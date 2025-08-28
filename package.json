@@ -13,12 +13,12 @@
     "react-dom": "18.3.1",
     "@twa-dev/sdk": "7.0.0"
   },
-  "engines": {
-    "node": ">=18"
-  },
   "devDependencies": {
     "typescript": "5.5.4",
     "@types/react": "18.3.4",
     "@types/node": "20.12.12"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
