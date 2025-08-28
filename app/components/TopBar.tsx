@@ -1,13 +1,16 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { isPro } from '../lib/subscription';
-export default function TopBar(){
+
+export default function TopBar({showBack=false}:{showBack?:boolean}){
   const [pro,setPro]=useState(false);
-  useEffect(()=>{ setPro(isPro()); },[]);
+  useEffect(()=>{ try{ setPro(isPro()); }catch{} },[]);
   return (
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 16px',borderBottom:'1px solid #2b2f39',position:'sticky',top:0,background:'#0b0c0f',zIndex:10}}>
-      <a href="/" style={{textDecoration:'none',color:'#e7e7e7',fontWeight:700}}>PravoGo</a>
-      <a href="/pro" style={{textDecoration:'none',color:'#e7e7e7',fontWeight:600}}>{pro ? '⭐ Pro до конца срока' : '⭐ Оформить Pro'}</a>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,padding:'12px 16px',borderBottom:'1px solid #1b1f27',position:'sticky',top:0,background:'#0f1114',zIndex:10}}>
+      <div style={{display:'flex',alignItems:'center',gap:12}}>
+        {showBack && <button onClick={()=>history.back()} aria-label="Назад" style={{background:'#0b6b3a',border:'none',color:'#fff',borderRadius:10,padding:'6px 10px'}}>← Назад</button>}
+        <a href="/" style={{textDecoration:'none',color:'#e7e7e7',fontWeight:800}}>Juristum ⚖️</a>
+      </div>
     </div>
   );
 }
