@@ -1,0 +1,1 @@
+export default function LockBadge({locked}:{locked:boolean}){ return <span style={{marginLeft:8, opacity:.9}}>{locked? '🔒' : '🔓'}</span>; }
