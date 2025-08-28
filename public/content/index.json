@@ -1,0 +1,20 @@
+[
+  {
+    "id": "ru-constitution",
+    "title": "Конституция Российской Федерации",
+    "updated_at": "2025-08-01",
+    "category": "constitution"
+  },
+  {
+    "id": "ru-zpp",
+    "title": "Закон РФ «О защите прав потребителей»",
+    "updated_at": "2025-08-01",
+    "category": "federal"
+  },
+  {
+    "id": "uk-rf",
+    "title": "Уголовный кодекс РФ",
+    "updated_at": "2025-07-10",
+    "category": "codes"
+  }
+]
