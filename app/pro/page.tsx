@@ -5,7 +5,7 @@ import { useState } from "react";
 
 type PlanKey = "week" | "month" | "half" | "year";
 
-const MONTH_PRICE = 99; // базовая цена месяца, для расчёта экономии
+const MONTH_PRICE = 99; // базовая цена месяца
 
 const plans: Record<PlanKey, { label: string; months: number; price: number }> = {
   week: { label: "Неделя", months: 1 / 4.345, price: 29 },
@@ -50,70 +50,71 @@ export default function Page() {
         <div className="rounded-3xl bg-white/10 ring-1 ring-white/25 shadow-2xl overflow-hidden">
           <div className="px-5 pt-5 pb-2">
             <p className="text-sm text-white/80">
-              Выберите период подписки. Цены фиксированы, без лишних надписей про дни.
-              Для «Полгода» и «Год» сразу показываем выгоду относительно помесячной оплаты.
+              Выберите период подписки. Цены фиксированы. Для «Полгода» и «Год» показываем выгоду.
             </p>
           </div>
 
-        <div className="px-3 pb-3">
-          <ul className="space-y-3">
-            {order.map((key) => {
-              const p = plans[key];
-              const save = savings(key);
-              const active = selected === key;
-              return (
-                <li key={key}>
-                  <button
-                    onClick={() => setSelected(key)}
-                    className={[
-                      "group w-full flex items-center justify-between rounded-2xl px-4 py-4 transition shadow-sm",
-                      active
-                        ? "bg-white text-[#0B0F14]"
-                        : "bg-black/20 text-white ring-1 ring-white/15 hover:ring-white/25 hover:bg-black/25",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div
-                        className={[
-                          "h-9 w-9 rounded-xl flex items-center justify-center ring-1",
-                          active
-                            ? "bg-[#0B4DFF]/10 ring-[#0B4DFF]/20 text-[#0B4DFF]"
-                            : "bg-white/10 ring-white/20 text-white/90",
-                        ].join(" ")}
-                      >
-                        {key === "week" && "7"}
-                        {key === "month" && "M"}
-                        {key === "half" && "6M"}
-                        {key === "year" && "12M"}
+          <div className="px-3 pb-3">
+            <ul className="space-y-3">
+              {order.map((key) => {
+                const p = plans[key];
+                const save = savings(key);
+                const active = selected === key;
+                return (
+                  <li key={key}>
+                    <button
+                      onClick={() => setSelected(key)}
+                      className={[
+                        "group w-full flex items-center justify-between rounded-2xl px-4 py-4 transition shadow-sm",
+                        active
+                          ? "bg-white text-[#0B0F14]"
+                          : "bg-black/20 text-white ring-1 ring-white/15 hover:ring-white/25 hover:bg-black/25",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={[
+                            "h-9 w-9 rounded-xl flex items-center justify-center ring-1",
+                            active
+                              ? "bg-[#0B4DFF]/10 ring-[#0B4DFF]/20 text-[#0B4DFF]"
+                              : "bg-white/10 ring-white/20 text-white/90",
+                          ].join(" ")}
+                        >
+                          {key === "week" && "7"}
+                          {key === "month" && "M"}
+                          {key === "half" && "6M"}
+                          {key === "year" && "12M"}
+                        </div>
+                        <span className="text-base font-medium">{p.label}</span>
+                        {save && (
+                          <span className="ml-2 rounded-lg px-2 py-1 text-[11px] font-medium tracking-tight bg-emerald-400/15 text-emerald-100 ring-1 ring-emerald-300/25">
+                            −{save.pct}% выгоднее
+                          </span>
+                        )}
                       </div>
-                      <span className="text-base font-medium">{p.label}</span>
-                      {save && (
-                        <span className="ml-2 rounded-lg px-2 py-1 text-[11px] font-medium tracking-tight bg-emerald-400/15 text-emerald-100 ring-1 ring-emerald-300/25">
-                          −{save.pct}% выгоднее
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-baseline gap-1 font-semibold tracking-tight">
-                      <span className={active ? "text-[#0B0F14]" : "text-white"}>{p.price}</span>
-                    </div>
-                  </button>
-                  {save && (
-                    <div className="px-1 pt-1 text-[11px] text-white/70">
-                      Экономия {save.diff} по сравнению с {formatRef(p.months)}.
-                    </div>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                      <div className="flex items-baseline gap-1 font-semibold tracking-tight">
+                        <span className={active ? "text-[#0B0F14]" : "text-white"}>{p.price}</span>
+                      </div>
+                    </button>
+                    {save && (
+                      <div className="px-1 pt-1 text-[11px] text-white/70">
+                        Экономия {save.diff} по сравнению с {formatRef(p.months)}.
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
 
-          <div className="pt-4 px-1">
-            <button onClick={onSubmit} className="w-full rounded-2xl bg-[#FFB000] text-black font-medium py-3 shadow hover:opacity-95 transition">
-              Продолжить
-            </button>
-            <p className="text-center text-[11px] text-white/70 mt-3">Подтверждая, вы соглашаетесь с условиями подписки.</p>
+            <div className="pt-4 px-1">
+              <button onClick={onSubmit} className="w-full rounded-2xl bg-[#FFB000] text-black font-medium py-3 shadow hover:opacity-95 transition">
+                Продолжить
+              </button>
+              <p className="text-center text-[11px] text-white/70 mt-3">
+                Подтверждая, вы соглашаетесь с условиями подписки.
+              </p>
+            </div>
           </div>
-        </div>
         </div>
 
         <div className="text-center text-[11px] text-white/70 mt-6">Поддержка: @juristum_support</div>
