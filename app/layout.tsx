@@ -1,5 +1,3 @@
-"use client";
-
 import "./globals.css";
 import { PT_Serif } from "next/font/google";
 
