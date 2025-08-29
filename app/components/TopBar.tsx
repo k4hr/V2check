@@ -1,10 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { isPro } from '../lib/subscription';
-
 export default function TopBar({showBack=false}:{showBack?:boolean}){
-  const [pro,setPro]=useState(false);
-  useEffect(()=>{ try{ setPro(isPro()); }catch{} },[]);
   return (
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,padding:'12px 16px',borderBottom:'1px solid #1b1f27',position:'sticky',top:0,background:'#0f1114',zIndex:10}}>
       <div style={{display:'flex',alignItems:'center',gap:12}}>
