@@ -1,32 +1,19 @@
-/* app/globals.css — базовые стили проекта Juristum */
+/* app/globals.css — базовый стиль (reset + фон) */
 *,
 *::before,
-*::after {
-  box-sizing: border-box;
-}
+*::after { box-sizing: border-box; }
 
-html, body {
-  margin: 0;
-  padding: 0;
-  min-height: 100%;
-}
-
+html, body { margin: 0; padding: 0; min-height: 100%; }
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
-  background: #0B0F14; /* мягкий тёмный фон по умолчанию */
+  background: #0B0F14;
   color: #ffffff;
 }
 
-img, picture, video, canvas, svg {
-  display: block;
-  max-width: 100%;
-}
-
-button {
-  cursor: pointer;
-}
+img, picture, video, canvas, svg { display: block; max-width: 100%; }
+button { cursor: pointer; }
 
 :root {
   --accent: #0B4DFF;
