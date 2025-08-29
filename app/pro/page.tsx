@@ -1,23 +1,32 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+/**
+ * Оплата по клику на тариф:
+ * - создаём инвойс на бекенде: POST /api/createInvoice?plan=...
+ * - открываем Telegram WebApp.openInvoice(link)
+ * - обрабатываем закрытие окна оплаты (paid/cancelled/failed)
+ * Требуется существующий API-роут /api/createInvoice и пакет @twa-dev/sdk.
+ */
 
 type PlanKey = "week" | "month" | "half" | "year";
+type ServerPlan = "WEEK" | "MONTH" | "HALF" | "YEAR";
 
-const MONTH_PRICE = 99; // базовая цена месяца
+const MONTH_PRICE = 99;
 
-const plans: Record<PlanKey, { label: string; months: number; price: number }> = {
-  week: { label: "Неделя", months: 1 / 4.345, price: 29 },
-  month: { label: "Месяц", months: 1, price: MONTH_PRICE },
-  half: { label: "Полгода", months: 6, price: 499 },
-  year: { label: "Год", months: 12, price: 899 },
+const plans: Record<PlanKey, { label: string; months: number; price: number; server: ServerPlan }> = {
+  week:  { label: "Неделя",  months: 1 / 4.345, price: 29,  server: "WEEK" },
+  month: { label: "Месяц",   months: 1,          price: 99,  server: "MONTH" },
+  half:  { label: "Полгода", months: 6,          price: 499, server: "HALF" },
+  year:  { label: "Год",     months: 12,         price: 899, server: "YEAR" },
 };
 
 const order: PlanKey[] = ["week", "month", "half", "year"];
 
 export default function Page() {
-  const [selected, setSelected] = useState<PlanKey>("month");
+  const [busy, setBusy] = useState<PlanKey | null>(null);
 
   const savings = (plan: PlanKey) => {
     const p = plans[plan];
@@ -30,8 +39,51 @@ export default function Page() {
     return null;
   };
 
-  const onSubmit = () => {
-    console.log("selected plan:", selected);
+  useEffect(() => {
+    try {
+      const w: any = (window as any).Telegram?.WebApp;
+      w?.ready?.();
+      w?.expand?.();
+    } catch {}
+  }, []);
+
+  const pay = async (plan: PlanKey) => {
+    if (busy) return;
+    setBusy(plan);
+    try {
+      const sdk = await import("@twa-dev/sdk");
+      const WebApp = sdk.default.WebApp || (sdk as any).WebApp || (window as any).Telegram?.WebApp;
+
+      // Сообщим боту о выборе (не обязательно, но полезно для аналитики)
+      try { WebApp?.sendData?.(JSON.stringify({ action: "buy", plan })); } catch {}
+
+      // Создаём инвойс на бекенде
+      const resp = await fetch(`/api/createInvoice?plan=${plans[plan].server}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!resp.ok) throw new Error("Failed to create invoice");
+      const data = await resp.json(); // ожидаем { link: string }
+
+      // Откроем окно покупки
+      WebApp?.openInvoice?.(data.link, (status: string) => {
+        // "paid" | "cancelled" | "failed" | "pending"
+        console.log("invoiceClosed:", status);
+        setBusy(null);
+        if (status === "paid") {
+          WebApp?.showPopup?.({ title: "Готово", message: "Оплата прошла успешно." });
+        }
+      });
+
+      // На всякий случай — фолбэк
+      if (!WebApp?.openInvoice) {
+        window.location.href = data.link;
+      }
+    } catch (e) {
+      console.error(e);
+      setBusy(null);
+      alert("Не удалось открыть оплату. Попробуйте ещё раз.");
+    }
   };
 
   return (
@@ -55,31 +107,23 @@ export default function Page() {
           </div>
 
           <div className="px-3 pb-3">
-            <ul className="space-y-3">
+            <ul className="list-none p-0 m-0 space-y-3">
               {order.map((key) => {
                 const p = plans[key];
                 const save = savings(key);
-                const active = selected === key;
+                const isBusy = busy === key;
                 return (
                   <li key={key}>
                     <button
-                      onClick={() => setSelected(key)}
+                      onClick={() => pay(key)}
+                      disabled={isBusy}
                       className={[
                         "group w-full flex items-center justify-between rounded-2xl px-4 py-4 transition shadow-sm",
-                        active
-                          ? "bg-white text-[#0B0F14]"
-                          : "bg-black/20 text-white ring-1 ring-white/15 hover:ring-white/25 hover:bg-black/25",
+                        "bg-white text-[#0B0F14] hover:opacity-95 disabled:opacity-70",
                       ].join(" ")}
                     >
                       <div className="flex items-center gap-3">
-                        <div
-                          className={[
-                            "h-9 w-9 rounded-xl flex items-center justify-center ring-1",
-                            active
-                              ? "bg-[#0B4DFF]/10 ring-[#0B4DFF]/20 text-[#0B4DFF]"
-                              : "bg-white/10 ring-white/20 text-white/90",
-                          ].join(" ")}
-                        >
+                        <div className="h-9 w-9 rounded-xl flex items-center justify-center ring-1 bg-[#0B4DFF]/10 ring-[#0B4DFF]/20 text-[#0B4DFF]">
                           {key === "week" && "7"}
                           {key === "month" && "M"}
                           {key === "half" && "6M"}
@@ -93,7 +137,7 @@ export default function Page() {
                         )}
                       </div>
                       <div className="flex items-baseline gap-1 font-semibold tracking-tight">
-                        <span className={active ? "text-[#0B0F14]" : "text-white"}>{p.price}</span>
+                        <span className="text-[#0B0F14]">{isBusy ? "…" : p.price}</span>
                       </div>
                     </button>
                     {save && (
@@ -106,14 +150,9 @@ export default function Page() {
               })}
             </ul>
 
-            <div className="pt-4 px-1">
-              <button onClick={onSubmit} className="w-full rounded-2xl bg-[#FFB000] text-black font-medium py-3 shadow hover:opacity-95 transition">
-                Продолжить
-              </button>
-              <p className="text-center text-[11px] text-white/70 mt-3">
-                Подтверждая, вы соглашаетесь с условиями подписки.
-              </p>
-            </div>
+            <p className="text-center text-[11px] text-white/70 mt-5">
+              Подтверждая, вы соглашаетесь с условиями подписки.
+            </p>
           </div>
         </div>
 
