@@ -8,7 +8,7 @@ type Law = { id:string; title:string; updated_at:string; category:string };
 
 export default function Doc(){
   const params = useParams() as { id: string };
-  const id = params?.id;
+  const id = params?.id as string;
   const [html, setHtml] = useState<string>('');
   const [meta, setMeta] = useState<Law|null>(null);
   const [fav, setFav] = useState<boolean>(false);
