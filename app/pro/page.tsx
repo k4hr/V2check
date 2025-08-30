@@ -1,83 +1,55 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { applyPlan } from "../subscription";
+import { useEffect, useRef } from 'react';
+import { applyPlan } from '../subscription';
 
-type Plan = "WEEK" | "MONTH" | "HALF" | "YEAR";
+type Plan = 'WEEK'|'MONTH'|'HALF'|'YEAR';
 
-const UI = {
-  WEEK:  { label: "Неделя",  price: 100 },
-  MONTH: { label: "Месяц",   price: 300 },
-  HALF:  { label: "Полгода", price: 1200 },
-  YEAR:  { label: "Год",     price: 2000 },
-} as const;
-
-function extractSlug(link: string): string | null {
-  const m = /https?:\/\/t\.me\/(\$[A-Za-z0-9_\-]+)/.exec(link);
-  return m ? m[1] : null;
-}
+const UI: Record<Plan, {label:string; price:number}> = {
+  WEEK:  { label:'Неделя',  price:100 },
+  MONTH: { label:'Месяц',   price:300 },
+  HALF:  { label:'Полгода', price:1200 },
+  YEAR:  { label:'Год',     price:2000 },
+};
 
 export default function ProPage() {
-  const listenerReady = useRef(false);
+  const once = useRef(false);
 
   useEffect(() => {
     (async () => {
-      const SDK: any = (await import("@twa-dev/sdk")).default;
+      const SDK: any = (await import('@twa-dev/sdk')).default;
       const WebApp = (SDK?.WebApp || SDK || (window as any).Telegram?.WebApp);
       if (!WebApp) return;
       try { WebApp.ready(); WebApp.expand(); } catch {}
-      if (listenerReady.current) return;
-      WebApp.onEvent("invoiceClosed", async (ev: any) => {
-        const status = ev?.status;
-        if (status === "paid") {
-          try {
-            const p = /plan%3A([A-Z]+)/.exec(String(ev?.url || ""))?.[1] as Plan | undefined;
-            if (p) await applyPlan(p);
-          } catch {}
-          WebApp.showAlert("Оплата прошла! Доступ открыт.");
+      if (once.current) return;
+      WebApp.onEvent('invoiceClosed', async (ev:any) => {
+        if (ev?.status === 'paid') {
+          const p = /plan%3A([A-Z]+)/.exec(String(ev?.url || ''))?.[1] as Plan | undefined;
+          if (p) {
+            try { await applyPlan(p); } catch {}
+          }
+          WebApp.showAlert('Оплата прошла! Доступ открыт.');
           try { WebApp.close(); } catch {}
-        } else if (status === "canceled") {
-          WebApp.showAlert("Покупка отменена.");
-        } else {
-          WebApp.showAlert("Ошибка оплаты. Попробуйте ещё раз.");
+        } else if (ev?.status === 'canceled') {
+          WebApp.showAlert('Покупка отменена.');
         }
       });
-      listenerReady.current = true;
+      once.current = true;
     })();
   }, []);
 
   async function buy(plan: Plan) {
-    const SDK: any = (await import("@twa-dev/sdk")).default;
+    const SDK: any = (await import('@twa-dev/sdk')).default;
     const WebApp = (SDK?.WebApp || SDK || (window as any).Telegram?.WebApp);
-
     try {
-      const resp = await fetch(`/api/createInvoice?plan=${plan}`, { method: "POST" });
-      const data = await resp.json();
+      const r = await fetch(`/api/createInvoice?plan=${plan}`, { method:'POST' });
+      const data = await r.json();
       if (!data?.ok || !data?.link) {
-        WebApp?.showAlert?.(`Не удалось создать счёт: ${data?.error || "unknown"}`);
+        WebApp?.showAlert?.(`Не удалось создать счёт: ${data?.error || 'unknown'}`);
         return;
       }
-
-      const link: string = data.link;
-      const slug = extractSlug(link);
-
-      let opened = false;
-      try {
-        const r = WebApp.openInvoice(link, (status: string) => {});
-        opened = r === true;
-      } catch {}
-
-      if (!opened && slug) {
-        try {
-          const r2 = WebApp.openInvoice(slug, (status: string) => {});
-          opened = r2 === true;
-        } catch {}
-      }
-
-      if (!opened) {
-        try { WebApp.openTelegramLink(link); } catch {}
-      }
-    } catch (e: any) {
+      WebApp.openInvoice(data.link, () => {});
+    } catch (e:any) {
       WebApp?.showAlert?.(`Сеть недоступна: ${e?.message || e}`);
     }
   }
@@ -87,22 +59,14 @@ export default function ProPage() {
       <div className="max-w-md mx-auto px-5 pt-10 pb-24">
         <h1 className="text-4xl font-serif mb-6">Juristum Pro</h1>
         <p className="opacity-80 mb-6">Выберите тариф — окно Telegram-оплаты откроется сразу.</p>
-
         <div className="flex flex-wrap gap-3">
-          {(Object.keys(UI) as Plan[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => buy(p)}
-              className="px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/15 transition ring-1 ring-white/20"
-            >
+          {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p) => (
+            <button key={p} onClick={() => buy(p)}
+              className="px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/15 transition ring-1 ring-white/20">
               {UI[p].label} — {UI[p].price} ⭐
             </button>
           ))}
         </div>
-
-        <p className="text-xs opacity-60 mt-10">
-          Подтверждая, вы соглашаетесь с условиями подписки.
-        </p>
       </div>
     </main>
   );
