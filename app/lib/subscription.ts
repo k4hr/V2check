@@ -1,19 +1,9 @@
+import { get, set } from './storage';
 export type Plan = 'WEEK'|'MONTH'|'HALF'|'YEAR';
-const DAY = 86400000;
-const DAYS: Record<Plan, number> = { WEEK:7, MONTH:30, HALF:182, YEAR:365 };
-
-export function getSub(): { expiresAt?: number }{
-  if (typeof window==='undefined') return {};
-  try{ return JSON.parse(localStorage.getItem('sub')||'{}'); }catch{ return {}; }
-}
-export function isPro(): boolean {
-  const s = getSub(); return !!s.expiresAt && s.expiresAt > Date.now();
-}
-export function applyPlan(plan: Plan){
-  const addDays = DAYS[plan] ?? DAYS.MONTH;
-  const now = Date.now();
-  const cur = getSub();
-  const base = cur.expiresAt && cur.expiresAt > now ? cur.expiresAt : now;
-  const expiresAt = base + addDays*DAY;
-  try{ localStorage.setItem('sub', JSON.stringify({expiresAt})); }catch{}
-}
+type Sub = { pro:boolean; expiresAt:number };
+const KEY='pro-subscription';
+export const getSub=():Sub=> get<Sub>(KEY,{pro:false,expiresAt:0})!;
+export const isPro=()=> Date.now() < getSub().expiresAt;
+export const setProUntil=(until:number)=>{ set(KEY,{pro:true,expiresAt:until}); }
+export const setProForDays=(days:number)=>{ const until = Date.now() + days*24*60*60*1000; setProUntil(until); }
+export const applyPlan=(p:Plan)=>{ if(p==='WEEK') setProForDays(7); if(p==='MONTH') setProForDays(30); if(p==='HALF') setProForDays(182); if(p==='YEAR') setProForDays(365); }
