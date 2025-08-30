@@ -2,19 +2,17 @@
 "use client";
 
 import React from "react";
-import WebApp from "@twa-dev/sdk";
 
-// Локальная таблица тарифов (без импорта, чтобы не ловить ошибки путей)
+// Локальная таблица тарифов
 const PLANS = {
   WEEK:  { title: "⭐ 7 дней — 29 ⭐",   code: "WEEK"  as const },
   MONTH: { title: "⭐ 30 дней — 99 ⭐",  code: "MONTH" as const },
   HALF:  { title: "⭐ Полгода — 499 ⭐", code: "HALF"  as const },
   YEAR:  { title: "⭐ Год — 899 ⭐",     code: "YEAR"  as const },
 };
-
 type PlanKey = keyof typeof PLANS;
 
-// Если бэкенд вернёт ссылку вида https://t.me/$xxxx — достаём slug для openInvoice
+// Достаём slug из ссылки https://t.me/$XXXX
 function extractInvoiceSlug(link: string): string | null {
   try {
     const m = /https?:\/\/t\.me\/(\$[A-Za-z0-9_\-]+)/.exec(link);
@@ -26,6 +24,8 @@ function extractInvoiceSlug(link: string): string | null {
 
 export default function ProPage() {
   const onBuy = async (planKey: PlanKey) => {
+    // ✅ динамический импорт, чтобы не падать на сервере
+    const { default: WebApp } = await import("@twa-dev/sdk");
     const plan = PLANS[planKey].code;
 
     try {
@@ -34,15 +34,11 @@ export default function ProPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ plan }),
       });
-
       const json = await res.json();
 
       if (!json?.ok) {
-        // Покажем причину в алерте, чтобы было понятно, что чинить на сервере
         const msg =
-          json?.error ||
-          json?.detail?.description ||
-          "Не удалось создать счёт";
+          json?.error || json?.detail?.description || "Не удалось создать счёт";
         WebApp.showAlert?.(msg);
         return;
       }
@@ -50,33 +46,27 @@ export default function ProPage() {
       const link: string = json.link;
       const slug = extractInvoiceSlug(link);
 
-      // 1) нативный способ TMA
       if (slug && WebApp.openInvoice) {
         WebApp.openInvoice(slug);
         return;
       }
-
-      // 2) запасной вариант — открыть ссылку (на iOS это тоже подтянет Telegram)
-      if (WebApp.openLink) {
-        WebApp.openLink(link);
-      } else {
-        window.location.href = link;
-      }
+      if (WebApp.openLink) WebApp.openLink(link);
+      else if (typeof window !== "undefined") window.location.href = link;
     } catch (e) {
+      const { default: WebApp } = await import("@twa-dev/sdk");
       WebApp.showAlert?.("Ошибка оплаты. Попробуйте ещё раз.");
       console.error(e);
     }
   };
 
-  // Стили кнопок как в главном меню: большая карточка-строка с иконкой и стрелкой
+  // Кнопки в стиле главного меню — по одной в строке
   const Item: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({
     children,
     onClick,
   }) => (
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between rounded-2xl bg-white/5 hover:bg-white/7.5 transition-colors
-                 ring-1 ring-white/10 px-4 py-4 text-left shadow-sm"
+      className="w-full flex items-center justify-between rounded-2xl bg-white/5 hover:bg-white/7.5 transition-colors ring-1 ring-white/10 px-4 py-4 text-left shadow-sm"
     >
       <div className="flex items-center gap-3">
         <span className="text-2xl">⭐</span>
@@ -90,7 +80,6 @@ export default function ProPage() {
     <div className="min-h-screen text-white antialiased">
       <div className="max-w-md mx-auto px-4 pt-8 pb-24">
         <h1 className="text-4xl font-bold mb-6">Juristum Pro</h1>
-
         <p className="text-white/80 mb-5">
           Выберите тариф — окно Telegram-оплаты откроется сразу.
         </p>
