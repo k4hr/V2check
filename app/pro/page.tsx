@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { applyPlan } from "@/app/subscription";
+// FIX: use relative path so Next can resolve without custom aliases
+import { applyPlan } from "../subscription";
 
 type Plan = "WEEK" | "MONTH" | "HALF" | "YEAR";
 
