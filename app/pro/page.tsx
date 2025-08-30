@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { PRICES, type Plan } from '../lib/pricing';
 
 export default function ProPage(){
-  const [buying, setBuying] = useState<Plan | null>(null);
+  const [busy, setBusy] = useState<Plan | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(()=>{
     try{
@@ -15,27 +16,36 @@ export default function ProPage(){
   },[]);
 
   async function buy(plan: Plan){
-    if (buying) return;
-    setBuying(plan);
+    if (busy) return;
+    setBusy(plan);
+    setMsg(null);
     try{
-      const res = await fetch('/api/createInvoice', {
-        method: 'POST',
-        headers: { 'content-type':'application/json' },
-        body: JSON.stringify({ plan })
-      });
-      const data = await res.json();
-      if (!data?.ok || !data?.link) throw new Error(data?.error || 'Не удалось создать счёт');
+      // Используем безопасный GET с параметром, чтобы исключить проблемы с body на проде
+      const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}`, { method: 'POST' });
+      // некоторые прокси на Railway игнорируют body в edge — поэтому на сервере мы тоже читаем query
+      const data = await res.json().catch(()=>null);
+      if (!data?.ok || !data?.link){
+        throw new Error(data?.error || 'Ошибка создания счёта');
+      }
+
       const tg:any = (window as any).Telegram?.WebApp;
-      if (tg?.openInvoice) {
+      if (tg?.openInvoice){
         tg.openInvoice(data.link, (status:string)=>{
-          // status: "paid" | "cancelled" | "failed" | "pending"
+          // status: "paid" | "pending" | "cancelled" | "failed"
+          // Можно дополнить обработку, если нужно
         });
       } else {
-        // fallback
+        // Фолбэк, если метод недоступен (запуск вне Telegram)
         window.open(data.link, '_blank');
       }
-    }catch(e){ console.error(e); }
-    finally{ setBuying(null); }
+    }catch(e:any){
+      console.error(e);
+      setMsg(e?.message || 'Неизвестная ошибка');
+    }finally{
+      setBusy(null);
+      // автоочистка сообщения через 4 сек
+      setTimeout(()=>setMsg(null), 4000);
+    }
   }
 
   return (
@@ -44,15 +54,23 @@ export default function ProPage(){
         <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>Juristum Pro</h1>
         <p style={{opacity:.85, marginBottom:16}}>Выберите тариф — окно Telegram-оплаты откроется сразу.</p>
 
+        {msg && (
+          <div className="card" role="alert" style={{marginBottom:12, borderColor:'rgba(255,180,0,.35)'}}>
+            <b>Не получилось открыть оплату.</b><br/>
+            <span style={{opacity:.85}}>{msg}</span>
+          </div>
+        )}
+
         <div style={{display:'grid', gap:12}}>
           {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
             const cfg = PRICES[p];
             return (
               <button
                 key={p}
+                type="button"
                 onClick={()=>buy(p)}
                 className="list-btn"
-                disabled={!!buying}
+                disabled={!!busy}
                 aria-label={`Купить: ${cfg.label}`}
               >
                 <span className="list-btn__left">
