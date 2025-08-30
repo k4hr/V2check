@@ -4,9 +4,8 @@ export const runtime = "nodejs";
 
 /**
  * GET/POST /api/createInvoice?plan=WEEK|MONTH|HALF|YEAR
- * Returns detailed JSON. Hardens against common issues:
- *  - trims BOT_TOKEN (trailing spaces/newlines cause 404 "Not Found" on Bot API)
- *  - pre-validates token via getMe with clear message if invalid
+ * Возвращает { ok, link } или { ok:false, error }.
+ * Усилено: trim токена и проверка getMe для понятных ошибок.
  */
 const RAW = process.env.BOT_TOKEN ?? "";
 const TOKEN = RAW.trim();
@@ -22,22 +21,21 @@ export async function GET(req: NextRequest) { return POST(req); }
 
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const plan = (searchParams.get("plan") || "MONTH").toUpperCase();
+  const plan = (searchParams.get("plan") || "MONTH").toUpperCase() as keyof typeof PRICES;
   const amount = PRICES[plan] ?? PRICES.MONTH;
 
   if (!TOKEN) {
-    return Response.json({ ok: false, error: "BOT_TOKEN missing (empty after trim)" }, { status: 500 });
+    return Response.json({ ok: false, error: "BOT_TOKEN missing" }, { status: 500 });
   }
 
-  // Preflight validate token once per request (cheap and gives a clear error)
   try {
     const probe = await fetch(`https://api.telegram.org/bot${TOKEN}/getMe`);
     const probeJson = await probe.json();
     if (!probeJson?.ok) {
-      return Response.json({ ok: false, error: "Invalid BOT_TOKEN (getMe failed)", detail: probeJson }, { status: 401 });
+      return Response.json({ ok: false, error: "Invalid BOT_TOKEN (getMe failed)" }, { status: 401 });
     }
-  } catch (e: any) {
-    return Response.json({ ok: false, error: "Bot API unreachable", detail: e?.message }, { status: 502 });
+  } catch {
+    return Response.json({ ok: false, error: "Bot API unreachable" }, { status: 502 });
   }
 
   const body = {
@@ -54,15 +52,9 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const status = tg.status;
-    let data: any = null;
-    try { data = await tg.json(); } catch {}
+    const data = await tg.json();
     if (!tg.ok || !data?.ok || !data?.result) {
-      return Response.json({
-        ok: false,
-        error: data?.description || `telegram http ${status}`,
-        detail: { status, plan, amount, data },
-      }, { status: 500 });
+      return Response.json({ ok: false, error: data?.description || "telegram error" }, { status: 500 });
     }
     return Response.json({ ok: true, link: data.result });
   } catch (e: any) {
