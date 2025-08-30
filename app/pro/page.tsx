@@ -1,14 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * Оплата по клику на тариф:
- * - создаём инвойс на бекенде: POST /api/createInvoice?plan=...
- * - открываем Telegram WebApp.openInvoice(link)
- * - обрабатываем закрытие окна оплаты (paid/cancelled/failed)
- * Требуется существующий API-роут /api/createInvoice и пакет @twa-dev/sdk.
+ * Juristum Pro — оплата по клику на тариф.
+ * API: POST /api/createInvoice?plan=WEEK|MONTH|HALF|YEAR -> { link: string }
+ * Зависимость: @twa-dev/sdk
  */
 
 type PlanKey = "week" | "month" | "half" | "year";
@@ -28,6 +26,14 @@ const order: PlanKey[] = ["week", "month", "half", "year"];
 export default function Page() {
   const [busy, setBusy] = useState<PlanKey | null>(null);
 
+  useEffect(() => {
+    try {
+      const w: any = (window as any).Telegram?.WebApp;
+      w?.ready?.();
+      w?.expand?.();
+    } catch {}
+  }, []);
+
   const savings = (plan: PlanKey) => {
     const p = plans[plan];
     if (plan === "half" || plan === "year") {
@@ -39,50 +45,44 @@ export default function Page() {
     return null;
   };
 
-  useEffect(() => {
-    try {
-      const w: any = (window as any).Telegram?.WebApp;
-      w?.ready?.();
-      w?.expand?.();
-    } catch {}
-  }, []);
-
   const pay = async (plan: PlanKey) => {
     if (busy) return;
     setBusy(plan);
     try {
-      const sdk = await import("@twa-dev/sdk");
-      const WebApp = sdk.default.WebApp || (sdk as any).WebApp || (window as any).Telegram?.WebApp;
+      const sdk = await import("@twa-dev/sdk"); // default export — WebApp
+      const WebApp: any = (sdk as any).default ?? (sdk as any).WebApp ?? (window as any).Telegram?.WebApp;
 
-      // Сообщим боту о выборе (не обязательно, но полезно для аналитики)
-      try { WebApp?.sendData?.(JSON.stringify({ action: "buy", plan })); } catch {}
+      if (!WebApp) {
+        alert("Откройте мини‑приложение внутри Telegram, чтобы оплатить.");
+        setBusy(null);
+        return;
+      }
 
-      // Создаём инвойс на бекенде
+      try { WebApp.sendData?.(JSON.stringify({ action: "buy", plan })); } catch {}
+
       const resp = await fetch(`/api/createInvoice?plan=${plans[plan].server}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
       if (!resp.ok) throw new Error("Failed to create invoice");
-      const data = await resp.json(); // ожидаем { link: string }
+      const data = await resp.json(); // { link: string }
 
-      // Откроем окно покупки
-      WebApp?.openInvoice?.(data.link, (status: string) => {
-        // "paid" | "cancelled" | "failed" | "pending"
-        console.log("invoiceClosed:", status);
-        setBusy(null);
-        if (status === "paid") {
-          WebApp?.showPopup?.({ title: "Готово", message: "Оплата прошла успешно." });
-        }
-      });
-
-      // На всякий случай — фолбэк
-      if (!WebApp?.openInvoice) {
+      if (WebApp.openInvoice) {
+        WebApp.openInvoice(data.link, (status: string) => {
+          console.log("invoiceClosed:", status);
+          setBusy(null);
+          if (status === "paid") {
+            WebApp.showPopup?.({ title: "Готово", message: "Оплата прошла успешно." });
+          }
+        });
+      } else {
         window.location.href = data.link;
+        setBusy(null);
       }
     } catch (e) {
       console.error(e);
       setBusy(null);
-      alert("Не удалось открыть оплату. Попробуйте ещё раз.");
+      alert("Не удалось открыть платёж. Попробуйте ещё раз.");
     }
   };
 
