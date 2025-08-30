@@ -1,12 +1,11 @@
 import { NextRequest } from "next/server";
 
-// Force Node.js runtime on Railway (not Edge)
 export const runtime = "nodejs";
 
 /**
- * POST /api/createInvoice?plan=WEEK|MONTH|HALF|YEAR
- * Returns: { ok: boolean, link?: string, error?: string }
- * Requires: env BOT_TOKEN with Telegram bot token
+ * GET/POST /api/createInvoice?plan=WEEK|MONTH|HALF|YEAR
+ * Returns detailed JSON: { ok, link?, error?, detail? }
+ * Requires env BOT_TOKEN (Telegram bot token).
  */
 const TOKEN = process.env.BOT_TOKEN || "";
 
@@ -17,14 +16,19 @@ const PRICES: Record<string, number> = {
   YEAR: 2000,
 };
 
-export async function POST(req: NextRequest) {
-  if (!TOKEN) {
-    return Response.json({ ok: false, error: "BOT_TOKEN is missing" }, { status: 500 });
-  }
+export async function GET(req: NextRequest) {
+  // allow GET in browser for diagnostics
+  return POST(req);
+}
 
+export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const plan = (searchParams.get("plan") || "MONTH").toUpperCase();
   const amount = PRICES[plan] ?? PRICES.MONTH;
+
+  if (!TOKEN) {
+    return Response.json({ ok: false, error: "BOT_TOKEN is not set on server" }, { status: 500 });
+  }
 
   const body = {
     title: `Juristum Pro — ${plan}`,
@@ -49,10 +53,11 @@ export async function POST(req: NextRequest) {
       return Response.json({
         ok: false,
         error: data?.description || `telegram http ${status}`,
+        detail: { status, plan, amount, data },
       }, { status: 500 });
     }
 
-    return Response.json({ ok: true, link: data.result });
+    return Response.json({ ok: true, link: data.result, detail: { plan, amount } });
   } catch (e: any) {
     return Response.json({ ok: false, error: e?.message || "fetch error" }, { status: 500 });
   }
