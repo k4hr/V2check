@@ -1,63 +1,51 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export const runtime = "nodejs";
+export const runtime = 'nodejs';
 
-/**
- * GET/POST /api/createInvoice?plan=WEEK|MONTH|HALF|YEAR
- * Возвращает { ok, link } или { ok:false, error }.
- * Усилено: trim токена и проверка getMe для понятных ошибок.
- */
-const RAW = process.env.BOT_TOKEN ?? "";
-const TOKEN = RAW.trim();
+type Plan = 'WEEK'|'MONTH'|'HALF'|'YEAR';
 
-const PRICES: Record<string, number> = {
-  WEEK: 100,
-  MONTH: 300,
-  HALF: 1200,
-  YEAR: 2000,
+const PRICES: Record<Plan, {title:string; amount:number; description:string}> = {
+  WEEK:  { title: 'Juristum Pro — Неделя',  amount: 100,  description: 'Доступ на 7 дней' },
+  MONTH: { title: 'Juristum Pro — Месяц',   amount: 300,  description: 'Доступ на 30 дней' },
+  HALF:  { title: 'Juristum Pro — Полгода', amount: 1200, description: 'Доступ на 182 дня' },
+  YEAR:  { title: 'Juristum Pro — Год',     amount: 2000, description: 'Доступ на 365 дней' },
 };
 
-export async function GET(req: NextRequest) { return POST(req); }
-
 export async function POST(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-  const plan = (searchParams.get("plan") || "MONTH").toUpperCase() as keyof typeof PRICES;
-  const amount = PRICES[plan] ?? PRICES.MONTH;
-
-  if (!TOKEN) {
-    return Response.json({ ok: false, error: "BOT_TOKEN missing" }, { status: 500 });
-  }
-
   try {
-    const probe = await fetch(`https://api.telegram.org/bot${TOKEN}/getMe`);
-    const probeJson = await probe.json();
-    if (!probeJson?.ok) {
-      return Response.json({ ok: false, error: "Invalid BOT_TOKEN (getMe failed)" }, { status: 401 });
-    }
-  } catch {
-    return Response.json({ ok: false, error: "Bot API unreachable" }, { status: 502 });
-  }
+    const url = new URL(req.url);
+    const plan = (url.searchParams.get('plan') || 'MONTH') as Plan;
+    const cfg = PRICES[plan];
+    if (!cfg) return NextResponse.json({ ok:false, error: 'Unknown plan' }, { status:400 });
 
-  const body = {
-    title: `Juristum Pro — ${plan}`,
-    description: `Подписка Juristum Pro (${plan})`,
-    payload: `plan:${plan}`,
-    currency: "XTR",
-    prices: [{ label: plan, amount }],
-  };
+    const BOT_TOKEN_RAW = process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '';
+    const BOT_TOKEN = BOT_TOKEN_RAW.trim();
+    if (!BOT_TOKEN) return NextResponse.json({ ok:false, error:'BOT_TOKEN is not set on server' }, { status:500 });
 
-  try {
-    const tg = await fetch(`https://api.telegram.org/bot${TOKEN}/createInvoiceLink`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+    const payload = `plan:${plan}`;
+
+    const tg = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: cfg.title,
+        description: cfg.description,
+        payload,
+        provider_token: '',      // Stars
+        currency: 'XTR',         // Stars currency
+        prices: [{ label: cfg.title, amount: cfg.amount }],
+        start_parameter: 'start_parameter' // повышает совместимость клиентов
+      })
     });
+
     const data = await tg.json();
-    if (!tg.ok || !data?.ok || !data?.result) {
-      return Response.json({ ok: false, error: data?.description || "telegram error" }, { status: 500 });
+    if (!data?.ok || !data?.result) {
+      return NextResponse.json({ ok:false, error: data?.description || 'Telegram createInvoiceLink failed', detail: data }, { status: 500 });
     }
-    return Response.json({ ok: true, link: data.result });
-  } catch (e: any) {
-    return Response.json({ ok: false, error: e?.message || "fetch error" }, { status: 500 });
+
+    return NextResponse.json({ ok:true, link: data.result });
+  } catch (e:any) {
+    return NextResponse.json({ ok:false, error: e?.message || 'Server error' }, { status: 500 });
   }
 }
