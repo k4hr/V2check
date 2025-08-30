@@ -1,12 +1,24 @@
 export const dynamic = 'force-static';
 
 export default function TermsPage() {
+  if (typeof window !== 'undefined') {
+    try{
+      const tg:any = (window as any).Telegram?.WebApp;
+      tg?.ready?.();
+      tg?.BackButton?.show?.();
+      tg?.BackButton?.onClick?.(()=>{
+        if (document.referrer) history.back();
+        else window.location.href = '/pro';
+      });
+    }catch{}
+  }
+
   return (
     <main>
       <div className="safe" style={{maxWidth:720, margin:'0 auto'}}>
         <h1 style={{fontSize:24, fontWeight:700, textAlign:'center', marginBottom:16}}>Условия подписки Juristum Pro</h1>
 
-        <div className="card" style={{lineHeight:1.6}}>
+        <div className="card" style={{lineHeight:1.65}}>
           <p>Настоящие условия подписки регулируют порядок предоставления доступа к дополнительным функциям приложения «Juristum Pro». Совершая оплату, пользователь подтверждает своё полное и безоговорочное согласие со всеми положениями настоящих условий.</p>
           <ol style={{paddingLeft:18, margin:0}}>
             <li style={{marginBottom:8}}>Доступ предоставляется только после успешной оплаты выбранного тарифа.</li>
@@ -15,7 +27,7 @@ export default function TermsPage() {
             <li style={{marginBottom:8}}>Возврат средств возможен исключительно в случае технических ошибок (двойное списание, неверная сумма и т.п.).</li>
             <li style={{marginBottom:8}}>Оплата осуществляется в Telegram Stars. Пользователь подтверждает понимание того, что действуют правила Telegram в отношении всех операций со Stars.</li>
             <li style={{marginBottom:8}}>Приложение оставляет за собой право изменять состав и функционал подписки без предварительного уведомления.</li>
-            <li style={{marginBottom:8}}>Актуальная версия условий всегда доступна в данном разделе. Продолжение использования подписки означает согласие с обновлёнными условиями.</li>
+            <li style={{marginBottom:8}}>Актуальная версия условий всегда доступна в данном разделе. Продолжение использования означает согласие с обновлёнными условиями.</li>
           </ol>
         </div>
       </div>
