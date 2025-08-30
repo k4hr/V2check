@@ -64,9 +64,23 @@ export default function ProPage(){
           </div>
         )}
 
+        
         <div style={{display:'grid', gap:12}}>
           {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
             const cfg = PRICES[p];
+            // вычислим бейджи
+            let badge: JSX.Element | null = null;
+            if (p === 'MONTH') {
+              badge = <span className="badge badge--pop">Самый популярный</span>;
+            } else if (p === 'HALF') {
+              const base = PRICES.MONTH.amount * 6;
+              const save = Math.max(0, Math.round((1 - cfg.amount / base) * 100));
+              badge = <span className="badge badge--save">Экономия {save}%</span>;
+            } else if (p === 'YEAR') {
+              const base = PRICES.MONTH.amount * 12;
+              const save = Math.max(0, Math.round((1 - cfg.amount / base) * 100));
+              badge = <span className="badge badge--save">Экономия {save}%</span>;
+            }
             return (
               <button
                 key={p}
@@ -76,9 +90,10 @@ export default function ProPage(){
                 disabled={!!busy}
                 aria-label={`Купить: ${cfg.label}`}
               >
-                <span className="list-btn__left">
+                <span className="list-btn__left" style={{gap:12}}>
                   <span className="list-btn__emoji">⭐</span>
                   <b>{cfg.label}</b>
+                  {badge && <span style={{marginLeft:6}}>{badge}</span>}
                 </span>
                 <span className="list-btn__right">
                   <span>{cfg.amount} ⭐</span>
@@ -88,6 +103,7 @@ export default function ProPage(){
             );
           })}
         </div>
+
 
         {/* Нижний малозаметный футер */}
         <div style={{marginTop:'auto'}}>
