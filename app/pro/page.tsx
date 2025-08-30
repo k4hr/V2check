@@ -5,15 +5,15 @@ import { applyPlan } from "../subscription";
 
 type Plan = "WEEK" | "MONTH" | "HALF" | "YEAR";
 
-const UI = {
+const UI: Record<Plan, { label: string; price: number }> = {
   WEEK:  { label: "Неделя",  price: 100 },
   MONTH: { label: "Месяц",   price: 300 },
   HALF:  { label: "Полгода", price: 1200 },
   YEAR:  { label: "Год",     price: 2000 },
-} as const;
+};
 
 function extractSlug(link: string): string | null {
-  const m = /https?:\/\/t\.me\/(\$[A-Za-z0-9_\-_]+)/.exec(link);
+  const m = /https?:\\/\\/t\.me\\/(\$[A-Za-z0-9_\-]+)/.exec(link);
   return m ? m[1] : null;
 }
 
@@ -85,22 +85,41 @@ export default function ProPage() {
     }
   }
 
+  function PlanRow({ p }: { p: Plan }) {
+    const { label, price } = UI[p];
+    return (
+      <button
+        onClick={() => buy(p)}
+        className="w-full group flex items-center justify-between rounded-3xl px-5 py-5 bg-white/5 hover:bg-white/8 active:bg-white/10 transition ring-1 ring-white/10 hover:ring-white/20 shadow-sm"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-2xl bg-white/10 grid place-items-center ring-1 ring-white/15">⭐</div>
+          <div className="text-left">
+            <div className="text-[18px] font-serif">{label}</div>
+            <div className="text-[12px] opacity-70">Оплата звёздами</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="text-[16px] font-medium tabular-nums">{price} ⭐</div>
+          <svg className="h-5 w-5 opacity-60 group-hover:opacity-100 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M9 18l6-6-6-6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </button>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#0B0B0F] text-white antialiased">
       <div className="max-w-md mx-auto px-5 pt-10 pb-24">
         <h1 className="text-4xl font-serif mb-6">Juristum Pro</h1>
         <p className="opacity-80 mb-6">Выберите тариф — окно Telegram-оплаты откроется сразу.</p>
 
-        <div className="flex flex-wrap gap-3">
-          {(Object.keys(UI) as Plan[]).map((p) => (
-            <button
-              key={p}
-              onClick={() => buy(p)}
-              className="px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/15 transition ring-1 ring-white/20"
-            >
-              {UI[p].label} — {UI[p].price} ⭐
-            </button>
-          ))}
+        <div className="space-y-4">
+          <PlanRow p="WEEK" />
+          <PlanRow p="MONTH" />
+          <PlanRow p="HALF" />
+          <PlanRow p="YEAR" />
         </div>
 
         <p className="text-xs opacity-60 mt-10">
