@@ -41,3 +41,19 @@ html,body{ background:var(--bg); color:var(--text); }
 .btn:active{ transform: translateY(1px); }
 .btn-secondary{ background:var(--panel); color:var(--text); border:1px solid var(--border); }
 .input{ height:44px; width:100%; border-radius:var(--radius); background:var(--panel); color:var(--text); border:1px solid var(--border); padding:0 12px; }
+
+
+/* === List-style buttons for Pro page === */
+.list-btn{
+  display:flex; align-items:center; justify-content:space-between;
+  width:100%; height:56px; padding:0 16px;
+  background: var(--panel); color: var(--text);
+  border:1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--shadow);
+  transition: transform .02s ease, filter .15s ease;
+}
+.list-btn:active{ transform: translateY(1px); }
+.list-btn__left{ display:flex; align-items:center; gap:10px; font-size:18px; }
+.list-btn__emoji{ opacity:.9; }
+.list-btn__right{ display:flex; align-items:center; gap:8px; opacity:.9; }
+.list-btn__chev{ opacity:.6; font-size:20px; line-height:1; }
