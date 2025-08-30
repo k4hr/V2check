@@ -1,16 +1,13 @@
 import { NextRequest } from "next/server";
 
-/**
- * Next.js App Router route handler for Telegram Stars invoices.
- * Exports POST (module-typed), fixes "is not a module" compile error.
- *
- * ENV:
- *   BOT_TOKEN = <Telegram bot token>
- *
- * Request:  POST /api/createInvoice?plan=WEEK|MONTH|HALF|YEAR
- * Response: { ok: boolean, link?: string, error?: string }
- */
+// Force Node.js runtime on Railway (not Edge)
+export const runtime = "nodejs";
 
+/**
+ * POST /api/createInvoice?plan=WEEK|MONTH|HALF|YEAR
+ * Returns: { ok: boolean, link?: string, error?: string }
+ * Requires: env BOT_TOKEN with Telegram bot token
+ */
 const TOKEN = process.env.BOT_TOKEN || "";
 
 const PRICES: Record<string, number> = {
@@ -33,8 +30,8 @@ export async function POST(req: NextRequest) {
     title: `Juristum Pro — ${plan}`,
     description: `Подписка Juristum Pro (${plan})`,
     payload: `plan:${plan}`,
-    currency: "XTR", // Stars
-    prices: [{ label: "Juristum Pro", amount }],
+    currency: "XTR",
+    prices: [{ label: plan, amount }],
   };
 
   try {
@@ -43,10 +40,18 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await tg.json();
-    if (!data?.ok || !data?.result) {
-      return Response.json({ ok: false, error: data?.description || "telegram error" }, { status: 500 });
+
+    const status = tg.status;
+    let data: any = null;
+    try { data = await tg.json(); } catch {}
+
+    if (!tg.ok || !data?.ok || !data?.result) {
+      return Response.json({
+        ok: false,
+        error: data?.description || `telegram http ${status}`,
+      }, { status: 500 });
     }
+
     return Response.json({ ok: true, link: data.result });
   } catch (e: any) {
     return Response.json({ ok: false, error: e?.message || "fetch error" }, { status: 500 });
