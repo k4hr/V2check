@@ -5,7 +5,6 @@ import { applyPlan } from "../subscription";
 
 type Plan = "WEEK" | "MONTH" | "HALF" | "YEAR";
 
-// Тексты на кнопках
 const LABELS: Record<Plan, string> = {
   WEEK:  "7 дней — 29 ⭐️",
   MONTH: "30 дней — 99 ⭐️",
@@ -65,16 +64,13 @@ export default function ProPage() {
     }
 
     try { WebApp.openTelegramLink(link); return; } catch {}
-
     try { (window as any).location.href = link; } catch {}
   }
 
   async function buy(plan: Plan) {
     const SDK: any = (await import("@twa-dev/sdk")).default;
     const WebApp = (SDK?.WebApp || SDK || (window as any).Telegram?.WebApp);
-
     try {
-      // ВАЖНО: сервер ждёт ?plan=... и POST
       const resp = await fetch(`/api/createInvoice?plan=${plan}`, { method: "POST" });
       const data = await resp.json();
       if (!data?.ok || !data?.link) {
@@ -87,14 +83,17 @@ export default function ProPage() {
     }
   }
 
-  function MenuItem({ plan }: { plan: Plan }) {
+  function MenuCard({ plan }: { plan: Plan }) {
     return (
       <button
         onClick={() => buy(plan)}
-        className="w-full bg-white/5 hover:bg-white/8 active:bg-white/10 transition rounded-xl px-5 py-4 flex items-center justify-between ring-1 ring-white/10 hover:ring-white/20 text-[18px]"
+        className="w-full rounded-2xl bg-white/5 hover:bg-white/8 active:bg-white/10 transition ring-1 ring-white/10 hover:ring-white/20 shadow-sm px-5 py-4 flex items-center justify-between"
       >
-        <span className="font-serif">⭐ {LABELS[plan]}</span>
-        <span className="text-blue-500 text-2xl leading-none">›</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xl">⭐</span>
+          <span className="text-[18px] font-serif">{LABELS[plan]}</span>
+        </div>
+        <span className="text-white/60 text-2xl leading-none">›</span>
       </button>
     );
   }
@@ -105,12 +104,11 @@ export default function ProPage() {
         <h1 className="text-4xl font-serif mb-6">Juristum Pro</h1>
         <p className="opacity-80 mb-6">Выберите тариф — окно Telegram-оплаты откроется сразу.</p>
 
-        {/* Вертикальное меню: одна кнопка — одна строка */}
         <div className="flex flex-col gap-3">
-          <MenuItem plan="WEEK" />
-          <MenuItem plan="MONTH" />
-          <MenuItem plan="HALF" />
-          <MenuItem plan="YEAR" />
+          <MenuCard plan="WEEK" />
+          <MenuCard plan="MONTH" />
+          <MenuCard plan="HALF" />
+          <MenuCard plan="YEAR" />
         </div>
 
         <p className="text-xs opacity-60 mt-10">
