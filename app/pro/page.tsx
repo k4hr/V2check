@@ -1,100 +1,112 @@
-// app/pro/page.tsx
 "use client";
 
-import React from "react";
+import { useEffect, useRef } from "react";
+import { applyPlan } from "../subscription";
 
-// Локальная таблица тарифов
-const PLANS = {
-  WEEK:  { title: "⭐ 7 дней — 29 ⭐",   code: "WEEK"  as const },
-  MONTH: { title: "⭐ 30 дней — 99 ⭐",  code: "MONTH" as const },
-  HALF:  { title: "⭐ Полгода — 499 ⭐", code: "HALF"  as const },
-  YEAR:  { title: "⭐ Год — 899 ⭐",     code: "YEAR"  as const },
-};
-type PlanKey = keyof typeof PLANS;
+type Plan = "WEEK" | "MONTH" | "HALF" | "YEAR";
 
-// Достаём slug из ссылки https://t.me/$XXXX
-function extractInvoiceSlug(link: string): string | null {
-  try {
-    const m = /https?:\/\/t\.me\/(\$[A-Za-z0-9_\-]+)/.exec(link);
-    return m ? m[1] : null;
-  } catch {
-    return null;
-  }
+const UI = {
+  WEEK:  { label: "Неделя",  price: 100 },
+  MONTH: { label: "Месяц",   price: 300 },
+  HALF:  { label: "Полгода", price: 1200 },
+  YEAR:  { label: "Год",     price: 2000 },
+} as const;
+
+function extractSlug(link: string): string | null {
+  const m = /https?:\/\/t\.me\/(\$[A-Za-z0-9_\-_]+)/.exec(link);
+  return m ? m[1] : null;
 }
 
 export default function ProPage() {
-  const onBuy = async (planKey: PlanKey) => {
-    // ✅ динамический импорт, чтобы не падать на сервере
-    const { default: WebApp } = await import("@twa-dev/sdk");
-    const plan = PLANS[planKey].code;
+  const listenerReady = useRef(false);
+
+  useEffect(() => {
+    (async () => {
+      const SDK: any = (await import("@twa-dev/sdk")).default;
+      const WebApp = (SDK?.WebApp || SDK || (window as any).Telegram?.WebApp);
+      if (!WebApp) return;
+      try { WebApp.ready(); WebApp.expand(); } catch {}
+      if (listenerReady.current) return;
+      WebApp.onEvent("invoiceClosed", async (ev: any) => {
+        const status = ev?.status;
+        if (status === "paid") {
+          try {
+            const p = /plan%3A([A-Z]+)/.exec(String(ev?.url || ""))?.[1] as Plan | undefined;
+            if (p) await applyPlan(p);
+          } catch {}
+          WebApp.showAlert("Оплата прошла! Доступ открыт.");
+          try { WebApp.close(); } catch {}
+        } else if (status === "canceled") {
+          WebApp.showAlert("Покупка отменена.");
+        } else {
+          WebApp.showAlert("Ошибка оплаты. Попробуйте ещё раз.");
+        }
+      });
+      listenerReady.current = true;
+    })();
+  }, []);
+
+  async function openInvoiceSmart(link: string) {
+    const SDK: any = (await import("@twa-dev/sdk")).default;
+    const WebApp = (SDK?.WebApp || SDK || (window as any).Telegram?.WebApp);
+    const slug = extractSlug(link);
 
     try {
-      const res = await fetch("/api/createInvoice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan }),
-      });
-      const json = await res.json();
+      const r = WebApp.openInvoice(link, () => {});
+      if (r === true) return;
+    } catch {}
 
-      if (!json?.ok) {
-        const msg =
-          json?.error || json?.detail?.description || "Не удалось создать счёт";
-        WebApp.showAlert?.(msg);
-        return;
-      }
-
-      const link: string = json.link;
-      const slug = extractInvoiceSlug(link);
-
-      if (slug && WebApp.openInvoice) {
-        WebApp.openInvoice(slug);
-        return;
-      }
-      if (WebApp.openLink) WebApp.openLink(link);
-      else if (typeof window !== "undefined") window.location.href = link;
-    } catch (e) {
-      const { default: WebApp } = await import("@twa-dev/sdk");
-      WebApp.showAlert?.("Ошибка оплаты. Попробуйте ещё раз.");
-      console.error(e);
+    if (slug) {
+      try {
+        const r2 = WebApp.openInvoice(slug, () => {});
+        if (r2 === true) return;
+      } catch {}
     }
-  };
 
-  // Кнопки в стиле главного меню — по одной в строке
-  const Item: React.FC<{ children: React.ReactNode; onClick: () => void }> = ({
-    children,
-    onClick,
-  }) => (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center justify-between rounded-2xl bg-white/5 hover:bg-white/7.5 transition-colors ring-1 ring-white/10 px-4 py-4 text-left shadow-sm"
-    >
-      <div className="flex items-center gap-3">
-        <span className="text-2xl">⭐</span>
-        <span className="text-lg font-semibold text-white/90">{children}</span>
-      </div>
-      <span className="text-white/40 text-2xl">›</span>
-    </button>
-  );
+    try { WebApp.openTelegramLink(link); return; } catch {}
+
+    try { window.location.href = link; } catch {}
+  }
+
+  async function buy(plan: Plan) {
+    const SDK: any = (await import("@twa-dev/sdk")).default;
+    const WebApp = (SDK?.WebApp || SDK || (window as any).Telegram?.WebApp);
+
+    try {
+      const resp = await fetch(`/api/createInvoice?plan=${plan}`, { method: "POST" });
+      const data = await resp.json();
+      if (!data?.ok || !data?.link) {
+        WebApp?.showAlert?.(`Не удалось создать счёт: ${data?.error || "unknown"}`);
+        return;
+      }
+      await openInvoiceSmart(data.link);
+    } catch (e: any) {
+      WebApp?.showAlert?.(`Сеть недоступна: ${e?.message || e}`);
+    }
+  }
 
   return (
-    <div className="min-h-screen text-white antialiased">
-      <div className="max-w-md mx-auto px-4 pt-8 pb-24">
-        <h1 className="text-4xl font-bold mb-6">Juristum Pro</h1>
-        <p className="text-white/80 mb-5">
-          Выберите тариф — окно Telegram-оплаты откроется сразу.
-        </p>
+    <main className="min-h-screen bg-[#0B0B0F] text-white antialiased">
+      <div className="max-w-md mx-auto px-5 pt-10 pb-24">
+        <h1 className="text-4xl font-serif mb-6">Juristum Pro</h1>
+        <p className="opacity-80 mb-6">Выберите тариф — окно Telegram-оплаты откроется сразу.</p>
 
-        <div className="space-y-3">
-          <Item onClick={() => onBuy("WEEK")}>{PLANS.WEEK.title}</Item>
-          <Item onClick={() => onBuy("MONTH")}>{PLANS.MONTH.title}</Item>
-          <Item onClick={() => onBuy("HALF")}>{PLANS.HALF.title}</Item>
-          <Item onClick={() => onBuy("YEAR")}>{PLANS.YEAR.title}</Item>
+        <div className="flex flex-wrap gap-3">
+          {(Object.keys(UI) as Plan[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => buy(p)}
+              className="px-4 py-2 rounded-2xl bg-white/10 hover:bg-white/15 transition ring-1 ring-white/20"
+            >
+              {UI[p].label} — {UI[p].price} ⭐
+            </button>
+          ))}
         </div>
 
-        <p className="mt-8 text-white/70">
+        <p className="text-xs opacity-60 mt-10">
           Подтверждая, вы соглашаетесь с условиями подписки.
         </p>
       </div>
-    </div>
+    </main>
   );
 }
