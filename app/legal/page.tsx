@@ -16,7 +16,7 @@ export default function LegalPage(){
   return (
     <main>
       <div className="safe" style={{maxWidth:800, margin:'0 auto'}}>
-        <h1 style={{fontSize:24, fontWeight:700, textAlign:'center', marginBottom:16}}>Правовая информация и отказ от ответственности</h1>
+        <h1 style={{fontSize:24, fontWeight:700, textAlign:'center', marginBottom:16}}>Правовая информация</h1>
 
         <div className="card" style={{lineHeight:1.75}}>
           <p>Данный раздел содержит расширенное правовое уведомление, цель которого — максимально подробно разъяснить пользователю все возможные аспекты работы приложения. Текст сформулирован намеренно детально и пространно, чтобы исключить недопонимания и продемонстрировать добросовестность подхода разработчиков.</p>
