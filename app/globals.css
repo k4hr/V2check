@@ -19,3 +19,25 @@ button { cursor: pointer; }
   --accent: #0B4DFF;
   --gold: #FFB000;
 }
+
+
+/* === TMA theme bridge === */
+:root{
+  --tg-bg:#0b0d10; --tg-text:#e7edf3; --tg-hint:#a0a8b4; --tg-link:#2e7dd7;
+  --tg-button:#2e7dd7; --tg-button-text:#ffffff; --tg-secondary-bg:#12161b;
+  --bg:var(--tg-bg); --text:var(--tg-text); --muted:var(--tg-hint);
+  --brand:var(--tg-link); --panel:var(--tg-secondary-bg);
+  --btn:var(--tg-button); --btn-text:var(--tg-button-text);
+  --border: color-mix(in oklab, var(--text) 12%, black);
+  --radius:12px; --shadow:0 8px 24px rgba(0,0,0,.25);
+}
+html,body{ background:var(--bg); color:var(--text); }
+/* Safe area */
+.safe{ padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+/* Simple UI */
+.card{ background:var(--panel); border:1px solid var(--border); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; }
+.btn{ display:inline-flex; align-items:center; justify-content:center; height:44px; padding:0 16px; gap:8px; border-radius:var(--radius);
+  background:var(--btn); color:var(--btn-text); border:1px solid color-mix(in oklab, var(--btn) 70%, black); transition:filter .15s ease, transform .02s ease; }
+.btn:active{ transform: translateY(1px); }
+.btn-secondary{ background:var(--panel); color:var(--text); border:1px solid var(--border); }
+.input{ height:44px; width:100%; border-radius:var(--radius); background:var(--panel); color:var(--text); border:1px solid var(--border); padding:0 12px; }
