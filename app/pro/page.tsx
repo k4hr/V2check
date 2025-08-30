@@ -13,7 +13,8 @@ const UI: Record<Plan, { label: string; price: number }> = {
 };
 
 function extractSlug(link: string): string | null {
-  const m = /https?:\\/\\/t\.me\\/(\$[A-Za-z0-9_\-]+)/.exec(link);
+  // корректный JS-литерал без двойного экранирования
+  const m = /https?:\/\/t\.me\/(\$[A-Za-z0-9_-]+)/.exec(link);
   return m ? m[1] : null;
 }
 
@@ -65,7 +66,7 @@ export default function ProPage() {
 
     try { WebApp.openTelegramLink(link); return; } catch {}
 
-    try { window.location.href = link; } catch {}
+    try { (window as any).location.href = link; } catch {}
   }
 
   async function buy(plan: Plan) {
