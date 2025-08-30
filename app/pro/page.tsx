@@ -79,12 +79,10 @@ export default function ProPage(){
           })}
         </div>
 
-        
-        <p className="text-xs opacity-60" style={{marginTop:24, lineHeight:1.4}}>
-          Подтверждая, вы соглашаетесь с <a href="/terms" style={{textDecoration:'underline'}}>условиями подписки</a>.
-          <br/>Также ознакомьтесь с <a href="/legal" style={{textDecoration:'underline'}}>правовой информацией</a>.
+        <p className="text-xs opacity-60" style={{marginTop:32, lineHeight:1.4}}>
+          Подтверждая, вы соглашаетесь с <a href="/terms" style={{textDecoration:'underline'}}>условиями подписки</a>.<br/>
+          Также ознакомьтесь с <a href="/legal" style={{textDecoration:'underline'}}>правовой информацией</a>.
         </p>
-
       </div>
     </main>
   );
