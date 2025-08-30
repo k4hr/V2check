@@ -10,8 +10,16 @@ export default function ProPage(){
   useEffect(()=>{
     try{
       const w:any = window;
-      w?.Telegram?.WebApp?.ready?.();
-      w?.Telegram?.WebApp?.expand?.();
+      const tg = w?.Telegram?.WebApp;
+      tg?.ready?.();
+      tg?.expand?.();
+      // Встроенная кнопка "Назад" в шапке Telegram
+      tg?.BackButton?.show?.();
+      tg?.BackButton?.onClick?.(()=>{
+        if (document.referrer) history.back();
+        else window.location.href = '/';
+      });
+      return () => tg?.BackButton?.hide?.();
     }catch{}
   },[]);
 
@@ -43,18 +51,20 @@ export default function ProPage(){
 
   return (
     <main>
-      <div className="safe" style={{maxWidth:560, margin:'0 auto', textAlign:'center'}}>
-        <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>Juristum Pro</h1>
-        <p style={{opacity:.85, marginBottom:20}}>Выберите тариф:</p>
+      <div className="safe" style={{maxWidth:560, margin:'0 auto', display:'flex', flexDirection:'column', minHeight:'calc(100dvh - 32px)'}}>
+        <div style={{textAlign:'center'}}>
+          <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>Juristum Pro</h1>
+          <p style={{opacity:.85, marginBottom:20}}>Выберите тариф:</p>
+        </div>
 
         {msg && (
-          <div className="card" role="alert" style={{marginBottom:12, borderColor:'rgba(255,180,0,.35)', textAlign:'left'}}>
+          <div className="card" role="alert" style={{marginBottom:12, borderColor:'rgba(255,180,0,.35)'}}>
             <b>Не получилось открыть оплату.</b><br/>
             <span style={{opacity:.85}}>{msg}</span>
           </div>
         )}
 
-        <div style={{display:'grid', gap:12, textAlign:'left'}}>
+        <div style={{display:'grid', gap:12}}>
           {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
             const cfg = PRICES[p];
             return (
@@ -79,10 +89,15 @@ export default function ProPage(){
           })}
         </div>
 
-        <p className="text-xs opacity-60" style={{marginTop:32, lineHeight:1.4}}>
-          Подтверждая, вы соглашаетесь с <a href="/terms" style={{textDecoration:'underline'}}>условиями подписки</a>.<br/>
-          Также ознакомьтесь с <a href="/legal" style={{textDecoration:'underline'}}>правовой информацией</a>.
-        </p>
+        {/* Нижний малозаметный футер */}
+        <div style={{marginTop:'auto'}}>
+          <p className="text-xs opacity-60" style={{fontSize:12, opacity:.55, textAlign:'center', marginTop:24}}>
+            Подтверждая, вы соглашаетесь с <a href="/terms" style={{textDecoration:'underline'}}>условиями подписки</a>.
+          </p>
+          <p className="text-xs opacity-60" style={{fontSize:12, opacity:.55, textAlign:'center'}}>
+            Также ознакомьтесь с <a href="/legal" style={{textDecoration:'underline'}}>правовой информацией</a>.
+          </p>
+        </div>
       </div>
     </main>
   );
