@@ -25,7 +25,7 @@ export default function ProPage(){
       // некоторые прокси на Railway игнорируют body в edge — поэтому на сервере мы тоже читаем query
       const data = await res.json().catch(()=>null);
       if (!data?.ok || !data?.link){
-        throw new Error(data?.error || 'Ошибка создания счёта');
+        throw new Error(data?.error || data?.detail?.description || 'Ошибка создания счёта');
       }
 
       const tg:any = (window as any).Telegram?.WebApp;
