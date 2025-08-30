@@ -3,6 +3,11 @@
 import { useEffect, useRef } from "react";
 import { applyPlan } from "../subscription";
 
+// Полностью повторяем стиль «плиток» из главного меню:
+// контейнер-кнопка: rounded-2xl bg-white/5 ring-1 ring-white/10 hover:bg-white/8 active:bg-white/10
+// контент: слева иконка/текст, справа стрелка ›
+// одна кнопка — одна строка.
+
 type Plan = "WEEK" | "MONTH" | "HALF" | "YEAR";
 
 const LABELS: Record<Plan, string> = {
@@ -83,11 +88,11 @@ export default function ProPage() {
     }
   }
 
-  function MenuCard({ plan }: { plan: Plan }) {
+  function MenuRow({ plan }: { plan: Plan }) {
     return (
       <button
         onClick={() => buy(plan)}
-        className="w-full rounded-2xl bg-white/5 hover:bg-white/8 active:bg-white/10 transition ring-1 ring-white/10 hover:ring-white/20 shadow-sm px-5 py-4 flex items-center justify-between"
+        className="w-full rounded-2xl bg-white/5 ring-1 ring-white/10 hover:bg-white/8 active:bg-white/10 transition-colors px-5 py-4 shadow-sm flex items-center justify-between"
       >
         <div className="flex items-center gap-3">
           <span className="text-xl">⭐</span>
@@ -105,10 +110,10 @@ export default function ProPage() {
         <p className="opacity-80 mb-6">Выберите тариф — окно Telegram-оплаты откроется сразу.</p>
 
         <div className="flex flex-col gap-3">
-          <MenuCard plan="WEEK" />
-          <MenuCard plan="MONTH" />
-          <MenuCard plan="HALF" />
-          <MenuCard plan="YEAR" />
+          <MenuRow plan="WEEK" />
+          <MenuRow plan="MONTH" />
+          <MenuRow plan="HALF" />
+          <MenuRow plan="YEAR" />
         </div>
 
         <p className="text-xs opacity-60 mt-10">
