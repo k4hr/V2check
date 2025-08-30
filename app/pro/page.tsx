@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-// FIX: use relative path so Next can resolve without custom aliases
 import { applyPlan } from "../subscription";
 
 type Plan = "WEEK" | "MONTH" | "HALF" | "YEAR";
@@ -13,16 +12,21 @@ const UI = {
   YEAR:  { label: "Год",     price: 2000 },
 } as const;
 
+function extractSlug(link: string): string | null {
+  const m = /https?:\/\/t\.me\/(\$[A-Za-z0-9_\-]+)/.exec(link);
+  return m ? m[1] : null;
+}
+
 export default function ProPage() {
   const listenerReady = useRef(false);
 
   useEffect(() => {
-    const attach = async () => {
-      if (listenerReady.current) return;
+    (async () => {
       const SDK: any = (await import("@twa-dev/sdk")).default;
       const WebApp = (SDK?.WebApp || SDK || (window as any).Telegram?.WebApp);
       if (!WebApp) return;
-
+      try { WebApp.ready(); WebApp.expand(); } catch {}
+      if (listenerReady.current) return;
       WebApp.onEvent("invoiceClosed", async (ev: any) => {
         const status = ev?.status;
         if (status === "paid") {
@@ -38,10 +42,8 @@ export default function ProPage() {
           WebApp.showAlert("Ошибка оплаты. Попробуйте ещё раз.");
         }
       });
-
       listenerReady.current = true;
-    };
-    attach();
+    })();
   }, []);
 
   async function buy(plan: Plan) {
@@ -55,7 +57,26 @@ export default function ProPage() {
         WebApp?.showAlert?.(`Не удалось создать счёт: ${data?.error || "unknown"}`);
         return;
       }
-      WebApp.openInvoice(data.link);
+
+      const link: string = data.link;
+      const slug = extractSlug(link);
+
+      let opened = false;
+      try {
+        const r = WebApp.openInvoice(link, (status: string) => {});
+        opened = r === true;
+      } catch {}
+
+      if (!opened && slug) {
+        try {
+          const r2 = WebApp.openInvoice(slug, (status: string) => {});
+          opened = r2 === true;
+        } catch {}
+      }
+
+      if (!opened) {
+        try { WebApp.openTelegramLink(link); } catch {}
+      }
     } catch (e: any) {
       WebApp?.showAlert?.(`Сеть недоступна: ${e?.message || e}`);
     }
