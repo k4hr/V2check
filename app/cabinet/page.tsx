@@ -1,72 +1,101 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getTg } from '../lib/tma';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import WebApp from '@twa-dev/sdk';
 
-type User = {
-  id: string;
-  telegramId: string;
-  username?: string | null;
+type Profile = {
   firstName?: string | null;
   lastName?: string | null;
+  username?: string | null;
   photoUrl?: string | null;
-  plan?: string | null;
-  expiresAt?: string | null;
 };
 
-export default function Cabinet(){
-  const [user, setUser] = useState<User | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function CabinetPage() {
+  const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
-  useEffect(() => {
-    try{
-      const tg = (window as any)?.Telegram?.WebApp;
-      tg?.ready?.();
-      tg?.BackButton?.show?.();
-      tg?.BackButton?.onClick?.(()=>history.back());
-    }catch{}
-
-    const initData = (window as any)?.Telegram?.WebApp?.initData;
-    fetch('/api/auth/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData })
-    }).then(r => r.json()).then((data) => {
-      if (!data?.ok) throw new Error(data?.error || 'Auth failed');
-      setUser(data.user);
-    }).catch((e:any)=>{ setErr(e?.message || 'Ошибка'); }).finally(()=> setLoading(false));
+  const initData = useMemo(() => {
+    // пробуем из SDK
+    try {
+      const raw = (WebApp as any)?.initData || '';
+      return typeof raw === 'string' ? raw : '';
+    } catch {
+      return '';
+    }
   }, []);
 
-  const initials = (u:User) => (u.firstName?.[0] || u.username?.[0] || 'U').toUpperCase();
+  const initUser = useMemo(() => {
+    try {
+      const unsafe = (WebApp as any)?.initDataUnsafe;
+      return unsafe?.user;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        // сразу показываем данные из Telegram, чтобы не ждать сеть
+        if (initUser) {
+          setProfile({
+            firstName: initUser.first_name,
+            lastName: initUser.last_name,
+            username: initUser.username,
+            photoUrl: initUser.photo_url,
+          });
+        }
+        if (!initData) {
+          setError('Invalid initData');
+          return;
+        }
+        // апсертим пользователя в БД
+        await fetch('/api/auth/verify', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-init-data': initData },
+          body: JSON.stringify({ initData }),
+        });
+        // подтягиваем профиль из БД (на будущее, если понадобятся план/даты)
+        await fetch('/api/me?initData=' + encodeURIComponent(initData));
+      } catch (e: any) {
+        setError(e?.message || 'Ошибка подключения');
+      }
+    })();
+  }, [initData, initUser]);
 
   return (
-    <main>
-      <div className="safe" style={{maxWidth:560, margin:'0 auto'}}>
-        <h1 style={{fontWeight:700, fontSize:22, marginBottom:12, textAlign:'center'}}>Личный кабинет</h1>
+    <div className="mx-auto max-w-xl px-4 py-6">
+      <h1 className="text-3xl font-bold mb-4">Личный кабинет</h1>
 
-        {loading && <div className="card">Вход через Telegram…</div>}
-        {err && <div className="card" role="alert">Ошибка: {err}</div>}
+      {error && (
+        <div className="rounded-lg bg-neutral-800 text-red-300 p-4 mb-4">
+          Ошибка: {error}
+        </div>
+      )}
 
-        {user && (
-          <div className="card" style={{display:'grid', gridTemplateColumns:'56px 1fr', gap:12, alignItems:'center'}}>
-            <div style={{width:56, height:56, borderRadius:12, background:'var(--panel)', display:'grid', placeItems:'center', fontWeight:700}}>
-              {user.photoUrl ? <img src={user.photoUrl} alt="avatar" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:12}}/> : initials(user)}
-            </div>
-            <div>
-              <div style={{fontWeight:700}}>{user.firstName || user.username || 'Пользователь'}</div>
-              <div className="muted" style={{fontSize:12}}>@{user.username || 'unknown'} · ID {user.telegramId}</div>
-            </div>
+      <div className="rounded-2xl bg-neutral-900 border border-neutral-800 p-4 flex items-center gap-4">
+        <div className="w-14 h-14 rounded-full bg-neutral-700 overflow-hidden flex items-center justify-center">
+          {profile?.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profile.photoUrl} alt="avatar" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-xl">👤</span>
+          )}
+        </div>
+        <div>
+          <div className="text-lg font-semibold">
+            {profile?.firstName || profile?.username ? (
+              <>
+                {profile?.firstName ?? ''} {profile?.lastName ?? ''}
+                {profile?.username ? <span className="opacity-70"> @{profile.username}</span> : null}
+              </>
+            ) : (
+              'Гость'
+            )}
           </div>
-        )}
-
-        <div className="card">
-          <h2 style={{margin:'0 0 6px'}}>Статус подписки</h2>
-          <div className="muted" style={{marginBottom:8}}>Данные подписки появятся после первой покупки.</div>
-          <Link href="/pro" className="btn" style={{display:'inline-block'}}>Оформить или продлить</Link>
+          <div className="text-sm opacity-70">Статус подписки появится после первой покупки</div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
