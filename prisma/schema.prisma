@@ -4,7 +4,8 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  // Важно: читаем именно публичный URL, чтобы не конфликтовать с Provided DATABASE_URL
+  url      = env("DATABASE_URL_PUBLIC")
 }
 
 model User {
@@ -18,7 +19,6 @@ model User {
   expiresAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
-
   payments    Payment[]
 }
 
