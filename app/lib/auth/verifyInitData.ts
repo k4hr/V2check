@@ -1,7 +1,5 @@
-// lib/auth/verifyInitData.ts
-// Telegram WebApp initData verification per official docs:
-// https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
-
+// verifyInitData.ts — Telegram WebApp initData validation
+// Spec: https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
 import crypto from 'crypto';
 
 export type TgInitUser = {
@@ -30,7 +28,7 @@ export function verifyInitData(initData: string, botToken: string): VerifyResult
 
   for (const [key, value] of params.entries()) {
     if (key === 'user') {
-      try { user = JSON.parse(value) as TgInitUser; } catch { /* ignore */ }
+      try { user = JSON.parse(value) as TgInitUser; } catch {}
     } else if (key === 'auth_date') {
       const n = Number(value);
       if (!Number.isNaN(n)) auth_date = n;
@@ -46,18 +44,16 @@ export function verifyInitData(initData: string, botToken: string): VerifyResult
   // Secret key = HMAC_SHA256("WebAppData", bot_token)
   const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
 
-  // Build data-check-string: "key=value" lines sorted lexicographically by keys
+  // Build data-check-string: sorted "key=value" lines
   const lines: string[] = [];
   if (typeof user !== 'undefined') lines.push(`user=${JSON.stringify(user)}`);
   if (typeof auth_date !== 'undefined') lines.push(`auth_date=${auth_date}`);
-  Object.keys(other).sort().forEach((k) => lines.push(`${k}=${other[k]}`));
-  // final sort (spec says sort all pairs)
+  Object.keys(other).sort().forEach(k => lines.push(`${k}=${other[k]}`));
   const dataCheckString = lines.sort().join('\n');
 
-  const hmac = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
-
-  if (hmac !== hash) return { ok: false, reason: 'bad-sign' };
-  if (auth_date && (Date.now() / 1000 - auth_date) > 24 * 60 * 60) return { ok: false, reason: 'expired' };
+  const h = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+  if (h !== hash) return { ok: false, reason: 'bad-sign' };
+  if (auth_date && (Date.now()/1000 - auth_date) > 24*60*60) return { ok: false, reason: 'expired' };
 
   return { ok: true, payload: { user, auth_date } };
 }
