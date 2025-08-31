@@ -1,6 +1,5 @@
 'use client';
 
-// Prevent Next from trying to prerender/SSG this page on the server.
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -22,11 +21,12 @@ export default function CabinetPage() {
     let cancelled = false;
     (async () => {
       try {
-        // Load Telegram SDK only on the client
         const mod = await import('@twa-dev/sdk');
-        const WebApp = mod.default ?? mod;
-        WebApp.ready?.();
-        WebApp.expand?.();
+        // TypeScript workaround: the package exports can vary; use any to avoid build-time type errors
+        const WebApp: any = (mod as any).default ?? (mod as any);
+
+        WebApp?.ready?.();
+        WebApp?.expand?.();
 
         const unsafe = WebApp?.initDataUnsafe;
         const raw = WebApp?.initData || '';
@@ -36,7 +36,6 @@ export default function CabinetPage() {
           setInitData(typeof raw === 'string' ? raw : '');
         }
 
-        // Fire-and-forget: upsert user on server (if API подключен)
         if (raw) {
           fetch('/api/auth/verify', {
             method: 'POST',
