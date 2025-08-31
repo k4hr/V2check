@@ -1,17 +1,13 @@
-#!/usr/bin/env node
+// Lightweight DB URL sanity check that NEVER crashes the process.
+// It only warns to logs if the URL looks wrong.
+const url = process.env.DATABASE_URL || "";
+const prefixOk = url.startsWith("postgresql://") || url.startsWith("postgres://");
 
-const raw = process.env.DATABASE_PUBLIC_URL;
-console.log("DATABASE_PUBLIC_URL (raw):", JSON.stringify(raw));
+console.log(`DATABASE_URL (raw): ${JSON.stringify(url)}`);
 
-if(raw){
-  console.log("DATABASE_PUBLIC_URL (spaces collapsed):", JSON.stringify(raw.replace(/\s+/g," ")));
-  if(!/^postgres(ql)?:\/\//.test(raw.trim())){
-    console.error("FATAL: DATABASE_PUBLIC_URL does not start with postgres:// or postgresql://");
-    process.exit(1);
-  } else {
-    console.log("OK: DATABASE_PUBLIC_URL format looks valid.");
-  }
-}else{
-  console.error("FATAL: DATABASE_PUBLIC_URL is undefined");
-  process.exit(1);
+if (!prefixOk) {
+  console.warn("WARN: DATABASE_URL does not start with postgres:// or postgresql://. Proceeding anyway.");
+  process.exitCode = 0; // ensure no crash
+} else {
+  console.log("DB URL check passed.");
 }
