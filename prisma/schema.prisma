@@ -4,21 +4,21 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // читаем один-единственный URL
+  // Важно: читаем один-единственный URL из окружения Railway/другое
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id         String   @id @default(cuid())
-  telegramId String   @unique
+  id         String    @id @default(cuid())
+  telegramId String    @unique
   username   String?
   firstName  String?
   lastName   String?
   photoUrl   String?
   plan       String?
   expiresAt  DateTime?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
   payments   Payment[]
 }
 
