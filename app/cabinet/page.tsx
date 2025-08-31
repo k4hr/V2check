@@ -1,54 +1,66 @@
 'use client';
+
 import { useEffect, useState } from 'react';
-import TopBar from '../components/TopBar';
-import { getSub, isPro } from '../lib/subscription';
-import { getFavs } from '../lib/favorites';
+import { getTg } from '../lib/tma';
+import Link from 'next/link';
 
-const RECO = ['Гражданский кодекс РФ','Уголовный кодекс РФ','КоАП РФ','Налоговый кодекс РФ'];
-
-function daysLeft(ts:number){ const diff = ts - Date.now(); return Math.max(0, Math.ceil(diff/(24*60*60*1000))); }
+type User = {
+  id: string;
+  telegramId: string;
+  username?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  photoUrl?: string | null;
+  plan?: string | null;
+  expiresAt?: string | null;
+};
 
 export default function Cabinet(){
-  const [pro,setPro]=useState(false);
-  const [until,setUntil]=useState(0);
-  const [favs,setFavs]=useState<string[]>([]);
+  const [user, setUser] = useState<User | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(()=>{
-    setPro(isPro());
-    const s=getSub(); setUntil(s.expiresAt);
-    setFavs(getFavs());
-  },[]);
+  useEffect(() => {
+    const tg = getTg();
+    try{ tg?.BackButton?.show?.(); tg?.BackButton?.onClick?.(()=>history.back()); }catch{}
+    // Verify on mount
+    const initData = (window as any)?.Telegram?.WebApp?.initData;
+    fetch('/api/auth/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData })
+    }).then(r => r.json()).then((data) => {
+      if (!data?.ok) throw new Error(data?.error || 'Auth failed');
+      setUser(data.user);
+    }).catch((e:any)=>{ setErr(e?.message || 'Ошибка'); }).finally(()=> setLoading(false));
+  }, []);
 
-  const left = daysLeft(until);
+  const initials = (u:User) => (u.firstName?.[0] || u.username?.[0] || 'U').toUpperCase();
 
   return (
     <main>
-      <TopBar />
-      <div style={{padding:16}} className="grid">
-        <div className="card">
-          <h1 style={{margin:'0 0 6px'}}>👤 Личный кабинет</h1>
-          {pro ? (
-            <div>Статус: <b>Pro активно</b> — осталось {left} дн.<br/><span className="muted">до {new Date(until).toLocaleString()}</span></div>
-          ) : (
-            <div>Статус: <b>Бесплатный доступ</b> — 2 документа/день. <a href="/pro" style={{color:'#8ab4ff'}}>Оформить Pro</a></div>
-          )}
-          {!pro && <div className="card" style={{marginTop:12}}>
-            <b>Напоминание:</b> Оформите Pro, чтобы читать без ограничений.
-            <div style={{marginTop:8}}><a className="btn primary" href="/pro">Купить подписку</a></div>
-          </div>}
-        </div>
+      <div className="safe" style={{maxWidth:560, margin:'0 auto'}}>
+        <h1 style={{fontWeight:700, fontSize:22, marginBottom:12, textAlign:'center'}}>Личный кабинет</h1>
 
-        <div className="card">
-          <h2 style={{margin:'0 0 6px'}}>★ Избранное</h2>
-          {favs.length===0 ? <div className="muted">Пусто. Добавляйте документы через кнопку ☆.</div> :
-            <div className="grid">{favs.map(id=>(<a key={id} className="btn" href={`/content/laws/${id}.html`}>{id}</a>))}</div>}
-        </div>
+        {loading && <div className="card">Вход через Telegram…</div>}
+        {err && <div className="card" role="alert">Ошибка: {err}</div>}
 
-        <div className="card">
-          <h2 style={{margin:'0 0 6px'}}>Рекомендации</h2>
-          <div className="grid cols2">
-            {RECO.map((t,i)=>(<div key={i} className="btn">{t}</div>))}
+        {user && (
+          <div className="card" style={{display:'grid', gridTemplateColumns:'56px 1fr', gap:12, alignItems:'center'}}>
+            <div style={{width:56, height:56, borderRadius:12, background:'var(--panel)', display:'grid', placeItems:'center', fontWeight:700}}>
+              {user.photoUrl ? <img src={user.photoUrl} alt="avatar" style={{width:'100%',height:'100%',objectFit:'cover',borderRadius:12}}/> : initials(user)}
+            </div>
+            <div>
+              <div style={{fontWeight:700}}>{user.firstName || user.username || 'Пользователь'}</div>
+              <div className="muted" style={{fontSize:12}}>@{user.username || 'unknown'} · ID {user.telegramId}</div>
+            </div>
           </div>
+        )}
+
+        <div className="card">
+          <h2 style={{margin:'0 0 6px'}}>Статус подписки</h2>
+          <div className="muted" style={{marginBottom:8}}>Данные подписки появятся после первой покупки.</div>
+          <Link href="/pro" className="btn" style={{display:'inline-block'}}>Оформить или продлить</Link>
         </div>
       </div>
     </main>
