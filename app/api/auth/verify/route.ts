@@ -1,35 +1,63 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { verifyInitData } from '../../../lib/auth/verifyInitData';
-import { prisma } from '../../../lib/prisma';
+import { NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+import type { NextRequest } from 'next/server';
 
-export async function POST(req: NextRequest){
-  try{
-    const { initData } = await req.json();
-    const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
-    const v = verifyInitData(String(initData||''), String(BOT_TOKEN));
-    if(!v.ok || !v.payload?.user){
-      return NextResponse.json({ ok:false, error: 'Invalid initData' },{ status:401 });
+// Пытаемся использовать ваш существующий helper для верификации initData
+// Оставляем прежний путь импорта, чтобы не ломать структуру проекта.
+import { verifyInitData } from '../../../../lib/auth/verifyInitData';
+
+const prisma = new PrismaClient();
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({} as any));
+    const initData: string | undefined =
+      body?.initData ||
+      req.headers.get('x-init-data') ||
+      undefined;
+
+    if (!initData) {
+      return NextResponse.json({ ok: false, error: 'Missing initData' }, { status: 400 });
     }
-    const u = v.payload.user as any;
-    const telegramId = String(u.id);
-    const user = await prisma.user.upsert({
-      where: { telegramId },
-      update: {
-        username: u.username || null,
-        firstName: u.first_name || null,
-        lastName: u.last_name || null,
-        photoUrl: u.photo_url || null,
-      },
-      create: {
-        telegramId,
-        username: u.username || null,
-        firstName: u.first_name || null,
-        lastName: u.last_name || null,
-        photoUrl: u.photo_url || null,
-      }
+
+    const botToken = process.env.BOT_TOKEN;
+    if (!botToken) {
+      return NextResponse.json({ ok: false, error: 'Missing BOT_TOKEN' }, { status: 500 });
+    }
+
+    // Валидация Telegram initData
+    const verified = await verifyInitData(initData, botToken);
+    if (!verified || (typeof verified === 'object' && 'ok' in verified && !verified.ok)) {
+      return NextResponse.json({ ok: false, error: 'Invalid initData' }, { status: 401 });
+    }
+
+    // Извлекаем user из initDataUnsafe (внутри verifyInitData обычно уже разобрано)
+    // На всякий случай парсим из search-строки сами.
+    const params = new URLSearchParams(initData);
+    const userStr = params.get('user');
+    const user = userStr ? JSON.parse(userStr) : undefined;
+
+    if (!user?.id) {
+      return NextResponse.json({ ok: false, error: 'No user in initData' }, { status: 400 });
+    }
+
+    const data = {
+      telegramId: String(user.id),
+      username: user.username || null,
+      firstName: user.first_name || null,
+      lastName: user.last_name || null,
+      photoUrl: user.photo_url || null,
+    };
+
+    const dbUser = await prisma.user.upsert({
+      where: { telegramId: data.telegramId },
+      update: data,
+      create: { id: undefined as any, ...data } as any,
     });
-    return NextResponse.json({ ok:true, user });
-  }catch(e:any){
-    return NextResponse.json({ ok:false, error: e?.message || 'Server error' },{ status:500 });
+
+    return NextResponse.json({ ok: true, user: dbUser });
+  } catch (e: any) {
+    console.error('auth/verify error', e);
+    return NextResponse.json({ ok: false, error: e?.message || 'Server error' }, { status: 500 });
   }
 }
