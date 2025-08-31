@@ -1,85 +1,71 @@
-'use client';
+"use client";
 
-export const dynamic = 'force-dynamic';
+import { useEffect, useState } from "react";
+import WebApp from "@twa-dev/sdk";
 
-import { useEffect, useMemo, useState } from 'react';
-
-type TgUser = {
-  id: number;
+interface UserData {
   username?: string;
-  first_name?: string;
-  last_name?: string;
-  photo_url?: string;
-};
+  firstName?: string;
+  plan?: string | null;
+  expiresAt?: string | null;
+}
 
 export default function CabinetPage() {
-  const [user, setUser] = useState<TgUser | null>(null);
-  const [initData, setInitData] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+  const [user, setUser] = useState<UserData | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const mod = await import('@twa-dev/sdk');
-        // TypeScript workaround: the package exports can vary; use any to avoid build-time type errors
-        const WebApp: any = (mod as any).default ?? (mod as any);
+    WebApp.ready();
+    const initData = WebApp.initDataUnsafe;
 
-        WebApp?.ready?.();
-        WebApp?.expand?.();
-
-        const unsafe = WebApp?.initDataUnsafe;
-        const raw = WebApp?.initData || '';
-
-        if (!cancelled) {
-          if (unsafe?.user?.id) setUser(unsafe.user as TgUser);
-          setInitData(typeof raw === 'string' ? raw : '');
-        }
-
-        if (raw) {
-          fetch('/api/auth/verify', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json', 'x-init-data': raw as string },
-            body: JSON.stringify({ initData: raw }),
-          }).catch(() => {});
-        }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || 'Init error');
-      }
-    })();
-    return () => { cancelled = true; };
+    if (initData?.user) {
+      fetch("/api/me")
+        .then((res) => res.json())
+        .then((data) => {
+          setUser({
+            username: initData.user.username,
+            firstName: initData.user.first_name,
+            plan: data.plan,
+            expiresAt: data.expiresAt,
+          });
+        })
+        .catch(() => {
+          setUser({
+            username: initData.user.username,
+            firstName: initData.user.first_name,
+          });
+        });
+    }
   }, []);
 
-  const displayName = useMemo(() => {
-    if (!user) return 'Гость';
-    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim();
-    return name || (user.username ? '@' + user.username : 'ID ' + user.id);
-  }, [user]);
-
   return (
-    <div className="mx-auto max-w-xl px-4 py-6">
-      <h1 className="text-3xl font-bold mb-4">Личный кабинет</h1>
+    <div className="flex flex-col items-center justify-start min-h-screen text-white p-6">
+      <h1 className="text-2xl font-bold mb-6 text-center">Личный кабинет</h1>
 
-      {error && (
-        <div className="mb-4 rounded-lg bg-neutral-900 text-red-300 p-3">
-          Ошибка: {error}
-        </div>
-      )}
+      {user ? (
+        <>
+          <p className="text-lg mb-6">
+            Здравствуйте, {user.firstName || user.username}
+          </p>
 
-      <div className="mb-6 flex items-center gap-4 rounded-2xl bg-neutral-900/60 p-4">
-        <div className="h-14 w-14 overflow-hidden rounded-full ring-1 ring-white/10 flex items-center justify-center">
-          {user?.photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={user.photo_url} alt="avatar" className="h-full w-full object-cover" />
+          {user.plan ? (
+            <div className="text-center bg-gray-800 p-4 rounded-lg">
+              <p className="text-lg font-semibold">У вас оформлен Juristum Pro</p>
+              <p className="text-sm text-gray-300">
+                Подписка действует до: {user.expiresAt}
+              </p>
+            </div>
           ) : (
-            <span className="text-xl">👤</span>
+            <button
+              onClick={() => (window.location.href = "/subscribe")}
+              className="px-4 py-2 bg-blue-600 rounded-lg mt-4"
+            >
+              Оформить подписку
+            </button>
           )}
-        </div>
-        <div>
-          <div className="text-lg font-semibold">{displayName}</div>
-          <div className="text-sm opacity-70">initData: {initData ? 'получено' : 'нет'}</div>
-        </div>
-      </div>
+        </>
+      ) : (
+        <p className="text-lg text-gray-400">Не удалось получить данные из Telegram</p>
+      )}
     </div>
   );
 }
