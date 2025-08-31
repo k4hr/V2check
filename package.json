@@ -1,26 +1,10 @@
 {
-  "name": "juristum-tma",
-  "version": "0.9.4",
-  "private": true,
-  "scripts": {
-    "postinstall": "npx prisma generate --schema=prisma/schema.prisma || true",
-    "prestart": "node scripts/check-db-url.mjs",
-    "start": "npx prisma db push --schema=prisma/schema.prisma && next start -p $PORT",
-    "dev": "next dev",
-    "build": "next build",
-    "lint": "next lint"
-  },
+  "//": "Это только фрагмент: зависимости, которые должны быть в package.json",
   "dependencies": {
-    "@twa-dev/sdk": "^7.0.0",
-    "next": "15.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "@prisma/client": "^5.18.0"
+    "@prisma/client": "^5.22.0",
+    "@twa-dev/sdk": "^7.0.0"
   },
   "devDependencies": {
-    "prisma": "^5.18.0",
-    "typescript": "^5.5.4",
-    "@types/react": "^18.3.3",
-    "@types/node": "^20.14.9"
+    "prisma": "^5.22.0"
   }
 }
