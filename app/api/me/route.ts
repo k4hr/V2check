@@ -1,7 +1,7 @@
-// app/api/me/route.ts — POST: верификация initData и статус подписки
+// app/api/me/route.ts — фикс импорта Prisma (named export)
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInitData } from '../../../lib/auth/verifyInitData'; // <= ВАЖНО: 3 уровня вверх
-import prisma from '../../../lib/prisma';
+import { verifyInitData } from '../../../lib/auth/verifyInitData';
+import { prisma } from '../../../lib/prisma';
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       : null;
 
     return NextResponse.json({ ok: true, subscription: active });
-  } catch (e) {
+  } catch (_e) {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 }
