@@ -1,59 +1,37 @@
-// verifyInitData.ts — Telegram WebApp initData validation
-// Spec: https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
+// verifyInitData.ts — валидация Telegram initData по официальной схеме
+// Secret = HMAC_SHA256("WebAppData", BOT_TOKEN)
 import crypto from 'crypto';
 
-export type TgInitUser = {
-  id: number;
-  first_name?: string;
-  last_name?: string;
-  username?: string;
-  language_code?: string;
-  photo_url?: string;
-  allows_write_to_pm?: boolean;
-};
-
 export type VerifyResult =
-  | { ok: true; payload: { user?: TgInitUser; auth_date?: number } }
-  | { ok: false; reason: 'missing' | 'nohash' | 'bad-sign' | 'expired' };
+  | { ok: true; payload: { user?: any; auth_date?: number } }
+  | { ok: false; reason: 'missing' | 'nohash' | 'bad-sign' };
 
 export function verifyInitData(initData: string, botToken: string): VerifyResult {
   if (!initData || !botToken) return { ok: false, reason: 'missing' };
 
   const params = new URLSearchParams(initData);
-
-  let user: TgInitUser | undefined;
-  let auth_date: number | undefined;
-  let hash: string | undefined;
-  const other: Record<string, string> = {};
-
-  for (const [key, value] of params.entries()) {
-    if (key === 'user') {
-      try { user = JSON.parse(value) as TgInitUser; } catch {}
-    } else if (key === 'auth_date') {
-      const n = Number(value);
-      if (!Number.isNaN(n)) auth_date = n;
-    } else if (key === 'hash') {
-      hash = value;
-    } else {
-      other[key] = value;
-    }
-  }
-
+  const hash = params.get('hash') || '';
   if (!hash) return { ok: false, reason: 'nohash' };
 
-  // Secret key = HMAC_SHA256("WebAppData", bot_token)
+  // Собираем data-check-string из пар "key=value", исключая hash, сортируем по ключу
+  const pairs: string[] = [];
+  params.forEach((v, k) => { if (k !== 'hash') pairs.push(`${k}=${v}`); });
+  pairs.sort();
+  const dataCheckString = pairs.join('\n');
+
   const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+  const calc = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
 
-  // Build data-check-string: sorted "key=value" lines
-  const lines: string[] = [];
-  if (typeof user !== 'undefined') lines.push(`user=${JSON.stringify(user)}`);
-  if (typeof auth_date !== 'undefined') lines.push(`auth_date=${auth_date}`);
-  Object.keys(other).sort().forEach(k => lines.push(`${k}=${other[k]}`));
-  const dataCheckString = lines.sort().join('\n');
+  if (calc !== hash) return { ok: false, reason: 'bad-sign' };
 
-  const h = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
-  if (h !== hash) return { ok: false, reason: 'bad-sign' };
-  if (auth_date && (Date.now()/1000 - auth_date) > 24*60*60) return { ok: false, reason: 'expired' };
+  const payload: any = {};
+  params.forEach((v, k) => {
+    if (k === 'user') {
+      try { payload.user = JSON.parse(v); } catch {}
+    } else if (k === 'auth_date') {
+      const n = Number(v); if (!Number.isNaN(n)) payload.auth_date = n;
+    }
+  });
 
-  return { ok: true, payload: { user, auth_date } };
+  return { ok: true, payload };
 }
