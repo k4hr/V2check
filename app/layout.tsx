@@ -1,20 +1,18 @@
-import "./globals.css";
-import { PT_Serif } from "next/font/google";
-
-const ptSerif = PT_Serif({
-  subsets: ["latin", "cyrillic"],
-  weight: ["400", "700"],
-});
+import Script from 'next/script';
+import './globals.css';
 
 export const metadata = {
-  title: "Juristum",
-  description: "Юридическое приложение",
+  title: 'Juristum',
+  description: 'Личный кабинет',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru">
-      <body className={ptSerif.className}>{children}</body>
+      <head>
+        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
