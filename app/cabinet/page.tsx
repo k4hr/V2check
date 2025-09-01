@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type TgUser = {
   id: number;
@@ -35,14 +36,10 @@ export default function CabinetPage() {
   const [subActive, setSubActive] = useState<boolean>(false);
   const [subExpiresAt, setSubExpiresAt] = useState<string | null>(null);
 
-  // аккуратно форматируем имя
+  // отображаемое имя
   const displayName = useMemo(() => {
     if (!user) return "Гость";
-    return (
-      user.first_name ||
-      user.username ||
-      (user.last_name ? `${user.last_name}` : "Гость")
-    );
+    return user.first_name || user.username || user.last_name || "Гость";
   }, [user]);
 
   useEffect(() => {
@@ -53,7 +50,6 @@ export default function CabinetPage() {
         const mod = await import("@twa-dev/sdk");
         const WebApp = (mod.default ?? mod) as any;
 
-        // на всякий случай — мягкие вызовы
         WebApp?.ready?.();
         WebApp?.expand?.();
 
@@ -64,7 +60,7 @@ export default function CabinetPage() {
           setUser(unsafe.user as TgUser);
         }
 
-        // тянем статус подписки (если есть initData)
+        // за статусом подписки идём на наш API (если есть initData)
         if (initData) {
           const res = await fetch("/api/me", {
             method: "POST",
@@ -78,29 +74,22 @@ export default function CabinetPage() {
           if (mounted && data?.ok) {
             setSubActive(Boolean(data.subscription?.active));
             setSubExpiresAt(data.subscription?.expiresAt ?? null);
-          } else {
-            // если API вернул ошибку — считаем неактивной
-            if (mounted) {
-              setSubActive(false);
-              setSubExpiresAt(null);
-            }
-          }
-        } else {
-          // нет initData => неактивна (например, открыт не из Telegram)
-          if (mounted) {
+          } else if (mounted) {
             setSubActive(false);
             setSubExpiresAt(null);
           }
+        } else if (mounted) {
+          setSubActive(false);
+          setSubExpiresAt(null);
         }
-      } catch (e) {
-        // SDK недоступен / ошибка — отрисуем гость+неактивна
+      } catch {
         if (mounted) {
           setUser(null);
           setSubActive(false);
           setSubExpiresAt(null);
         }
       } finally {
-        if (mounted) setLoading(false);
+        mounted && setLoading(false);
       }
     })();
 
@@ -146,7 +135,6 @@ export default function CabinetPage() {
           }}
         />
       ) : (
-        // заглушка-инициал
         <div
           aria-label="avatar"
           style={{
@@ -167,7 +155,7 @@ export default function CabinetPage() {
         </div>
       )}
 
-      {/* Заголовок блока статуса — ВНЕ карточки */}
+      {/* Заголовок блока статуса — вне карточки */}
       <div style={{ height: 18 }} />
       <h2
         style={{
@@ -214,8 +202,10 @@ export default function CabinetPage() {
             <p style={{ fontSize: 16, marginBottom: 12 }}>
               Подписка <b>не активна</b>.
             </p>
-            <button
-              onClick={() => (window.location.href = "/pricing")}
+            {/* ВЕДЁМ НА СУЩЕСТВУЮЩУЮ СТРАНИЦУ С ТАРИФАМИ */}
+            <Link
+              href="/pro"
+              prefetch={false}
               style={{
                 display: "inline-block",
                 background: "#2b6cb0",
@@ -223,21 +213,20 @@ export default function CabinetPage() {
                 padding: "10px 16px",
                 borderRadius: 10,
                 fontWeight: 600,
-                border: "none",
-                cursor: "pointer",
+                textDecoration: "none",
               }}
             >
               Оформить подписку
-            </button>
+            </Link>
           </>
         )}
       </div>
 
-      {/* Подсказка, если человек открыл не из Telegram */}
+      {/* Подсказка, если открыто вне Telegram */}
       {!user && !loading && (
         <p style={{ opacity: 0.7, maxWidth: 680 }}>
-          Похоже, приложение открыто вне Telegram. Откройте через кнопку Web
-          App у бота, чтобы увидеть персональные данные.
+          Похоже, приложение открыто вне Telegram. Откройте через кнопку Web App
+          у бота, чтобы увидеть персональные данные.
         </p>
       )}
     </div>
