@@ -79,10 +79,10 @@ export default function CabinetPage() {
           </button>
         </a>
       </div>
-    
 
+      {/* Новая кнопка Избранное */}
       <div style={{marginTop:20}}>
-        <Link href="/favorites" className="list-btn" style={{textDecoration:'none'}}>
+        <Link href="/cabinet/favorites" className="list-btn" style={{textDecoration:'none'}}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">⭐</span>
             <b>Избранное</b>
