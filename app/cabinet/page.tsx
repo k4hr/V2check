@@ -1,95 +1,72 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-
-type Sub = { plan: string; expiresAt: string } | null;
+import Script from 'next/script';
 
 export default function CabinetPage() {
   const [user, setUser] = useState<any>(null);
-  const [sub, setSub] = useState<Sub>(null);
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [statusText, setStatusText] = useState<string>('Подписка не активна.');
+  const [loadingStatus, setLoadingStatus] = useState<boolean>(false);
 
-  async function loadMe(initData: string) {
+  async function loadSubscription(initData: string) {
     if (!initData) return;
-    setLoading(true);
-    setErr(null);
+    setLoadingStatus(true);
     try {
-      const resp = await fetch('/api/me', {
-        method: 'POST',
-        headers: { 'x-init-data': initData },
-      });
+      const resp = await fetch('/api/me', { method: 'POST', headers: { 'x-init-data': initData } });
       const data = await resp.json();
-      if (!resp.ok || !data?.ok) throw new Error(data?.error || 'Не удалось получить статус');
-      setSub(data.subscription ?? null);
-    } catch (e: any) {
-      setErr(e?.message || 'Ошибка загрузки');
-      setSub(null);
+      if (resp.ok && data?.ok && data?.subscription) {
+        const ex = new Date(data.subscription.expiresAt);
+        setStatusText(`✅ Подписка активна до ${ex.toLocaleString()}`);
+      } else {
+        setStatusText('Подписка не активна.');
+      }
+    } catch {
+      setStatusText('Не удалось получить статус');
     } finally {
-      setLoading(false);
+      setLoadingStatus(false);
     }
   }
 
   useEffect(() => {
-    const w: any = typeof window !== 'undefined' ? window : null;
-    const tg = w?.Telegram?.WebApp;
-    tg?.ready?.();
-    tg?.expand?.();
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+      const WebApp = (window as any).Telegram.WebApp;
+      WebApp.ready?.();
+      WebApp.expand?.();
+      setUser(WebApp.initDataUnsafe?.user || null);
 
-    // Текущий пользователь по данным Telegram
-    const u = tg?.initDataUnsafe?.user || null;
-    setUser(u);
+      const initData = WebApp?.initData || '';
+      if (initData) loadSubscription(initData);
 
-    const initData = tg?.initData || '';
-    if (initData) loadMe(initData);
+      const onInvoiceClosed = (e:any) => {
+        if (e?.status === 'paid') {
+          loadSubscription(WebApp?.initData || '');
+        }
+      };
+      (WebApp as any)?.onEvent?.('invoiceClosed', onInvoiceClosed);
 
-    // Авто-обновление статуса, когда окно оплаты закрывается
-    const onInvoiceClosed = (event: any) => {
-      // event?.status: 'paid' | 'cancelled' | 'failed' | undefined
-      if (event?.status === 'paid') {
-        loadMe(tg?.initData || '');
-      }
-    };
-    tg?.onEvent?.('invoiceClosed', onInvoiceClosed);
-
-    return () => {
-      tg?.offEvent?.('invoiceClosed', onInvoiceClosed);
-    };
+      return () => {
+        (WebApp as any)?.offEvent?.('invoiceClosed', onInvoiceClosed);
+      };
+    }
   }, []);
 
   return (
-    <div style={{ padding: 20 }}>
+    <div style={{ padding: '20px', textAlign: 'center' }}>
       <h1>Личный кабинет</h1>
-
       {user ? (
         <>
-          <p>Здравствуйте, <b>{user.username || `${user.first_name ?? ''} ${user.last_name ?? ''}` || 'пользователь'}</b></p>
-
-          <h3>Статус подписки</h3>
-
-          {loading ? (
-            <p>Проверяем подписку…</p>
-          ) : err ? (
-            <p style={{ color: '#f66' }}>{err}</p>
-          ) : sub ? (
-            <div style={{ border: '1px solid #444', borderRadius: 8, padding: 12 }}>
-              <p>✅ Подписка активна: <b>{sub.plan}</b></p>
-              <p>Действует до: <b>{new Date(sub.expiresAt).toLocaleString()}</b></p>
-            </div>
-          ) : (
-            <div style={{ border: '1px solid #444', borderRadius: 8, padding: 12 }}>
-              <p>Подписка <b>не активна</b>.</p>
-              <a href="/pro" style={{ textDecoration:'none' }}>
-                <button style={{ padding: '10px 20px', borderRadius: 6, background: '#3b82f6', color: '#fff' }}>
-                  Оформить подписку
-                </button>
-              </a>
-            </div>
-          )}
+          <p>Здравствуйте, <b>{user.first_name}</b></p>
+          {user.photo_url && <img src={user.photo_url} alt="avatar" style={{ borderRadius: '50%', width: 80, height: 80 }} />}
         </>
       ) : (
         <p>Данные пользователя недоступны. Откройте через Telegram WebApp.</p>
       )}
+
+      <div style={{ marginTop: 20, padding: 10, border: '1px solid #444', borderRadius: 8 }}>
+        <h3>Статус подписки</h3>
+        <p>{loadingStatus ? 'Проверяем подписку…' : statusText}</p>
+        <button style={{ padding: '10px 20px', borderRadius: 6, background: '#3b82f6', color: '#fff' }}>Оформить подписку</button>
+      </div>
     </div>
   );
 }
