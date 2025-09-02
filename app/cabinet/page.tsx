@@ -56,7 +56,13 @@ export default function CabinetPage() {
       {user ? (
         <>
           <p>Здравствуйте, <b>{user.first_name}</b></p>
-          {user.photo_url && <img src={user.photo_url} alt="avatar" style={{ borderRadius: '50%', width: 80, height: 80 }} />}
+          {user.photo_url && (
+            <img
+              src={user.photo_url}
+              alt="avatar"
+              style={{ display:'block', margin:'0 auto', borderRadius: '50%', width: 80, height: 80 }}
+            />
+          )}
         </>
       ) : (
         <p>Данные пользователя недоступны. Откройте через Telegram WebApp.</p>
@@ -65,7 +71,12 @@ export default function CabinetPage() {
       <div style={{ marginTop: 20, padding: 10, border: '1px solid #444', borderRadius: 8 }}>
         <h3>Статус подписки</h3>
         <p>{loadingStatus ? 'Проверяем подписку…' : statusText}</p>
-        <button style={{ padding: '10px 20px', borderRadius: 6, background: '#3b82f6', color: '#fff' }}>Оформить подписку</button>
+
+        <a href="/pro" style={{ textDecoration: 'none' }}>
+          <button style={{ padding: '10px 20px', borderRadius: 6, background: '#3b82f6', color: '#fff' }}>
+            Оформить подписку
+          </button>
+        </a>
       </div>
     </div>
   );
