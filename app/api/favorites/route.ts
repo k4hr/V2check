@@ -9,8 +9,9 @@ async function getTelegramId(req: NextRequest): Promise<string> {
   const initData = req.headers.get('x-init-data') || '';
   if (!initData) throw new Error('UNAUTHORIZED');
   const v = await verifyInitData(String(initData), String(BOT_TOKEN));
-  if (!v?.ok || !v?.data?.telegramId) throw new Error('UNAUTHORIZED');
-  return String(v.data.telegramId);
+  const tgId = v?.ok ? (v as any)?.payload?.user?.id : null;
+  if (!tgId) throw new Error('UNAUTHORIZED');
+  return String(tgId);
 }
 
 // GET: list favorites for current user
