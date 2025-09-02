@@ -6,55 +6,46 @@ export const dynamic = 'force-dynamic';
 
 import { PRICES, type Plan } from '../../lib/pricing';
 
-// Для Stars нужен BOT_TOKEN из .env
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const XTR_FACTOR = 100; // Stars: amount указывается в минимальных единицах
-
 export async function POST(req: NextRequest) {
   try {
-    if (!BOT_TOKEN) {
-      return NextResponse.json({ ok:false, error:'BOT_TOKEN is not set' }, { status:500 });
-    }
-
+    // 1) План: из body или из query (?plan=MONTH)
     let body: any = null;
     try { body = await req.json(); } catch {}
     const url = new URL(req.url);
     const plan = (body?.plan || url.searchParams.get('plan') || 'MONTH') as Plan;
 
-    if (!(plan in PRICES)) {
-      return NextResponse.json({ ok:false, error:`Unknown plan: ${plan}` }, { status:400 });
+    const cfg = PRICES[plan as Plan];
+    if (!cfg) return NextResponse.json({ ok:false, error: 'Unknown plan' }, { status: 400 });
+
+    // 2) Токен из окружения: TG_BOT_TOKEN ИЛИ BOT_TOKEN
+    const token = process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN || '';
+    if (!token) {
+      return NextResponse.json({ ok:false, error: 'Missing TG_BOT_TOKEN or BOT_TOKEN' }, { status: 500 });
     }
 
-    const price = PRICES[plan];
-    const title = `Подписка — ${price.label}`;
-    const description = `${price.days} дней доступа`;
-    const payload = `sub:${plan}:${Date.now()}`;
-
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
+    // 3) Запрос к Bot API
+    const res = await fetch(`https://api.telegram.org/bot${token}/createInvoiceLink`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        title,
-        description,
-        payload,
-        currency: 'XTR',
-        prices: [
-          {
-            label: price.label,
-            amount: price.stars * XTR_FACTOR
-          }
-        ],
-        start_parameter: `subs_${plan.toLowerCase()}`
+        title: cfg.title,
+        description: cfg.description,
+        payload: `${plan}:${Date.now()}`,
+        provider_token: '',          // Stars
+        currency: 'XTR',             // Stars currency
+        prices: [{ label: cfg.title, amount: cfg.amount }],
+        start_parameter: 'start_parameter'
       })
     });
 
     const data = await res.json().catch(() => null) as any;
-    if (!res.ok || !data?.ok || !data?.result) {
-      return NextResponse.json({ ok:false, error:data?.description || 'Telegram error', detail:data }, { status:500 });
+    if (!data?.ok || !data?.result) {
+      const detail = data?.description || 'Telegram createInvoiceLink failed';
+      return NextResponse.json({ ok:false, error: detail, detail: data }, { status: 500 });
     }
 
-    return NextResponse.json({ ok:true, link:data.result, payload });
-  } catch(e:any) {
-    return NextResponse.json({ ok:false, error:e?.message || 'Server error' }, { status:500 });
+    return NextResponse.json({ ok:true, link: data.result });
+  } catch (e:any) {
+    return NextResponse.json({ ok:false, error: e?.message || 'Server error' }, { status: 500 });
   }
 }
