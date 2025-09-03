@@ -14,7 +14,6 @@ export async function POST(req: NextRequest) {
     const update = await req.json();
     console.log('[botWebhook] update kind:', Object.keys(update || {}));
 
-    // 1) pre_checkout_query — подтверждаем, иначе Телега не даст оплатить
     if (update?.pre_checkout_query?.id) {
       const id = String(update.pre_checkout_query.id);
       if (BOT_TOKEN) {
@@ -27,7 +26,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // 2) успешный платеж
     const msg = update?.message;
     if (msg?.successful_payment) {
       const userId = msg?.from?.id ? String(msg.from.id) : null;
@@ -67,7 +65,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    return NextResponse.json({ ok: true }); // любое другое событие игнорим
+    return NextResponse.json({ ok: true });
   } catch (e: any) {
     console.error('botWebhook error', e);
     return NextResponse.json({ ok: false, error: e?.message || 'Server error' }, { status: 200 });
