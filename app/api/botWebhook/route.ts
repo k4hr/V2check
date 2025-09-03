@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { prisma } from '../../../lib/prisma';
 import { PRICES } from '../../../lib/pricing';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
-function daysToMs(days: number) {
-  return days * 24 * 60 * 60 * 1000;
-}
+function daysToMs(days: number) { return days * 24 * 60 * 60 * 1000; }
 
 export async function POST(req: NextRequest) {
   try {
     const update = await req.json();
+    console.log('[botWebhook] update kind:', Object.keys(update || {}));
 
     // 1) pre_checkout_query — подтверждаем, иначе Телега не даст оплатить
     if (update?.pre_checkout_query?.id) {
@@ -30,13 +32,10 @@ export async function POST(req: NextRequest) {
     if (msg?.successful_payment) {
       const userId = msg?.from?.id ? String(msg.from.id) : null;
       const payload: string | null = msg?.successful_payment?.invoice_payload || null;
-
-      // логирование для диагностики в Railway Logs
-      console.log('[botWebhook] paid:', { userId, payload });
+      console.log('[botWebhook] successful_payment:', { userId, payload });
 
       if (!userId || !payload) return NextResponse.json({ ok: true });
 
-      // payload ожидаем "subs:WEEK|MONTH|HALF_YEAR|YEAR"
       const rawKey = payload.includes(':') ? payload.split(':')[1] : payload;
       const planKey = String(rawKey || '').toUpperCase() as keyof typeof PRICES;
       const planCfg = PRICES[planKey];
@@ -54,7 +53,7 @@ export async function POST(req: NextRequest) {
       let base = now;
       if (prev?.expiresAt) {
         const prevMs = new Date(prev.expiresAt).getTime();
-        if (!Number.isNaN(prevMs) && prevMs > now) base = prevMs; // продлеваем от конца
+        if (!Number.isNaN(prevMs) && prevMs > now) base = prevMs;
       }
       const expiresAt = new Date(base + daysToMs(planCfg.days));
 
@@ -65,14 +64,12 @@ export async function POST(req: NextRequest) {
       });
 
       console.log('[botWebhook] updated subscription:', { userId, plan: planCfg.label, expiresAt });
-
       return NextResponse.json({ ok: true });
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true }); // любое другое событие игнорим
   } catch (e: any) {
     console.error('botWebhook error', e);
-    // Возвращаем 200, чтобы Телега не зациклилась на ретраях
     return NextResponse.json({ ok: false, error: e?.message || 'Server error' }, { status: 200 });
   }
 }
