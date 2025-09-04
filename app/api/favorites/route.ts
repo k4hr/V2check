@@ -17,8 +17,7 @@ async function getTelegramId(req: NextRequest): Promise<string> {
   return String(tgId);
 }
 
-// В твоей схеме Favorite связан по userId (Int) -> User.id (Int), а не по telegramId.
-// Поэтому гарантируем пользователя и возвращаем его числовой id.
+// В твоей схеме Favorite связан по userId (Int) -> User.id (Int)
 async function ensureUserAndGetId(telegramId: string): Promise<number> {
   const user = await prisma.user.upsert({
     where: { telegramId },
@@ -45,17 +44,17 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/favorites — добавить элемент { title, url?, note? }
+// POST /api/favorites — добавить элемент { title, url? }
 export async function POST(req: NextRequest) {
   try {
     const telegramId = await getTelegramId(req);
     const userId = await ensureUserAndGetId(telegramId);
     const body = await req.json().catch(() => ({}));
-    const { title, url = null, note = null } = body || {};
+    const { title, url = null } = body || {};
     if (!title) return NextResponse.json({ ok: false, error: 'title required' }, { status: 400 });
 
     const created = await prisma.favorite.create({
-      data: { userId, title, url, note },
+      data: { userId, title, url },
     });
     return NextResponse.json({ ok: true, item: created });
   } catch (e: any) {
