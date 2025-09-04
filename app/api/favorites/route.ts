@@ -7,7 +7,7 @@ import { verifyInitData } from '../../../lib/auth/verifyInitData';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
-// Читаем initData только из заголовка, как в остальном проекте
+// Берём initData из заголовка (как в остальном проекте)
 async function getTelegramId(req: NextRequest): Promise<string> {
   const initData = req.headers.get('x-init-data') || '';
   if (!initData) throw new Error('UNAUTHORIZED');
@@ -17,12 +17,25 @@ async function getTelegramId(req: NextRequest): Promise<string> {
   return String(tgId);
 }
 
-// GET /api/favorites — отдать избранное пользователя
+// В твоей схеме Favorite связан по userId (Int) -> User.id (Int), а не по telegramId.
+// Поэтому гарантируем пользователя и возвращаем его числовой id.
+async function ensureUserAndGetId(telegramId: string): Promise<number> {
+  const user = await prisma.user.upsert({
+    where: { telegramId },
+    create: { telegramId },
+    update: {},
+    select: { id: true },
+  });
+  return Number(user.id);
+}
+
+// GET /api/favorites — список избранного пользователя
 export async function GET(req: NextRequest) {
   try {
     const telegramId = await getTelegramId(req);
+    const userId = await ensureUserAndGetId(telegramId);
     const items = await prisma.favorite.findMany({
-      where: { telegramId },
+      where: { userId },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json({ ok: true, items });
@@ -36,12 +49,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const telegramId = await getTelegramId(req);
+    const userId = await ensureUserAndGetId(telegramId);
     const body = await req.json().catch(() => ({}));
     const { title, url = null, note = null } = body || {};
     if (!title) return NextResponse.json({ ok: false, error: 'title required' }, { status: 400 });
 
     const created = await prisma.favorite.create({
-      data: { telegramId, title, url, note },
+      data: { userId, title, url, note },
     });
     return NextResponse.json({ ok: true, item: created });
   } catch (e: any) {
@@ -54,16 +68,12 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const telegramId = await getTelegramId(req);
+    const userId = await ensureUserAndGetId(telegramId);
     const idParam = req.nextUrl.searchParams.get('id');
-    const id = idParam ? String(idParam) : null;
-    if (!id) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
+    const id = idParam ? Number(idParam) : NaN;
+    if (!Number.isFinite(id)) return NextResponse.json({ ok: false, error: 'id required' }, { status: 400 });
 
-    const exist = await prisma.favorite.findUnique({ where: { id } });
-    if (!exist || exist.telegramId !== telegramId) {
-      return NextResponse.json({ ok: false, error: 'Not found' }, { status: 404 });
-    }
-
-    await prisma.favorite.delete({ where: { id } });
+    await prisma.favorite.deleteMany({ where: { id, userId } });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     const code = e?.message === 'UNAUTHORIZED' ? 401 : 500;
