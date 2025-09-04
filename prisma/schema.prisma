@@ -4,46 +4,22 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // Важно: читаем один-единственный URL из окружения Railway/другое
   url      = env("DATABASE_URL")
 }
 
 model User {
-  id         String    @id @default(cuid())
-  telegramId String    @unique
-  username   String?
-  firstName  String?
-  lastName   String?
-  photoUrl   String?
-  plan       String?
-  expiresAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-  payments   Payment[]
-  favorites   Favorite[]
-}
-
-model Payment {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan      String
-  amount    Int
-  currency  String   @default("XTR")
-  invoiceId String?
-  createdAt DateTime @default(now())
+  id            Int       @id @default(autoincrement())
+  telegramId    String    @unique
+  subscription  String?
+  subscriptionUntil DateTime?
+  favorites     Favorite[]
 }
 
 model Favorite {
-  id         String   @id @default(cuid())
-  telegramId String
-  title      String
-  url        String?
-  note       String?
-  createdAt  DateTime @default(now())
-
-  user   User?  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String?
-
-  @@index([telegramId])
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
 }
