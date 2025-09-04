@@ -1,49 +1,42 @@
-// app/api/me/route.ts — фикс импорта Prisma (named export)
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyInitData } from '../../../lib/auth/verifyInitData';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 import { prisma } from '../../../lib/prisma';
+import { verifyInitData } from '../../../lib/auth/verifyInitData';
 
-export async function POST(req: NextRequest) {
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
+
+function bad(status: number, msg: string) {
+  return NextResponse.json({ ok: false, error: msg }, { status });
+}
+
+export async function GET(req: NextRequest) {
   try {
-    const raw = req.headers.get('x-init-data') || '';
-    const BOT = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
+    const initData = req.headers.get('x-init-data') || '';
+    if (!initData) return bad(401, 'UNAUTHORIZED');
 
-    const ver = verifyInitData(raw, BOT);
-    if (!ver.ok || !ver.payload?.user) {
-      return NextResponse.json({ ok: false }, { status: 401 });
-    }
+    const v = await verifyInitData(String(initData), String(BOT_TOKEN));
+    const u = (v as any)?.ok ? (v as any)?.payload?.user : null;
+    if (!u?.id) return bad(401, 'UNAUTHORIZED');
 
-    const u = ver.payload.user as {
-      id: number;
-      username?: string;
-      first_name?: string;
-      last_name?: string;
-      photo_url?: string;
-    };
-
+    // В текущей Prisma-схеме User имеет поля:
+    // id (Int), telegramId (String @unique), subscription (String?), subscriptionUntil (DateTime?)
+    // Поэтому создаём/обновляем только допустимые поля.
     const user = await prisma.user.upsert({
       where: { telegramId: String(u.id) },
-      create: {
-        telegramId: String(u.id),
-        username: u.username ?? null,
-        firstName: u.first_name ?? null,
-        lastName: u.last_name ?? null,
-        photoUrl: u.photo_url ?? null,
-      },
-      update: {
-        username: u.username ?? null,
-        firstName: u.first_name ?? null,
-        lastName: u.last_name ?? null,
-        photoUrl: u.photo_url ?? null,
+      create: { telegramId: String(u.id) },
+      update: {},
+      select: {
+        id: true,
+        telegramId: true,
+        subscription: true,
+        subscriptionUntil: true,
       },
     });
 
-    const active = user.expiresAt && user.expiresAt.getTime() > Date.now()
-      ? { plan: user.plan || 'Juristum Pro', expiresAt: user.expiresAt.toISOString() }
-      : null;
-
-    return NextResponse.json({ ok: true, subscription: active });
-  } catch (_e) {
-    return NextResponse.json({ ok: false }, { status: 500 });
+    return NextResponse.json({ ok: true, user });
+  } catch (e: any) {
+    return bad(500, e?.message || 'Server error');
   }
 }
