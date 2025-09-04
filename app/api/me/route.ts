@@ -1,42 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { verifyInitData } from '@/lib/telegramAuth'
 
-import { prisma } from '../../../lib/prisma';
-import { verifyInitData } from '../../../lib/auth/verifyInitData';
-
-const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
-
-function bad(status: number, msg: string) {
-  return NextResponse.json({ ok: false, error: msg }, { status });
-}
-
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
-    const initData = req.headers.get('x-init-data') || '';
-    if (!initData) return bad(401, 'UNAUTHORIZED');
+    const { searchParams } = new URL(req.url);
+    const initData = searchParams.get('initData') ?? req.headers.get('x-init-data');
+    if (!initData) throw new Error('UNAUTHORIZED');
+    const v: any = await verifyInitData(String(initData));
+    if (!v?.ok || !v?.data?.telegramId) throw new Error('UNAUTHORIZED');
 
-    const v = await verifyInitData(String(initData), String(BOT_TOKEN));
-    const u = (v as any)?.ok ? (v as any)?.payload?.user : null;
-    if (!u?.id) return bad(401, 'UNAUTHORIZED');
-
-    // В текущей Prisma-схеме User имеет поля:
-    // id (Int), telegramId (String @unique), subscription (String?), subscriptionUntil (DateTime?)
-    // Поэтому создаём/обновляем только допустимые поля.
+    // Create or update user keyed by telegramId (never touch numeric id)
     const user = await prisma.user.upsert({
-      where: { telegramId: String(u.id) },
-      create: { telegramId: String(u.id) },
+      where: { telegramId: v.data.telegramId as string },
       update: {},
-      select: {
-        id: true,
-        telegramId: true,
-        subscription: true,
-        subscriptionUntil: true,
-      },
+      create: { telegramId: v.data.telegramId as string },
+      select: { telegramId: true, expiresAt: true },
     });
 
     return NextResponse.json({ ok: true, user });
   } catch (e: any) {
-    return bad(500, e?.message || 'Server error');
+    return NextResponse.json({ ok: false, error: e?.message ?? 'ME_ERROR' }, { status: 401 });
   }
 }
