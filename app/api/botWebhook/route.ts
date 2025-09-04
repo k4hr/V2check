@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
     const update = await req.json();
     console.log('[botWebhook] update kind:', Object.keys(update || {}));
 
+    // 1) pre_checkout_query — подтверждаем
     if (update?.pre_checkout_query?.id) {
       const id = String(update.pre_checkout_query.id);
       if (BOT_TOKEN) {
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // 2) успешный платеж
     const msg = update?.message;
     if (msg?.successful_payment) {
       const userId = msg?.from?.id ? String(msg.from.id) : null;
@@ -43,25 +45,27 @@ export async function POST(req: NextRequest) {
       }
 
       const now = Date.now();
+      // В твоей схеме у пользователя поля называются subscriptionUntil и subscription
       const prev = await prisma.user.findUnique({
         where: { telegramId: userId },
-        select: { expiresAt: true },
+        select: { subscriptionUntil: true },
       });
 
       let base = now;
-      if (prev?.expiresAt) {
-        const prevMs = new Date(prev.expiresAt).getTime();
-        if (!Number.isNaN(prevMs) && prevMs > now) base = prevMs;
+      if (prev?.subscriptionUntil) {
+        const prevMs = new Date(prev.subscriptionUntil as any).getTime();
+        if (!Number.isNaN(prevMs) && prevMs > now) base = prevMs; // продлеваем «от конца»
       }
       const expiresAt = new Date(base + daysToMs(planCfg.days));
 
+      // Записываем в те поля, что есть в схеме: subscription / subscriptionUntil
       await prisma.user.upsert({
         where: { telegramId: userId },
-        create: { telegramId: userId, plan: planCfg.label, expiresAt },
-        update: { plan: planCfg.label, expiresAt },
+        create: { telegramId: userId, subscription: planCfg.label, subscriptionUntil: expiresAt },
+        update: { subscription: planCfg.label, subscriptionUntil: expiresAt },
       });
 
-      console.log('[botWebhook] updated subscription:', { userId, plan: planCfg.label, expiresAt });
+      console.log('[botWebhook] updated subscription:', { userId, plan: planCfg.label, subscriptionUntil: expiresAt });
       return NextResponse.json({ ok: true });
     }
 
