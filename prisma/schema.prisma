@@ -1,30 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
 model User {
-  id          Int       @id @default(autoincrement())
-  telegramId  String    @unique
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  favorites   Favorite[]
+  id                 String     @id @default(cuid())
+  telegramId         String     @unique
+  username           String?
+  firstName          String?
+  lastName           String?
+  photoUrl           String?
+  subscriptionUntil  DateTime?
+  favorites          Favorite[]
 }
 
 model Favorite {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        String   @id @default(cuid())
+  userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   url       String
-  note      String?
   createdAt DateTime @default(now())
-
-  @@index([userId])
 }
