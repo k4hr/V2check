@@ -1,42 +1,37 @@
-// app/api/me/route.ts
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getTelegramId } from '@/lib/auth';
+import { parseTgUser, getTelegramIdStrict } from '@/lib/auth';
 
 export async function GET(req: NextRequest) {
   try {
-    const telegramId = await getTelegramId(req);
+    const tg = parseTgUser(req);
+    const telegramId = getTelegramIdStrict(req);
 
-    // Гарантируем, что юзер в базе есть
-    const user = await prisma.user.upsert({
+    // синхронизируем профиль пользователя (без обязательных полей)
+    await prisma.user.upsert({
       where: { telegramId },
-      update: {},
-      create: { telegramId },
+      update: {
+        firstName: tg?.first_name ?? null,
+        lastName:  tg?.last_name  ?? null,
+        username:  tg?.username   ?? null,
+        photoUrl:  tg?.photo_url  ?? null,
+      },
+      create: {
+        telegramId,
+        firstName: tg?.first_name ?? null,
+        lastName:  tg?.last_name  ?? null,
+        username:  tg?.username   ?? null,
+        photoUrl:  tg?.photo_url  ?? null,
+      },
+    });
+
+    const user = await prisma.user.findUnique({
+      where: { telegramId },
       select: { telegramId: true, subscriptionUntil: true },
     });
 
-    const now = new Date();
-    const active = !!(user.subscriptionUntil && user.subscriptionUntil > now);
-
-    // Двойной формат: и старый, и новый — чтобы фронт точно не упал
-    return NextResponse.json({
-      ok: true,
-      user,                               // ← старый формат (user.subscriptionUntil)
-      subscriptionActive: active,         // ← явный флаг
-      subscriptionUntil: user.subscriptionUntil, // ← явное поле
-      status: active ? 'ACTIVE' : 'NONE', // ← ещё один флаг на всякий
-      until: user.subscriptionUntil ? new Date(user.subscriptionUntil).toISOString() : null,
-    });
+    return NextResponse.json({ ok: true, user });
   } catch (e: any) {
-    // Не роняем UI, но сигналим причину
-    return NextResponse.json({
-      ok: true,
-      user: null,
-      subscriptionActive: false,
-      subscriptionUntil: null,
-      status: 'NONE',
-      until: null,
-      reason: String(e?.message ?? e),
-    });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
   }
 }
