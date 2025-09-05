@@ -1,1 +1,1 @@
-export { getTelegramId, verifyInitData } from './verifyInitData';
+export { parseTgUser, getTelegramIdStrict } from './verifyInitData';
