@@ -1,70 +1,56 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-function addMonths(base: Date, months: number) {
-  const d = new Date(base);
-  const day = d.getDate();
-  d.setMonth(d.getMonth() + months);
-  if (d.getDate() < day) d.setDate(0);
-  return d;
-}
-function addWeeks(base: Date, weeks: number) {
-  const d = new Date(base);
-  d.setDate(d.getDate() + weeks * 7);
-  return d;
-}
-function addYears(base: Date, years: number) {
-  return addMonths(base, years * 12);
-}
-function parsePlan(payload?: string) {
-  const raw = (payload ?? '').split(':')[1]?.trim().toUpperCase();
-  switch (raw) {
-    case 'WEEK':       return { kind: 'weeks'  as const, value: 1 };
-    case 'MONTH':      return { kind: 'months' as const, value: 1 };
-    case 'HALF_YEAR':
-    case 'HALFYEAR':
-    case 'SIX_MONTH':
-    case 'SIX_MONTHS':
-    case '6M':         return { kind: 'months' as const, value: 6 };
-    case 'YEAR':       return { kind: 'years'  as const, value: 1 };
-    default:           return null;
+function addDuration(from: Date, kind: string): Date {
+  const d = new Date(from);
+  switch (kind.toUpperCase()) {
+    case 'WEEK':     d.setDate(d.getDate() + 7);  break;
+    case 'MONTH':    d.setMonth(d.getMonth() + 1); break;
+    case 'HALFYEAR': d.setMonth(d.getMonth() + 6); break;
+    case 'YEAR':     d.setFullYear(d.getFullYear() + 1); break;
+    default:         d.setDate(d.getDate() + 7);
   }
-}
-function addInterval(base: Date, plan: { kind: 'weeks'|'months'|'years'; value: number }) {
-  if (plan.kind === 'weeks')  return addWeeks(base, plan.value);
-  if (plan.kind === 'months') return addMonths(base, plan.value);
-  return addYears(base, plan.value);
+  return d;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const update = await req.json();
-    const msg = update?.message;
-    const sp = msg?.successful_payment;
-    if (!sp) return NextResponse.json({ ok: true, skip: true });
+    const data = await req.json();
+    // Ожидаем событие Telegram «successful_payment»
+    const userId: string | undefined = data?.successful_payment?.telegram_user_id
+      ?? data?.userId
+      ?? (typeof data?.from?.id !== 'undefined' ? String(data.from.id) : undefined);
 
-    const userId = String(msg?.from?.id ?? '');
-    if (!userId) return NextResponse.json({ ok: false, error: 'no user' }, { status: 400 });
+    const plan: string | undefined =
+      data?.successful_payment?.invoice_payload?.split(':')[1] ??
+      data?.payload ??
+      data?.plan;
 
-    const plan = parsePlan(msg?.invoice_payload);
-    if (!plan) return NextResponse.json({ ok: true, ignored: true });
+    if (!userId || !plan) {
+      return NextResponse.json({ ok: false, error: 'Missing userId or plan' }, { status: 400 });
+    }
 
-    const now = new Date();
-    const prev = await prisma.user.findUnique({
-      where: { telegramId: userId },
+    // База для продления — максимум из текущей даты и уже существующего срока
+    const existing = await prisma.user.findUnique({
+      where: { telegramId: String(userId) },
       select: { subscriptionUntil: true },
     });
-    const base = prev?.subscriptionUntil && prev.subscriptionUntil > now ? prev.subscriptionUntil : now;
-    const until = addInterval(base, plan);
+
+    const now = new Date();
+    const base = existing?.subscriptionUntil && existing.subscriptionUntil > now
+      ? existing.subscriptionUntil
+      : now;
+
+    const until = addDuration(base, plan);
 
     await prisma.user.upsert({
-      where: { telegramId: userId },
+      where: { telegramId: String(userId) },
       update: { subscriptionUntil: until },
-      create: { telegramId: userId, subscriptionUntil: until },
+      create: { telegramId: String(userId), subscriptionUntil: until },
     });
 
-    return NextResponse.json({ ok: true, until });
+    return NextResponse.json({ ok: true, subscriptionUntil: until.toISOString() });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 200 });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
   }
 }
