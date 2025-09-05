@@ -1,37 +1,28 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import { parseTgUser, getTelegramIdStrict } from '@/lib/auth';
+// app/api/me/route.ts
+import { NextResponse, NextRequest } from 'next/server';
+import { PrismaClient } from '@prisma/client';
+import { getTelegramId } from '@/lib/auth';
+
+const prisma = new PrismaClient();
 
 export async function GET(req: NextRequest) {
   try {
-    const tg = parseTgUser(req);
-    const telegramId = getTelegramIdStrict(req);
+    const telegramId = await getTelegramId(req);
 
-    // синхронизируем профиль пользователя (без обязательных полей)
+    // гарантируем наличие пользователя
     await prisma.user.upsert({
       where: { telegramId },
-      update: {
-        firstName: tg?.first_name ?? null,
-        lastName:  tg?.last_name  ?? null,
-        username:  tg?.username   ?? null,
-        photoUrl:  tg?.photo_url  ?? null,
-      },
-      create: {
-        telegramId,
-        firstName: tg?.first_name ?? null,
-        lastName:  tg?.last_name  ?? null,
-        username:  tg?.username   ?? null,
-        photoUrl:  tg?.photo_url  ?? null,
-      },
+      update: {},
+      create: { telegramId },
     });
 
-    const user = await prisma.user.findUnique({
+    const me = await prisma.user.findUnique({
       where: { telegramId },
       select: { telegramId: true, subscriptionUntil: true },
     });
 
-    return NextResponse.json({ ok: true, user });
+    return NextResponse.json({ ok: true, me });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
+    return NextResponse.json({ ok: false, error: 'ME_FETCH_FAILED', details: String(e?.message ?? e) }, { status: 500 });
   }
 }
