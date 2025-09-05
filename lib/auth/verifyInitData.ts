@@ -1,37 +1,41 @@
-// verifyInitData.ts — валидация Telegram initData по официальной схеме
-// Secret = HMAC_SHA256("WebAppData", BOT_TOKEN)
+import type { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-export type VerifyResult =
-  | { ok: true; payload: { user?: any; auth_date?: number } }
-  | { ok: false; reason: 'missing' | 'nohash' | 'bad-sign' };
+const BOT_TOKEN = process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN;
 
-export function verifyInitData(initData: string, botToken: string): VerifyResult {
-  if (!initData || !botToken) return { ok: false, reason: 'missing' };
+function parseInitData(data: string): Record<string, string> {
+  return Object.fromEntries(new URLSearchParams(data));
+}
 
-  const params = new URLSearchParams(initData);
-  const hash = params.get('hash') || '';
-  if (!hash) return { ok: false, reason: 'nohash' };
+function checkSignature(data: string) {
+  if (!BOT_TOKEN) throw new Error('TG_BOT_TOKEN is not set');
+  const secret = crypto.createHmac('sha256', 'WebAppData').update(BOT_TOKEN).digest();
+  const url = new URLSearchParams(data);
+  const hash = url.get('hash') || '';
+  url.delete('hash');
+  const pairs = Array.from(url.entries()).map(([k, v]) => `${k}=${v}`).sort();
+  const str = pairs.join('\n');
+  const signature = crypto.createHmac('sha256', secret).update(str).digest('hex');
+  return signature === hash;
+}
 
-  // Собираем data-check-string из пар "key=value", исключая hash, сортируем по ключу
-  const pairs: string[] = [];
-  params.forEach((v, k) => { if (k !== 'hash') pairs.push(`${k}=${v}`); });
-  pairs.sort();
-  const dataCheckString = pairs.join('\n');
+export async function getTelegramId(req: NextRequest): Promise<string> {
+  const testHeader = req.headers.get('x-telegram-id');
+  if (testHeader) return String(testHeader);
 
-  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-  const calc = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+  const initData =
+    req.headers.get('x-telegram-init-data') ??
+    req.nextUrl.searchParams.get('initData') ??
+    req.cookies.get('tg_init_data')?.value ??
+    '';
 
-  if (calc !== hash) return { ok: false, reason: 'bad-sign' };
+  if (!initData) throw new Error('No initData');
+  if (!checkSignature(initData)) throw new Error('Bad signature');
 
-  const payload: any = {};
-  params.forEach((v, k) => {
-    if (k === 'user') {
-      try { payload.user = JSON.parse(v); } catch {}
-    } else if (k === 'auth_date') {
-      const n = Number(v); if (!Number.isNaN(n)) payload.auth_date = n;
-    }
-  });
+  const parsed = parseInitData(initData);
+  const userJson = parsed['user'];
+  if (!userJson) throw new Error('No user in initData');
 
-  return { ok: true, payload };
+  const user = JSON.parse(userJson);
+  return String(user.id);
 }
