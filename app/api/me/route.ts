@@ -1,25 +1,23 @@
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyInitData } from '@/lib/telegramAuth'
+import { NextResponse, NextRequest } from 'next/server';
+import prisma from '@/lib/prisma';
+import { getTelegramId, getTelegramUser } from '@/lib/auth';
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const initData = searchParams.get('initData') ?? req.headers.get('x-init-data');
-    if (!initData) throw new Error('UNAUTHORIZED');
-    const v: any = await verifyInitData(String(initData));
-    if (!v?.ok || !v?.data?.telegramId) throw new Error('UNAUTHORIZED');
-
-    // Create or update user keyed by telegramId (never touch numeric id)
-    const user = await prisma.user.upsert({
-      where: { telegramId: v.data.telegramId as string },
+    const telegramId = await getTelegramId(req);
+    // Создаём пользователя по telegramId, не трогая числовой id и лишние поля
+    await prisma.user.upsert({
+      where: { telegramId },
       update: {},
-      create: { telegramId: v.data.telegramId as string },
-      select: { telegramId: true, expiresAt: true },
+      create: { telegramId },
     });
 
-    return NextResponse.json({ ok: true, user });
+    // Возвращаем базовую информацию о подписке (если поле есть — отдаём, если нет — null)
+    const user = await prisma.user.findUnique({ where: { telegramId } });
+    const until: any = (user as any)?.subscriptionUntil ?? (user as any)?.expiresAt ?? null;
+
+    return NextResponse.json({ ok: true, user: { telegramId, subscriptionUntil: until } });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'ME_ERROR' }, { status: 401 });
+    return NextResponse.json({ ok: false, error: e?.message ?? 'ME_FAILED' }, { status: 500 });
   }
 }
