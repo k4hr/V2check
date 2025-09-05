@@ -1,23 +1,17 @@
-import { NextRequest, NextResponse } from 'next/server';
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
-
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
-const $ = promisify(exec);
+import { NextResponse, type NextRequest } from 'next/server'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+const $ = promisify(exec)
 
 export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const token = url.searchParams.get('token') || '';
-
-  if (!process.env.ADMIN_TOKEN || token !== process.env.ADMIN_TOKEN) {
-    return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
-  }
+  const token = new URL(req.url).searchParams.get('token') ?? ''
+  if (token !== process.env.ADMIN_TOKEN)
+    return NextResponse.json({ ok: false, error: 'forbidden' }, { status: 403 })
 
   try {
-    const { stdout, stderr } = await $('npx prisma db push --accept-data-loss');
-    return NextResponse.json({ ok: true, stdout, stderr });
+    const { stdout, stderr } = await $(`npx prisma db push --accept-data-loss && npx prisma generate`)
+    return NextResponse.json({ ok: true, stdout, stderr })
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 })
   }
 }
