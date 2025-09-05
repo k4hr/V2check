@@ -1,21 +1,26 @@
 // app/api/botWebhook/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
-import { add } from 'date-fns';
-import { PRICES } from '@/lib/pricing'; // если у тебя другой путь — оставь как есть в проекте
+
+export const runtime = 'nodejs';
+
+// Мини-хелпер: прибавить дни/недели/месяцы без сторонних зависимостей
+function addDuration(base: Date, opts: { days?: number; weeks?: number; months?: number }) {
+  const d = new Date(base);
+  if (opts.days)   d.setDate(d.getDate() + opts.days);
+  if (opts.weeks)  d.setDate(d.getDate() + opts.weeks * 7);
+  if (opts.months) d.setMonth(d.getMonth() + opts.months);
+  return d;
+}
 
 type TgSuccessfulPayment = {
-  currency: string;
-  total_amount: number;
-  invoice_payload: string; // например: "subs:WEEK"
+  invoice_payload?: string; // например: "subs:WEEK"
 };
 
 type TgMessage = {
   from?: { id: number };
   successful_payment?: TgSuccessfulPayment;
 };
-
-export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,11 +34,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true });
     }
 
-    // payload вида "subs:WEEK"
+    // из payload берём план (по твоей логике "subs:WEEK" | "subs:MONTH" | "subs:YEAR")
     const planKey = payment.invoice_payload?.split(':')[1] ?? 'WEEK';
 
-    // сколько продлеваем (по твоей таблице PRICES)
-    // допустим, там есть WEEK | MONTH | YEAR
+    // сопоставляем длительность
     let toAdd: { days?: number; weeks?: number; months?: number } = {};
     switch (planKey) {
       case 'WEEK':
@@ -52,42 +56,26 @@ export async function POST(req: NextRequest) {
 
     const now = new Date();
 
-    // читаем предыдущую дату окончания
+    // читаем текущий срок подписки
     const prev = await prisma.user.findUnique({
       where: { telegramId: userId },
-      select: { expiresAt: true }, // ВАЖНО: имя совпадает со схемой
+      select: { expiresAt: true }, // ⚠️ имя поля должно совпадать с твоей Prisma-схемой
     });
 
-    let base = now;
-    if (prev?.expiresAt && prev.expiresAt > now) {
-      base = prev.expiresAt;
-    }
+    // если подписка ещё активна — продлеваем от неё, иначе от "сейчас"
+    const base = prev?.expiresAt && prev.expiresAt > now ? prev.expiresAt : now;
+    const newUntil = addDuration(base, toAdd);
 
-    const newUntil = add(base, toAdd);
-
-    // апсёрт пользователя и продление подписки
+    // апсертом создаём/обновляем пользователя и срок подписки
     await prisma.user.upsert({
       where: { telegramId: userId },
-      create: {
-        telegramId: userId,
-        expiresAt: newUntil, // имя поля из схемы
-      },
-      update: {
-        expiresAt: newUntil,
-      },
+      create: { telegramId: userId, expiresAt: newUntil },
+      update: { expiresAt: newUntil },
     });
 
-    return NextResponse.json({
-      ok: true,
-      userId,
-      plan: planKey,
-      until: newUntil.toISOString(),
-    });
+    return NextResponse.json({ ok: true, userId, plan: planKey, until: newUntil.toISOString() });
   } catch (e: any) {
     console.error('[botWebhook] error:', e);
-    return NextResponse.json(
-      { ok: false, error: String(e?.message ?? e) },
-      { status: 500 },
-    );
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
