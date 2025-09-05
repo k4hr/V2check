@@ -1,59 +1,43 @@
-// app/api/botWebhook/route.ts
-import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { NextResponse, type NextRequest } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
-type Add = { days?: number; weeks?: number; months?: number; years?: number }
-
-// Локальная утилита вместо date-fns/add — чтобы не тянуть зависимость
-function addDuration(base: Date, add: Add): Date {
+function addPeriod(base: Date, plan: 'WEEK'|'MONTH'|'YEAR') {
   const d = new Date(base)
-  if (add.years)  d.setFullYear(d.getFullYear() + (add.years || 0))
-  if (add.months) d.setMonth(d.getMonth() + (add.months || 0))
-  const dayDelta = (add.days || 0) + (add.weeks || 0) * 7
-  if (dayDelta) d.setDate(d.getDate() + dayDelta)
+  if (plan === 'WEEK')  d.setUTCDate(d.getUTCDate() + 7)
+  if (plan === 'MONTH') d.setUTCMonth(d.getUTCMonth() + 1)
+  if (plan === 'YEAR')  d.setUTCFullYear(d.getUTCFullYear() + 1)
   return d
 }
 
-// Простейший вебхук: ожидаем Telegram update с successful_payment
-export async function POST(req: Request) {
-  try {
-    const update = await req.json() as any
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({} as any))
+  const msg = body?.message
+  const sp  = msg?.successful_payment
+  if (!sp) return NextResponse.json({ ok: true, skip: true })
 
-    // логика фильтрации
-    const sp = update?.message?.successful_payment
-    if (!sp) return NextResponse.json({ ok: true, skipped: true })
+  const payload: string = sp.invoice_payload ?? ''
+  const plan = (payload.split(':')[1] ?? 'WEEK') as 'WEEK'|'MONTH'|'YEAR'
+  const userId = String(msg?.from?.id ?? '')
 
-    const userId = String(update?.message?.from?.id || update?.message?.chat?.id)
-    if (!userId) return NextResponse.json({ ok: false, error: 'NO_USER' }, { status: 400 })
+  if (!userId) return NextResponse.json({ ok: false, error: 'no user' }, { status: 400 })
 
-    // На основании payload определяем длительность
-    const payload: string = sp?.invoice_payload || ''
-    // допустим payload вида "subs:WEEK" | "subs:MONTH" | "subs:YEAR"
-    let add: Add = { days: 7 }
-    if (payload.endsWith('MONTH')) add = { months: 1 }
-    else if (payload.endsWith('YEAR')) add = { years: 1 }
-    else if (payload.endsWith('WEEK')) add = { days: 7 }
+  const now = new Date()
+  const prev = await prisma.user.findUnique({
+    where: { telegramId: userId },
+    select: { subscriptionUntil: true },
+  })
 
-    const now = new Date()
-    const prev = await prisma.user.findUnique({
-      where: { telegramId: userId },
-      select: { subscriptionUntil: true },
-    })
+  const startFrom = prev?.subscriptionUntil && prev.subscriptionUntil > now
+    ? prev.subscriptionUntil
+    : now
 
-    const base = prev?.subscriptionUntil && prev.subscriptionUntil > now
-      ? prev.subscriptionUntil
-      : now
+  const until = addPeriod(startFrom, plan)
 
-    const until = addDuration(base, add)
+  await prisma.user.upsert({
+    where: { telegramId: userId },
+    update: { subscriptionUntil: until },
+    create: { telegramId: userId, subscriptionUntil: until },
+  })
 
-    await prisma.user.upsert({
-      where: { telegramId: userId },
-      update: { subscriptionUntil: until },
-      create: { telegramId: userId, subscriptionUntil: until },
-    })
-
-    return NextResponse.json({ ok: true, userId, until })
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 })
-  }
+  return NextResponse.json({ ok: true, plan, until })
 }
