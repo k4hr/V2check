@@ -1,24 +1,30 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
 model User {
-  id                 String   @id @default(cuid())
-  telegramId         String   @unique
-  username           String?
-  firstName          String?
-  lastName           String?
-  photoUrl           String?
+  id                 String    @id @default(cuid())
+  telegramId         String    @unique
   subscriptionUntil  DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
   favorites          Favorite[]
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
 }
 
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   url       String
   note      String?
   createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
