@@ -1,1 +1,1 @@
-export { getTelegramId } from './verifyInitData';
+export { getTelegramId, verifyInitData } from './verifyInitData';
