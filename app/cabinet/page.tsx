@@ -1,9 +1,22 @@
-import { format } from 'date-fns';
-
+// app/cabinet/page.tsx
 type MeResponse = {
   ok: boolean;
   user?: { telegramId: string; subscriptionUntil?: string | null } | null;
 };
+
+function formatDate(iso?: string | null) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const fmt = new Intl.DateTimeFormat('ru-RU', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return fmt.format(d);
+}
 
 async function getMe(): Promise<MeResponse> {
   const base = process.env.NEXT_PUBLIC_BASE_URL ?? '';
@@ -13,12 +26,16 @@ async function getMe(): Promise<MeResponse> {
 
 export default async function CabinetPage() {
   const data = await getMe();
-  const iso = data.user?.subscriptionUntil ?? null;
-  const until = iso ? new Date(iso) : null;
-  const active = until ? until.getTime() > Date.now() : false;
-  const status = active
-    ? `Подписка активна до ${format(until!, 'dd.MM.yyyy, HH:mm')}`
-    : 'Не удалось получить статус';
+  const untilISO = data.user?.subscriptionUntil ?? null;
+  const untilTs = untilISO ? new Date(untilISO).getTime() : 0;
+  const active = untilTs > Date.now();
+
+  let statusText: string;
+  if (active) {
+    statusText = `Подписка активна до ${formatDate(untilISO)}`;
+  } else {
+    statusText = 'Подписка неактивна';
+  }
 
   return (
     <main className="p-6">
@@ -26,10 +43,8 @@ export default async function CabinetPage() {
 
       <section className="mb-6 rounded-xl border p-4">
         <h2 className="text-xl font-semibold mb-2">Статус подписки</h2>
-        <p>{status}</p>
+        <p>{statusText}</p>
       </section>
-
-      {/* Остальное содержимое кабинета остаётся как было */}
     </main>
   );
 }
