@@ -2,5 +2,5 @@ export {
   verifyInitData,
   parseTgUser,
   getTelegramIdStrict,
-  getTelegramId, // алиас для совместимости
+  getTelegramId,
 } from './verifyInitData';
