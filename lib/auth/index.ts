@@ -1,1 +1,6 @@
-export { parseTgUser, getTelegramIdStrict } from './verifyInitData';
+export {
+  verifyInitData,
+  parseTgUser,
+  getTelegramIdStrict,
+  getTelegramId, // алиас для совместимости
+} from './verifyInitData';
