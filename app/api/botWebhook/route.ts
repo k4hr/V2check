@@ -1,47 +1,65 @@
+// Handle Telegram Bot webhook updates to apply subscription extensions
 import { NextRequest, NextResponse } from 'next/server';
 import prisma from '@/lib/prisma';
 
-/**
- * Ожидается тело вида:
- * { userId: '1177339433', payload: 'subs:WEEK' }
- * В логах у тебя такое уже приходило.
- */
+function addDuration(base: Date, opts: { days?: number; weeks?: number; months?: number }) {
+  const d = new Date(base);
+  if (opts.days)   d.setDate(d.getDate() + opts.days);
+  if (opts.weeks)  d.setDate(d.getDate() + opts.weeks * 7);
+  if (opts.months) d.setMonth(d.getMonth() + opts.months);
+  return d;
+}
+
+type TgSuccessfulPayment = {
+  invoice_payload?: string; // e.g. "subs:WEEK"
+};
+
+type TgMessage = {
+  from?: { id: number };
+  successful_payment?: TgSuccessfulPayment;
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const data = await req.json();
-    const userId: string = String(data?.userId ?? '');
-    const payload: string = String(data?.payload ?? '');
+    const update = await req.json();
+    const msg: TgMessage | undefined = update?.message;
+    const payment = msg?.successful_payment;
+    const userId = msg?.from?.id ? String(msg.from.id) : undefined;
 
-    if (!userId || !payload.startsWith('subs:')) {
-      return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
+    if (!payment || !userId) {
+      return NextResponse.json({ ok: true, skipped: true });
     }
 
-    const kind = payload.split(':')[1]; // WEEK / MONTH / YEAR и т.п.
+    const planKey = String(payment.invoice_payload ?? '').split(':')[1] ?? 'WEEK';
+
+    let add: { days?: number; weeks?: number; months?: number } = {};
+    switch (planKey) {
+      case 'WEEK':
+        add = { weeks: 1 }; break;
+      case 'MONTH':
+        add = { months: 1 }; break;
+      case 'YEAR':
+        add = { months: 12 }; break;
+      default:
+        add = { weeks: 1 }; break;
+    }
 
     const now = new Date();
-    const prev = await prisma.user.findUnique({ where: { telegramId: userId } });
-    // базовая точка продления — большее из now и текущего until/expired
-    let base = now;
-    const prevUntilRaw: any = (prev as any)?.subscriptionUntil ?? (prev as any)?.expiresAt;
-    if (prevUntilRaw) {
-      const prevUntil = new Date(prevUntilRaw);
-      if (!Number.isNaN(prevUntil.getTime()) && prevUntil > now) base = prevUntil;
-    }
-
-    let addDays = 7;
-    if (kind === 'MONTH') addDays = 31;
-    if (kind === 'YEAR') addDays = 365;
-
-    const until = new Date(base.getTime() + addDays * 24 * 60 * 60 * 1000);
+    const prev = await prisma.user.findUnique({
+      where: { telegramId: userId },
+      select: { expiresAt: true },
+    });
+    const base = prev?.expiresAt && prev.expiresAt > now ? prev.expiresAt : now;
+    const newUntil = addDuration(base, add);
 
     await prisma.user.upsert({
       where: { telegramId: userId },
-      update: { subscriptionUntil: until },
-      create: { telegramId: userId, subscriptionUntil: until },
+      create: { telegramId: userId, expiresAt: newUntil },
+      update: { expiresAt: newUntil },
     });
 
-    return NextResponse.json({ ok: true, subscriptionUntil: until.toISOString() });
+    return NextResponse.json({ ok: true, plan: planKey, until: newUntil.toISOString() });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'WEBHOOK_FAILED' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message ?? 'WEBHOOK_ERROR' }, { status: 500 });
   }
 }
