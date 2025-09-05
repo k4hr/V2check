@@ -1,14 +1,11 @@
 // lib/auth/index.ts
-// Универсальный помощник: извлекает telegramId из Request
-// приоритет: заголовок -> initData -> query-параметр
-import { NextRequest } from 'next/server';
-
-export async function getTelegramId(req: NextRequest): Promise<string> {
-  // 1) Спец-заголовок (прокидывается прокси/ботом)
+// Универсальный helper: извлекает telegramId из Request (подходит и для Edge, и для Node)
+export async function getTelegramId(req: Request): Promise<string> {
+  // 1) Спец-заголовок (если прокидывается прокси/ботом)
   const direct = req.headers.get('x-telegram-id');
   if (direct && String(direct).trim()) return String(direct).trim();
 
-  // 2) WebApp initData (прокидывай целиком в заголовок x-init-data)
+  // 2) Telegram WebApp initData — целиком в заголовке x-init-data
   const initData = req.headers.get('x-init-data') || '';
   if (initData) {
     try {
@@ -21,9 +18,11 @@ export async function getTelegramId(req: NextRequest): Promise<string> {
   }
 
   // 3) query ?userId=
-  const url = new URL(req.url);
-  const q = url.searchParams.get('userId');
-  if (q && String(q).trim()) return String(q).trim();
+  try {
+    const url = new URL(req.url);
+    const q = url.searchParams.get('userId');
+    if (q && String(q).trim()) return String(q).trim();
+  } catch {}
 
   throw new Error('TELEGRAM_ID_NOT_FOUND');
 }
