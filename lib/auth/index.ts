@@ -1,28 +1,14 @@
-// lib/auth/index.ts
-// Универсальный helper: извлекает telegramId из Request (подходит и для Edge, и для Node)
-export async function getTelegramId(req: Request): Promise<string> {
-  // 1) Спец-заголовок (если прокидывается прокси/ботом)
-  const direct = req.headers.get('x-telegram-id');
-  if (direct && String(direct).trim()) return String(direct).trim();
+import type { NextRequest } from 'next/server'
 
-  // 2) Telegram WebApp initData — целиком в заголовке x-init-data
-  const initData = req.headers.get('x-init-data') || '';
-  if (initData) {
-    try {
-      const p = new URLSearchParams(initData);
-      const userStr = p.get('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-      const id = user?.id ? String(user.id) : null;
-      if (id) return id;
-    } catch {}
-  }
+// Extract Telegram user id either from real initData or from x-telegram-id header (for local/Railway tests)
+export async function getTelegramId(req: NextRequest): Promise<string> {
+  const test = req.headers.get('x-telegram-id')
+  if (test) return test
 
-  // 3) query ?userId=
-  try {
-    const url = new URL(req.url);
-    const q = url.searchParams.get('userId');
-    if (q && String(q).trim()) return String(q).trim();
-  } catch {}
-
-  throw new Error('TELEGRAM_ID_NOT_FOUND');
+  const initData = req.headers.get('x-telegram-init-data') ?? ''
+  const params = new URLSearchParams(initData)
+  const userJson = params.get('user')
+  if (!userJson) throw new Error('No Telegram user in initData')
+  const user = JSON.parse(userJson) as { id: number }
+  return String(user.id)
 }
