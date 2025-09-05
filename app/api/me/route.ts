@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import prisma from '@/lib/prisma';
 import { getTelegramId } from '@/lib/auth';
 
 export async function GET(req: Request) {
@@ -12,12 +12,8 @@ export async function GET(req: Request) {
       select: {
         id: true,
         telegramId: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        photoUrl: true,
         subscriptionUntil: true,
-      }
+      },
     });
     return NextResponse.json({ ok: true, user });
   } catch (e: any) {
