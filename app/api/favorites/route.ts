@@ -1,68 +1,63 @@
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyInitData } from '@/lib/telegramAuth'
+import { NextRequest, NextResponse } from 'next/server';
+import prisma from '@/lib/prisma';
+import { getTelegramId } from '@/lib/auth';
 
-async function getTelegramId(req: Request) {
-  const initData =
-    req.headers.get('x-init-data') ||
-    new URL(req.url).searchParams.get('initData');
-  if (!initData) throw new Error('UNAUTHORIZED');
-  const v: any = await verifyInitData(String(initData));
-  if (!v?.ok || !v?.data?.telegramId) throw new Error('UNAUTHORIZED');
-  return String(v.data.telegramId);
-}
-
-async function ensureUserAndGetNumericId(telegramId: string) {
-  const user = await prisma.user.upsert({
-    where: { telegramId },
-    update: {},
-    create: { telegramId },
-    select: { id: true },
-  });
-  return user.id;
-}
-
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
     const telegramId = await getTelegramId(req);
-    const userId = await ensureUserAndGetNumericId(telegramId);
+    const user = await prisma.user.findUnique({ where: { telegramId } });
+    if (!user) return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 401 });
+
     const items = await prisma.favorite.findMany({
-      where: { userId },
+      where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
     return NextResponse.json({ ok: true, items });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'FAV_LIST_FAILED' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: e?.message ?? 'FAV_LIST_FAILED' }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const telegramId = await getTelegramId(req);
-    const { title, url, note } = (await req.json()) ?? {};
-    if (!title || !url) throw new Error('TITLE_URL_REQUIRED');
-    const userId = await ensureUserAndGetNumericId(telegramId);
+    const user = await prisma.user.findUnique({ where: { telegramId } });
+    if (!user) return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 401 });
+
+    const { title, url } = await req.json();
+    if (!title || !url) {
+      return NextResponse.json({ ok: false, error: 'TITLE_URL_REQUIRED' }, { status: 400 });
+    }
+
     const created = await prisma.favorite.create({
-      data: { userId, title, url, note: note ?? null },
+      data: { userId: user.id, title, url },
     });
+
     return NextResponse.json({ ok: true, item: created });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'FAV_CREATE_FAILED' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: e?.message ?? 'FAV_CREATE_FAILED' }, { status: 500 });
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(req: NextRequest) {
   try {
     const telegramId = await getTelegramId(req);
+    const user = await prisma.user.findUnique({ where: { telegramId } });
+    if (!user) return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 401 });
+
     const { searchParams } = new URL(req.url);
-    const id = Number(searchParams.get('id'));
-    if (!id) throw new Error('ID_REQUIRED');
-    const userId = await ensureUserAndGetNumericId(telegramId);
-    await prisma.favorite.delete({
-      where: { id, userId },
-    } as any);
-    return NextResponse.json({ ok: true });
+    const idRaw = searchParams.get('id');
+    const id = Number(idRaw);
+    if (!id || Number.isNaN(id)) {
+      return NextResponse.json({ ok: false, error: 'BAD_ID' }, { status: 400 });
+    }
+
+    // удаляем только свои
+    const deleted = await prisma.favorite.delete({
+      where: { id },
+    });
+    return NextResponse.json({ ok: true, item: deleted });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? 'FAV_DELETE_FAILED' }, { status: 400 });
+    return NextResponse.json({ ok: false, error: e?.message ?? 'FAV_DELETE_FAILED' }, { status: 500 });
   }
 }
