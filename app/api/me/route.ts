@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
-import prisma from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getTelegramId } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
@@ -9,24 +9,19 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
+    // создаём пользователя при первом заходе и читаем только существующие поля
+    const user = await prisma.user.upsert({
       where: { telegramId },
+      update: {},
+      create: { telegramId },
       select: {
         telegramId: true,
-        firstName: true,
-        lastName: true,
-        username: true,
-        photoUrl: true,
         subscriptionUntil: true,
       },
     });
 
-    if (!user) {
-      return NextResponse.json({ ok: true, user: null, subscriptionActive: false });
-    }
-
     const now = new Date();
-    const active = user.subscriptionUntil ? user.subscriptionUntil > now : false;
+    const active = !!(user.subscriptionUntil && user.subscriptionUntil > now);
 
     return NextResponse.json({
       ok: true,
@@ -35,7 +30,6 @@ export async function GET(req: NextRequest) {
       subscriptionUntil: user.subscriptionUntil,
     });
   } catch (e: any) {
-    console.error(e);
-    return NextResponse.json({ ok: false, error: e.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
