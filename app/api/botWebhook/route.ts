@@ -1,56 +1,45 @@
-import { NextResponse, type NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
+\
+// app/api/botWebhook/route.ts
+import { NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 
-function addDuration(from: Date, kind: string): Date {
-  const d = new Date(from);
-  switch (kind.toUpperCase()) {
-    case 'WEEK':     d.setDate(d.getDate() + 7);  break;
-    case 'MONTH':    d.setMonth(d.getMonth() + 1); break;
-    case 'HALFYEAR': d.setMonth(d.getMonth() + 6); break;
-    case 'YEAR':     d.setFullYear(d.getFullYear() + 1); break;
-    default:         d.setDate(d.getDate() + 7);
-  }
-  return d;
-}
+const prisma = new PrismaClient();
 
-export async function POST(req: NextRequest) {
+const PLAN_MS: Record<string, number> = {
+  WEEK: 7 * 24 * 60 * 60 * 1000,
+  MONTH: 30 * 24 * 60 * 60 * 1000,
+  HALF: 182 * 24 * 60 * 60 * 1000, // полгода
+  YEAR: 365 * 24 * 60 * 60 * 1000,
+};
+
+export async function POST(req: Request) {
   try {
-    const data = await req.json();
-    // Ожидаем событие Telegram «successful_payment»
-    const userId: string | undefined = data?.successful_payment?.telegram_user_id
-      ?? data?.userId
-      ?? (typeof data?.from?.id !== 'undefined' ? String(data.from.id) : undefined);
+    const update = await req.json();
+    const sp = update?.message?.successful_payment;
+    if (!sp) return NextResponse.json({ ok: true });
 
-    const plan: string | undefined =
-      data?.successful_payment?.invoice_payload?.split(':')[1] ??
-      data?.payload ??
-      data?.plan;
+    const userId: string = String(update?.message?.from?.id || '');
+    if (!userId) return NextResponse.json({ ok: false, error: 'NO_TELEGRAM_ID' }, { status: 400 });
 
-    if (!userId || !plan) {
-      return NextResponse.json({ ok: false, error: 'Missing userId or plan' }, { status: 400 });
-    }
+    const rawPayload: string = sp?.invoice_payload || '';
+    const plan = rawPayload.split(':')[1]?.toUpperCase();
+    const addMs = plan && PLAN_MS[plan] ? PLAN_MS[plan] : 0;
+    if (!addMs) return NextResponse.json({ ok: false, error: 'UNKNOWN_PLAN' }, { status: 400 });
 
-    // База для продления — максимум из текущей даты и уже существующего срока
-    const existing = await prisma.user.findUnique({
-      where: { telegramId: String(userId) },
-      select: { subscriptionUntil: true },
-    });
+    await prisma.$executeRawUnsafe(`ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "subscriptionUntil" TIMESTAMPTZ`);
 
+    await prisma.$executeRaw`INSERT INTO "User" ("telegramId") VALUES (${userId}) ON CONFLICT ("telegramId") DO NOTHING`;
+
+    const rows: any[] = await prisma.$queryRaw`SELECT "subscriptionUntil" FROM "User" WHERE "telegramId" = ${userId} LIMIT 1`;
     const now = new Date();
-    const base = existing?.subscriptionUntil && existing.subscriptionUntil > now
-      ? existing.subscriptionUntil
-      : now;
+    const current: Date | null = rows?.[0]?.subscriptionUntil ? new Date(rows[0].subscriptionUntil) : null;
+    const base = current && current > now ? current : now;
+    const newUntil = new Date(base.getTime() + addMs);
 
-    const until = addDuration(base, plan);
+    await prisma.$executeRaw`UPDATE "User" SET "subscriptionUntil" = ${newUntil.toISOString()}::timestamptz WHERE "telegramId" = ${userId}`;
 
-    await prisma.user.upsert({
-      where: { telegramId: String(userId) },
-      update: { subscriptionUntil: until },
-      create: { telegramId: String(userId), subscriptionUntil: until },
-    });
-
-    return NextResponse.json({ ok: true, subscriptionUntil: until.toISOString() });
+    return NextResponse.json({ ok: true, subscriptionUntil: newUntil.toISOString() });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
   }
 }
