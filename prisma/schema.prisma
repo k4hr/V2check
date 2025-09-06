@@ -8,21 +8,19 @@ datasource db {
 }
 
 model User {
-  id                Int       @id @default(autoincrement())
-  telegramId        String    @unique
+  id                String   @id @default(cuid())
+  telegramId        String   @unique
   subscriptionUntil DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  favorites         Favorite[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt @default(now())
 }
 
 model Favorite {
-  id        Int      @id @default(autoincrement())
-  userId    Int
+  id        String   @id @default(cuid())
+  userId    String
   title     String
   url       String
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
