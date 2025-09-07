@@ -1,10 +1,11 @@
 // app/api/me/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { getTelegramIdStrict } from '@/lib/auth/verifyInitData';
+import { getTelegramIdStrict } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
+// Единый способ определить telegramId — тот же, что использует избранное
 async function resolveTelegramId(req: NextRequest): Promise<string | null> {
   const url = new URL(req.url);
   const q1 = url.searchParams.get('telegramId');
@@ -18,9 +19,7 @@ async function resolveTelegramId(req: NextRequest): Promise<string | null> {
   try {
     const id = await getTelegramIdStrict(req);
     if (id) return String(id);
-  } catch {
-    // падаем в null, отдадим 401 ниже
-  }
+  } catch {}
   return null;
 }
 
@@ -31,7 +30,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'TELEGRAM_ID_NOT_FOUND' }, { status: 401 });
     }
 
-    // гарантируем, что юзер существует (не ломая существующие данные)
+    // Гарантируем существование пользователя (не трогаем лишние поля)
     const user = await prisma.user.upsert({
       where:  { telegramId },
       update: {},
