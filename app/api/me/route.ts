@@ -1,59 +1,31 @@
 // app/api/me/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { getTelegramIdStrict } from '../../../lib/auth/verifyInitData';
+import { getTelegramIdStrict } from '@/lib/auth';
 
 const prisma = new PrismaClient();
 
-async function resolveTelegramId(req: NextRequest): Promise<string | null> {
-  const url = new URL(req.url);
-  const q1 = url.searchParams.get('telegramId');
-  const q2 = url.searchParams.get('tid');
-  if (q1) return String(q1);
-  if (q2) return String(q2);
-
-  const override = req.headers.get('x-telegram-id');
-  if (override) return String(override);
-
-  try {
-    const id = await getTelegramIdStrict(req);
-    if (id) return String(id);
-  } catch {}
-  return null;
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
   try {
-    const telegramId = await resolveTelegramId(req);
-    if (!telegramId) {
-      return NextResponse.json({ ok: false, error: 'TELEGRAM_ID_NOT_FOUND' }, { status: 401 });
-    }
+    const telegramId = await getTelegramIdStrict(req);
 
     const user = await prisma.user.upsert({
-      where:  { telegramId },
+      where: { telegramId },
       update: {},
       create: { telegramId },
-      select: { telegramId: true, subscriptionUntil: true },
-    });
-
-    const until = user.subscriptionUntil ?? null;
-    const isActive = !!(until && until > new Date());
-
-    return NextResponse.json({
-      ok: true,
-      user: {
-        telegramId: user.telegramId,
-        subscriptionUntil: until ? until.toISOString() : null,
-        isActive,
+      select: {
+        telegramId: true,
+        subscriptionUntil: true,
       },
-      label: isActive && until
-        ? `активна до ${new Date(until).toLocaleDateString('ru-RU')}`
-        : 'подписка неактивна',
     });
+
+    return NextResponse.json({ ok: true, user }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e: any) {
     return NextResponse.json(
-      { ok: false, error: 'INTERNAL', detail: String(e?.message ?? e) },
-      { status: 500 },
+      { ok: false, error: String(e?.message ?? e) },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }
