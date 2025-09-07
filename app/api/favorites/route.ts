@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 
 export async function GET(req: NextRequest) {
   try {
-    const telegramId = await getTelegramIdStrict(req); // гарантированно string
+    const telegramId = await getTelegramIdStrict(req);
     const user = await prisma.user.findUnique({
       where: { telegramId },
       select: { id: true },
@@ -21,7 +21,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, items });
   } catch {
-    // если нет телеграм-ид или другая ошибка — возвращаем пусто, чтобы не ронять билд/рантайм
     return NextResponse.json({ ok: true, items: [] });
   }
 }
@@ -55,9 +54,8 @@ export async function POST(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const telegramId = await getTelegramIdStrict(req);
-    const idParam = req.nextUrl.searchParams.get('id');
-    const id = idParam ? Number(idParam) : NaN;
-    if (!id || Number.isNaN(id)) {
+    const id = req.nextUrl.searchParams.get('id') || '';
+    if (!id) {
       return NextResponse.json({ ok: false, error: 'ID_REQUIRED' }, { status: 400 });
     }
 
@@ -67,7 +65,10 @@ export async function DELETE(req: NextRequest) {
     });
     if (!user) return NextResponse.json({ ok: true });
 
-    await prisma.favorite.deleteMany({ where: { id, userId: user.id } });
+    await prisma.favorite.deleteMany({
+      where: { id, userId: user.id },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
