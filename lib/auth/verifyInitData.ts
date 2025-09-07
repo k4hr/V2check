@@ -1,3 +1,4 @@
+// lib/auth/verifyInitData.ts
 import type { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
@@ -6,10 +7,10 @@ export function verifyInitData(initData: string, botToken: string) {
   if (!botToken) return { ok: false as const, error: 'EMPTY_BOT_TOKEN' };
 
   const params = new URLSearchParams(initData);
-  const hash = params.get('hash') || '';
+  const hash = params.get('hash') ?? '';
   params.delete('hash');
 
-  const dataCheckString = Array.from(params.entries())
+  const dataCheckString = [...params.entries()]
     .map(([k, v]) => `${k}=${v}`)
     .sort()
     .join('\n');
@@ -20,31 +21,25 @@ export function verifyInitData(initData: string, botToken: string) {
   if (sign !== hash) return { ok: false as const, error: 'BAD_SIGNATURE' };
 
   const userJson = params.get('user');
-  const auth_date = params.get('auth_date') ? Number(params.get('auth_date')) : undefined;
-
-  let user: any = undefined;
+  let user: any;
   try { if (userJson) user = JSON.parse(userJson); } catch {}
+  const auth_date = params.get('auth_date') ? Number(params.get('auth_date')) : undefined;
 
   const telegramId = user?.id ? String(user.id) : undefined;
 
-  return {
-    ok: true as const,
-    payload: { user, auth_date },
-    data: { telegramId, user, auth_date },
-  };
+  return { ok: true as const, payload: { user, auth_date }, data: { telegramId, user, auth_date } };
 }
 
 export function parseTgUser(req: NextRequest): { id: string; [k: string]: any } | null {
   const hdr = req.headers.get('x-telegram-user');
-  if (hdr) {
-    try { const u = JSON.parse(hdr); if (u?.id) return { ...u, id: String(u.id) }; } catch {}
-  }
+  if (hdr) { try { const u = JSON.parse(hdr); if (u?.id) return { ...u, id: String(u.id) }; } catch {} }
+
   const c = req.cookies.get('tg_user')?.value;
-  if (c) {
-    try { const u = JSON.parse(c); if (u?.id) return { ...u, id: String(u.id) }; } catch {}
-  }
+  if (c) { try { const u = JSON.parse(c); if (u?.id) return { ...u, id: String(u.id) }; } catch {} }
+
   const tid = req.nextUrl.searchParams.get('tid');
   if (tid) return { id: String(tid) };
+
   return null;
 }
 
@@ -71,11 +66,6 @@ export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
   throw new Error('UNAUTHORIZED');
 }
 
-// Удобный «мягкий» вариант — вернёт null вместо ошибки
 export async function getTelegramId(req: NextRequest): Promise<string | null> {
-  try {
-    return await getTelegramIdStrict(req);
-  } catch {
-    return null;
-  }
+  try { return await getTelegramIdStrict(req); } catch { return null; }
 }
