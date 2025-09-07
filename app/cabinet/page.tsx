@@ -4,39 +4,28 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 
 type MeResponse =
-  | { ok: true; user: { id: number; telegramId: string; subscriptionUntil: string | null } }
+  | { ok: true; user: { id?: number; telegramId: string; subscriptionUntil: string | null } }
   | { ok: false; error: string };
 
 function formatUntil(dt: string) {
   try {
     const d = new Date(dt);
     return new Intl.DateTimeFormat('ru-RU', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit',
     }).format(d);
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export default async function CabinetPage() {
-  // Заголовки текущего запроса
-  const h = headers();
+  const h = await headers(); // await — важно при твоей типизации
 
-  // Базовый абсолютный URL (важно для fetch в серверном компоненте)
   const proto = h.get('x-forwarded-proto') ?? 'https';
-  const host =
-    h.get('x-forwarded-host') ??
-    h.get('host') ??
-    'localhost';
-  const base = `${proto}://${host}`;
+  const host  = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost';
+  const base  = `${proto}://${host}`;
 
-  // Имя для приветствия — пробуем cookie tg_user, затем x-telegram-user
-  let displayName: string | null = null;
   const cookieHeader = h.get('cookie') ?? '';
+  let displayName: string | null = null;
   const m = cookieHeader.match(/(?:^|;\s*)tg_user=([^;]+)/);
   if (m) {
     try {
@@ -51,7 +40,6 @@ export default async function CabinetPage() {
     } catch {}
   }
 
-  // Тянем статус подписки с прокидыванием заголовков
   const res = await fetch(`${base}/api/me`, {
     cache: 'no-store',
     headers: {
@@ -63,15 +51,11 @@ export default async function CabinetPage() {
   });
 
   let data: MeResponse;
-  try {
-    data = await res.json();
-  } catch {
-    data = { ok: false, error: 'BAD_JSON' };
-  }
+  try { data = await res.json(); } catch { data = { ok: false, error: 'BAD_JSON' } as MeResponse; }
 
   const until =
-    data.ok && data.user.subscriptionUntil
-      ? formatUntil(data.user.subscriptionUntil)
+    (data as any).ok && (data as any).user?.subscriptionUntil
+      ? formatUntil((data as any).user.subscriptionUntil as string)
       : null;
 
   return (
@@ -87,7 +71,7 @@ export default async function CabinetPage() {
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6 md:p-8 mb-6">
         <h2 className="text-2xl md:text-3xl font-semibold mb-4">Статус подписки</h2>
 
-        {data.ok ? (
+        {(data as any).ok ? (
           until ? (
             <p className="text-lg">Подписка активна до {until}</p>
           ) : (
