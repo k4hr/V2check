@@ -1,7 +1,7 @@
 // app/cabinet/page.tsx
 import React from 'react';
 import Link from 'next/link';
-import { cookies } from 'next/headers';
+import { headers } from 'next/headers';
 
 type MeResponse =
   | { ok: true; user: { id: number; telegramId: string; subscriptionUntil: string | null } }
@@ -23,20 +23,51 @@ function formatUntil(dt: string) {
 }
 
 export default async function CabinetPage() {
-  // читаем имя из cookie Telegram WebApp (если есть)
-  const c = await cookies();
-  const raw = c.get('tg_user')?.value;
+  // Заголовки текущего запроса
+  const h = headers();
+
+  // Базовый абсолютный URL (важно для fetch в серверном компоненте)
+  const proto = h.get('x-forwarded-proto') ?? 'https';
+  const host =
+    h.get('x-forwarded-host') ??
+    h.get('host') ??
+    'localhost';
+  const base = `${proto}://${host}`;
+
+  // Имя для приветствия — пробуем cookie tg_user, затем x-telegram-user
   let displayName: string | null = null;
-  if (raw) {
+  const cookieHeader = h.get('cookie') ?? '';
+  const m = cookieHeader.match(/(?:^|;\s*)tg_user=([^;]+)/);
+  if (m) {
     try {
-      const u = JSON.parse(raw);
+      const u = JSON.parse(decodeURIComponent(m[1]));
+      displayName = u?.first_name || u?.username || null;
+    } catch {}
+  }
+  if (!displayName && h.get('x-telegram-user')) {
+    try {
+      const u = JSON.parse(h.get('x-telegram-user') as string);
       displayName = u?.first_name || u?.username || null;
     } catch {}
   }
 
-  // тянем актуальный статус (без кеша)
-  const res = await fetch('/api/me', { cache: 'no-store' });
-  const data: MeResponse = await res.json();
+  // Тянем статус подписки с прокидыванием заголовков
+  const res = await fetch(`${base}/api/me`, {
+    cache: 'no-store',
+    headers: {
+      cookie: cookieHeader,
+      'x-telegram-user': h.get('x-telegram-user') ?? '',
+      'x-telegram-id': h.get('x-telegram-id') ?? '',
+      'x-telegram-init-data': h.get('x-telegram-init-data') ?? '',
+    },
+  });
+
+  let data: MeResponse;
+  try {
+    data = await res.json();
+  } catch {
+    data = { ok: false, error: 'BAD_JSON' };
+  }
 
   const until =
     data.ok && data.user.subscriptionUntil
