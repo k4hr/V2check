@@ -1,7 +1,7 @@
 // app/cabinet/page.tsx
 import React from 'react';
 import Link from 'next/link';
-import { cookies, headers } from 'next/headers';
+import { cookies } from 'next/headers';
 
 type MeResponse =
   | { ok: true; user: { id: number; telegramId: string; subscriptionUntil: string | null } }
@@ -23,17 +23,7 @@ function formatUntil(dt: string) {
 }
 
 function getDisplayName() {
-  // Приветствие берем из куки/заголовка Telegram WebApp, чтобы не зависеть от колонок в БД
-  const h = headers();
   const c = cookies();
-
-  const hdr = h.get('x-telegram-user');
-  if (hdr) {
-    try {
-      const u = JSON.parse(hdr);
-      return u?.first_name || u?.username || null;
-    } catch {}
-  }
   const raw = c.get('tg_user')?.value;
   if (raw) {
     try {
@@ -45,22 +35,8 @@ function getDisplayName() {
 }
 
 export default async function CabinetPage() {
-  // важно: без кэша, чтобы статус всегда был актуальным
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/me`, {
-    cache: 'no-store',
-    // прокидываем initData и user (если браузер/прокси их добавляет)
-    headers: {
-      ...(headers().get('x-telegram-init-data')
-        ? { 'x-telegram-init-data': headers().get('x-telegram-init-data') as string }
-        : {}),
-      ...(headers().get('x-telegram-user')
-        ? { 'x-telegram-user': headers().get('x-telegram-user') as string }
-        : {}),
-      ...(headers().get('x-telegram-id')
-        ? { 'x-telegram-id': headers().get('x-telegram-id') as string }
-        : {}),
-    },
-  });
+  // Cookies текущего запроса автоматически прокинутся во внутренний fetch
+  const res = await fetch('/api/me', { cache: 'no-store' });
   const data: MeResponse = await res.json();
 
   const displayName = getDisplayName();
@@ -69,8 +45,6 @@ export default async function CabinetPage() {
       ? formatUntil(data.user.subscriptionUntil)
       : null;
 
-  // Ниже — разметка в духе твоей страницы: большой заголовок, приветствие, блок «Статус подписки»,
-  // две кнопки: «Оформить/продлить подписку» и «Избранное».
   return (
     <div className="px-6 py-8 md:py-12 max-w-3xl mx-auto">
       <h1 className="text-4xl md:text-5xl font-serif mb-8">Личный кабинет</h1>
