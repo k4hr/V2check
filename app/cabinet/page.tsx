@@ -22,24 +22,22 @@ function formatUntil(dt: string) {
   }
 }
 
-function getDisplayName() {
-  const c = cookies();
+export default async function CabinetPage() {
+  // читаем имя из cookie Telegram WebApp (если есть)
+  const c = await cookies();
   const raw = c.get('tg_user')?.value;
+  let displayName: string | null = null;
   if (raw) {
     try {
       const u = JSON.parse(raw);
-      return u?.first_name || u?.username || null;
+      displayName = u?.first_name || u?.username || null;
     } catch {}
   }
-  return null;
-}
 
-export default async function CabinetPage() {
-  // Cookies текущего запроса автоматически прокинутся во внутренний fetch
+  // тянем актуальный статус (без кеша)
   const res = await fetch('/api/me', { cache: 'no-store' });
   const data: MeResponse = await res.json();
 
-  const displayName = getDisplayName();
   const until =
     data.ok && data.user.subscriptionUntil
       ? formatUntil(data.user.subscriptionUntil)
