@@ -4,7 +4,6 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// добавление интервалов без сторонних либ
 function addDuration(base: Date, opts: { days?: number; months?: number; years?: number }) {
   const d = new Date(base);
   if (opts.years)  d.setFullYear(d.getFullYear() + (opts.years || 0));
@@ -15,9 +14,6 @@ function addDuration(base: Date, opts: { days?: number; months?: number; years?:
 
 export async function POST(req: NextRequest) {
   try {
-    // Поддерживаем 2 формата тела:
-    // 1) real Telegram webhook (message.successful_payment)
-    // 2) прокси-вызов { userId, payload } — удобно для теста
     const update = await req.json();
 
     const sp = update?.message?.successful_payment;
@@ -30,13 +26,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'MISSING_PARAMS' }, { status: 400 });
     }
 
-    // ожидаем payload вида: "subs:WEEK|MONTH|HALFYEAR|YEAR"
     const plan = payload.split(':')[1]?.toUpperCase();
     if (!plan) {
       return NextResponse.json({ ok: false, error: 'UNKNOWN_PLAN' }, { status: 400 });
     }
 
-    // берём базовую точку продления — максимальная из (сейчас, текущий срок)
     const now = new Date();
     const prev = await prisma.user.findUnique({
       where: { telegramId: userId },
