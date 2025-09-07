@@ -1,21 +1,26 @@
 // app/api/me/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { getTelegramId } from '@/lib/auth'; // оставляю твой хелпер
+import { getTelegramIdStrict } from '@/lib/auth/verifyInitData';
 
 const prisma = new PrismaClient();
 
-// Аккуратно читаем telegramId: сначала из query (?telegramId=...),
-// иначе через ваш getTelegramId(req) (initData/заголовки/куки)
 async function resolveTelegramId(req: NextRequest): Promise<string | null> {
   const url = new URL(req.url);
-  const fromQuery = url.searchParams.get('telegramId');
-  if (fromQuery) return String(fromQuery);
+  const q1 = url.searchParams.get('telegramId');
+  const q2 = url.searchParams.get('tid');
+  if (q1) return String(q1);
+  if (q2) return String(q2);
+
+  const override = req.headers.get('x-telegram-id');
+  if (override) return String(override);
 
   try {
-    const id = await (getTelegramId as any)(req);
+    const id = await getTelegramIdStrict(req);
     if (id) return String(id);
-  } catch {}
+  } catch {
+    // падаем в null, отдадим 401 ниже
+  }
   return null;
 }
 
@@ -26,7 +31,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'TELEGRAM_ID_NOT_FOUND' }, { status: 401 });
     }
 
-    // гарантируем наличие пользователя (upsert не меняет верстку и не ломает данные)
+    // гарантируем, что юзер существует (не ломая существующие данные)
     const user = await prisma.user.upsert({
       where:  { telegramId },
       update: {},
@@ -44,7 +49,6 @@ export async function GET(req: NextRequest) {
         subscriptionUntil: until ? until.toISOString() : null,
         isActive,
       },
-      // для удобства фронта добавляю готовую метку
       label: isActive && until
         ? `активна до ${until.toLocaleDateString('ru-RU')}`
         : 'подписка неактивна',
