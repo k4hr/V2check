@@ -66,6 +66,7 @@ export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
   throw new Error('UNAUTHORIZED');
 }
 
+// Мягкая версия — возвращает null вместо ошибки
 export async function getTelegramId(req: NextRequest): Promise<string | null> {
   try { return await getTelegramIdStrict(req); } catch { return null; }
 }
