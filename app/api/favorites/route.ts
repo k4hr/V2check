@@ -1,7 +1,7 @@
 // app/api/favorites/route.ts
 import { NextResponse, NextRequest } from 'next/server';
 import { PrismaClient } from '@prisma/client';
-import { getTelegramIdStrict } from '@/lib/auth/verifyInitData';
+import { getTelegramIdStrict } from '@/lib/auth'; // <— короткий путь
 
 const prisma = new PrismaClient();
 
@@ -20,10 +20,7 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, items });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e?.message ?? e) },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
   }
 }
 
@@ -33,10 +30,7 @@ export async function POST(req: NextRequest) {
     const { title, url } = await req.json();
 
     if (!title || !url) {
-      return NextResponse.json(
-        { ok: false, error: 'TITLE_OR_URL_MISSING' },
-        { status: 400 },
-      );
+      return NextResponse.json({ ok: false, error: 'TITLE_OR_URL_MISSING' }, { status: 400 });
     }
 
     const user = await prisma.user.findUnique({
@@ -44,10 +38,7 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
     if (!user) {
-      return NextResponse.json(
-        { ok: false, error: 'USER_NOT_FOUND' },
-        { status: 404 },
-      );
+      return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 404 });
     }
 
     const created = await prisma.favorite.create({
@@ -55,10 +46,7 @@ export async function POST(req: NextRequest) {
     });
     return NextResponse.json({ ok: true, item: created });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e?.message ?? e) },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
   }
 }
 
@@ -66,13 +54,8 @@ export async function DELETE(req: NextRequest) {
   try {
     const telegramId = await getTelegramIdStrict(req);
     const urlObj = new URL(req.url);
-    const id = urlObj.searchParams.get('id') || ''; // <-- id строковый
-    if (!id) {
-      return NextResponse.json(
-        { ok: false, error: 'ID_REQUIRED' },
-        { status: 400 },
-      );
-    }
+    const id = urlObj.searchParams.get('id') || ''; // id — СТРОКА (cuid), не число
+    if (!id) return NextResponse.json({ ok: false, error: 'ID_REQUIRED' }, { status: 400 });
 
     const user = await prisma.user.findUnique({
       where: { telegramId },
@@ -83,9 +66,6 @@ export async function DELETE(req: NextRequest) {
     await prisma.favorite.deleteMany({ where: { id, userId: user.id } });
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e?.message ?? e) },
-      { status: 400 },
-    );
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 400 });
   }
 }
