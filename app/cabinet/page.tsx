@@ -1,113 +1,81 @@
-// app/cabinet/page.tsx
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { headers, cookies } from 'next/headers';
 
-export const dynamic = 'force-dynamic';
+export default function CabinetPage() {
+  const [user, setUser] = useState<any>(null);
+  const [statusText, setStatusText] = useState<string>('Подписка не активна.');
+  const [loadingStatus, setLoadingStatus] = useState<boolean>(false);
 
-function formatRu(dt: Date) {
-  return dt.toLocaleString('ru-RU', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function nameFromRaw(raw: any): string | null {
-  try {
-    const u = typeof raw === 'string' ? JSON.parse(raw) : raw;
-    if (!u || typeof u !== 'object') return null;
-    if (u.first_name || u.last_name) return [u.first_name, u.last_name].filter(Boolean).join(' ');
-    if (u.username) return String(u.username);
-    if (u.id) return `id${u.id}`;
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export default async function CabinetPage() {
-  const [h, c] = await Promise.all([headers(), cookies()]);
-
-  // Абсолютный URL для server fetch
-  const proto = h.get('x-forwarded-proto') ?? 'https';
-  const host =
-    h.get('x-forwarded-host') ??
-    h.get('host') ??
-    process.env.VERCEL_URL ??
-    process.env.RAILWAY_PUBLIC_DOMAIN ??
-    'localhost:3000';
-  const base = `${proto}://${host}`;
-
-  const fwd: HeadersInit = {};
-  const hdrUser = h.get('x-telegram-user');
-  if (hdrUser) fwd['x-telegram-user'] = hdrUser;
-  const initData = c.get('tg_init_data')?.value;
-  if (initData) fwd['x-telegram-init-data'] = initData;
-
-  // Получаем статус из API
-  let statusText = 'Не удалось получить статус';
-  try {
-    const res = await fetch(`${base}/api/me`, { headers: fwd, cache: 'no-store' });
-    if (res.ok) {
-      const j = await res.json();
-      const until = j?.user?.subscriptionUntil ? new Date(j.user.subscriptionUntil) : null;
-      if (until && until.getTime() > Date.now()) {
-        statusText = `Подписка активна до ${formatRu(until)}`;
+  async function loadSubscription(initData: string) {
+    if (!initData) return;
+    setLoadingStatus(true);
+    try {
+      const resp = await fetch('/api/me', { method: 'POST', headers: { 'x-init-data': initData } });
+      const data = await resp.json();
+      if (resp.ok && data?.ok && data?.subscription) {
+        const ex = new Date(data.subscription.expiresAt);
+        setStatusText(`✅ Подписка активна до ${ex.toLocaleString()}`);
       } else {
-        statusText = 'Подписка неактивна';
+        setStatusText('Подписка не активна.');
       }
+    } catch {
+      setStatusText('Не удалось получить статус');
+    } finally {
+      setLoadingStatus(false);
     }
-  } catch {}
-
-  // Имя для приветствия
-  let helloName: string | null = null;
-  if (hdrUser) helloName = nameFromRaw(hdrUser);
-  if (!helloName) {
-    const cu = c.get('tg_user')?.value;
-    if (cu) helloName = nameFromRaw(cu);
   }
 
-  // === ВЕРСТКА: оставлена максимально нейтральной, чтобы не ломать твой дизайн ===
-  return (
-    <main className="mx-auto w-full max-w-2xl px-4 py-8">
-      <h1 className="mb-6 text-4xl font-extrabold tracking-tight md:text-5xl">Личный кабинет</h1>
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
+      const WebApp = (window as any).Telegram.WebApp;
+      WebApp.ready?.();
+      WebApp.expand?.();
+      setUser(WebApp.initDataUnsafe?.user || null);
+      const initData = WebApp?.initData || '';
+      if (initData) loadSubscription(initData);
+      const onInvoiceClosed = (e:any) => {
+        if (e?.status === 'paid') loadSubscription(WebApp?.initData || '');
+      };
+      (WebApp as any)?.onEvent?.('invoiceClosed', onInvoiceClosed);
+      return () => {(WebApp as any)?.offEvent?.('invoiceClosed', onInvoiceClosed);};
+    }
+  }, []);
 
-      {helloName && (
-        <p className="mb-6 text-lg text-zinc-300">
-          Здравствуйте, <span className="font-semibold">{helloName}</span>
-        </p>
+  return (
+    <div style={{ padding: 20 }}>
+      <h1 style={{ textAlign: 'center' }}>Личный кабинет</h1>
+      {user ? (
+        <p style={{ textAlign: 'center' }}>Здравствуйте, <b>{user.first_name}</b></p>
+      ) : (
+        <p style={{ textAlign: 'center' }}>Данные пользователя недоступны.</p>
       )}
 
-      <section className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow">
-        <h2 className="mb-3 text-2xl font-semibold">Статус подписки</h2>
-        <p className="text-zinc-200">{statusText}</p>
+      <div style={{ marginTop: 16 }}>
+        <div style={{ margin: '0 auto', maxWidth: 680, padding: 12, border: '1px solid #333', borderRadius: 12 }}>
+          <h3 style={{ marginTop: 0, textAlign: 'center' }}>Статус подписки</h3>
+          <p style={{ textAlign: 'center' }}>{loadingStatus ? 'Проверяем подписку…' : statusText}</p>
 
-        <div className="mt-6 space-y-3">
-          <Link
-            href="/payments"
-            className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-4 transition hover:bg-white/10"
-          >
-            <span className="flex items-center gap-3">
-              <span className="text-xl">⭐</span>
-              <span className="text-lg font-medium">Оформить/продлить подписку</span>
-            </span>
-            <span className="text-zinc-400">›</span>
-          </Link>
+          <div style={{ display:'grid', gap:12, marginTop:12 }}>
+            <Link href="/pro" className="list-btn" style={{ textDecoration:'none' }}>
+              <span className="list-btn__left">
+                <span className="list-btn__emoji">⭐</span>
+                <b>Оформить/продлить подписку</b>
+              </span>
+              <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+            </Link>
 
-          <Link
-            href="/favorites"
-            className="flex items-center justify-between rounded-xl bg-white/5 px-4 py-4 transition hover:bg-white/10"
-          >
-            <span className="flex items-center gap-3">
-              <span className="text-xl">🔅</span>
-              <span className="text-lg font-medium">Избранное</span>
-            </span>
-            <span className="text-zinc-400">›</span>
-          </Link>
+            <Link href="/cabinet/favorites" className="list-btn" style={{ textDecoration:'none' }}>
+              <span className="list-btn__left">
+                <span className="list-btn__emoji">🌟</span>
+                <b>Избранное</b>
+              </span>
+              <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+            </Link>
+          </div>
         </div>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }
