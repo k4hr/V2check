@@ -2,9 +2,7 @@
 import type { NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-/**
- * Проверка initData из Telegram Mini App.
- */
+/** Проверка подписи Telegram WebApp initData */
 export function verifyInitData(initData: string, botToken: string) {
   if (!initData) return { ok: false as const, error: 'EMPTY_INIT_DATA' };
   if (!botToken) return { ok: false as const, error: 'EMPTY_BOT_TOKEN' };
@@ -16,7 +14,7 @@ export function verifyInitData(initData: string, botToken: string) {
   const dataCheckString = Array.from(params.entries())
     .map(([k, v]) => `${k}=${v}`)
     .sort()
-    .join('\\n');
+    .join('\n');
 
   const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
   const sign = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
@@ -27,7 +25,9 @@ export function verifyInitData(initData: string, botToken: string) {
   const auth_date = params.get('auth_date') ? Number(params.get('auth_date')) : undefined;
 
   let user: any = undefined;
-  try { if (userJson) user = JSON.parse(userJson); } catch {}
+  try {
+    if (userJson) user = JSON.parse(userJson);
+  } catch { /* noop */ }
 
   const telegramId = user?.id ? String(user.id) : undefined;
 
@@ -38,28 +38,32 @@ export function verifyInitData(initData: string, botToken: string) {
   };
 }
 
-/**
- * Извлечь объект пользователя (без криптографии) — удобно для приветствия/идентификации.
- */
+/** Попытаться вытащить пользователя из заголовка/куки без валидации подписи */
 export function parseTgUser(req: NextRequest): { id: string; [k: string]: any } | null {
   const hdr = req.headers.get('x-telegram-user');
   if (hdr) {
-    try { const u = JSON.parse(hdr); if (u?.id) return { ...u, id: String(u.id) }; } catch {}
+    try {
+      const u = JSON.parse(hdr);
+      if (u?.id) return { ...u, id: String(u.id) };
+    } catch {}
   }
+
   const c = req.cookies.get('tg_user')?.value;
   if (c) {
-    try { const u = JSON.parse(c); if (u?.id) return { ...u, id: String(u.id) }; } catch {}
+    try {
+      const u = JSON.parse(c);
+      if (u?.id) return { ...u, id: String(u.id) };
+    } catch {}
   }
+
   const tid = req.nextUrl.searchParams.get('tid');
   if (tid) return { id: String(tid) };
+
   return null;
 }
 
-/**
- * Гарантированно вернуть telegramId (или бросить ошибку).
- * Проверяем: x-telegram-id -> initData (с подписью) -> tg_user/tid.
- */
-export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
+/** Мягкий: вернуть telegramId или null */
+export async function getTelegramId(req: NextRequest): Promise<string | null> {
   const override = req.headers.get('x-telegram-id');
   if (override) return String(override);
 
@@ -79,10 +83,12 @@ export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
   const u = parseTgUser(req);
   if (u?.id) return String(u.id);
 
-  throw new Error('UNAUTHORIZED');
+  return null;
 }
 
-/** Мягкая версия: вернёт id или null. */
-export async function getTelegramId(req: NextRequest): Promise<string | null> {
-  try { return await getTelegramIdStrict(req); } catch { return null; }
+/** Строгий: либо вернёт id, либо бросит UNAUTHORIZED */
+export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
+  const id = await getTelegramId(req);
+  if (!id) throw new Error('UNAUTHORIZED');
+  return id;
 }
