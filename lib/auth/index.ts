@@ -2,6 +2,6 @@
 export {
   verifyInitData,
   parseTgUser,
-  getTelegramId,
   getTelegramIdStrict,
-} from './verifyInitData';
+  getTelegramId,
+} from './verifyInitData'

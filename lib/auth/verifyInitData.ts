@@ -1,94 +1,80 @@
 // lib/auth/verifyInitData.ts
-import type { NextRequest } from 'next/server';
-import crypto from 'crypto';
+import type { NextRequest } from 'next/server'
+import crypto from 'crypto'
 
-/** Проверка подписи Telegram WebApp initData */
+/** Verifies Telegram WebApp initData with bot token and returns parsed payload */
 export function verifyInitData(initData: string, botToken: string) {
-  if (!initData) return { ok: false as const, error: 'EMPTY_INIT_DATA' };
-  if (!botToken) return { ok: false as const, error: 'EMPTY_BOT_TOKEN' };
+  if (!initData) return { ok: false as const, error: 'EMPTY_INIT_DATA' }
+  if (!botToken) return { ok: false as const, error: 'EMPTY_BOT_TOKEN' }
 
-  const params = new URLSearchParams(initData);
-  const hash = params.get('hash') || '';
-  params.delete('hash');
+  const params = new URLSearchParams(initData)
+  const hash = params.get('hash') || ''
+  params.delete('hash')
 
   const dataCheckString = Array.from(params.entries())
     .map(([k, v]) => `${k}=${v}`)
     .sort()
-    .join('\n');
+    .join('\n')
 
-  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-  const sign = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest()
+  const sign = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex')
 
-  if (sign !== hash) return { ok: false as const, error: 'BAD_SIGNATURE' };
+  if (sign !== hash) return { ok: false as const, error: 'BAD_SIGNATURE' }
 
-  const userJson = params.get('user');
-  const auth_date = params.get('auth_date') ? Number(params.get('auth_date')) : undefined;
+  const userJson = params.get('user')
+  const auth_date = params.get('auth_date') ? Number(params.get('auth_date')) : undefined
 
-  let user: any = undefined;
-  try {
-    if (userJson) user = JSON.parse(userJson);
-  } catch { /* noop */ }
+  let user: any = undefined
+  try { if (userJson) user = JSON.parse(userJson) } catch {}
 
-  const telegramId = user?.id ? String(user.id) : undefined;
+  const telegramId = user?.id ? String(user.id) : undefined
 
   return {
     ok: true as const,
     payload: { user, auth_date },
     data: { telegramId, user, auth_date },
-  };
+  }
 }
 
-/** Попытаться вытащить пользователя из заголовка/куки без валидации подписи */
+/** Extracts Telegram user object from headers/cookie/query when initData is absent */
 export function parseTgUser(req: NextRequest): { id: string; [k: string]: any } | null {
-  const hdr = req.headers.get('x-telegram-user');
+  const hdr = req.headers.get('x-telegram-user')
   if (hdr) {
-    try {
-      const u = JSON.parse(hdr);
-      if (u?.id) return { ...u, id: String(u.id) };
-    } catch {}
+    try { const u = JSON.parse(hdr); if (u?.id) return { ...u, id: String(u.id) } } catch {}
   }
-
-  const c = req.cookies.get('tg_user')?.value;
+  const c = req.cookies.get('tg_user')?.value
   if (c) {
-    try {
-      const u = JSON.parse(c);
-      if (u?.id) return { ...u, id: String(u.id) };
-    } catch {}
+    try { const u = JSON.parse(c); if (u?.id) return { ...u, id: String(u.id) } } catch {}
   }
-
-  const tid = req.nextUrl.searchParams.get('tid');
-  if (tid) return { id: String(tid) };
-
-  return null;
+  const tid = req.nextUrl.searchParams.get('tid')
+  if (tid) return { id: String(tid) }
+  return null
 }
 
-/** Мягкий: вернуть telegramId или null */
-export async function getTelegramId(req: NextRequest): Promise<string | null> {
-  const override = req.headers.get('x-telegram-id');
-  if (override) return String(override);
+/** Resolve Telegram ID. Throws on failure. */
+export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
+  const override = req.headers.get('x-telegram-id')
+  if (override) return String(override)
 
   const initData =
     req.headers.get('x-telegram-init-data') ??
     req.nextUrl.searchParams.get('initData') ??
     req.cookies.get('tg_init_data')?.value ??
-    '';
+    ''
 
-  const BOT_TOKEN = process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN || '';
-
-  if (initData && BOT_TOKEN) {
-    const v = verifyInitData(String(initData), String(BOT_TOKEN));
-    if (v.ok && v.data?.telegramId) return String(v.data.telegramId);
+  const BOT_TOKEN = process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN || ''
+  if (initData) {
+    const v = verifyInitData(String(initData), String(BOT_TOKEN))
+    if (v.ok && v.data?.telegramId) return String(v.data.telegramId)
   }
 
-  const u = parseTgUser(req);
-  if (u?.id) return String(u.id);
+  const u = parseTgUser(req)
+  if (u?.id) return String(u.id)
 
-  return null;
+  throw new Error('UNAUTHORIZED')
 }
 
-/** Строгий: либо вернёт id, либо бросит UNAUTHORIZED */
-export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
-  const id = await getTelegramId(req);
-  if (!id) throw new Error('UNAUTHORIZED');
-  return id;
+/** Soft version: returns string or null */
+export async function getTelegramId(req: NextRequest): Promise<string | null> {
+  try { return await getTelegramIdStrict(req) } catch { return null }
 }
