@@ -1,6 +1,5 @@
 // lib/auth/index.ts
-// Совместимый реэкспорт под импортами '@/lib/auth'.
-// Некоторые файлы в проекте импортируют отсюда getTelegramIdStrict.
+// Реэкспорт под импорт '@/lib/auth'
 export {
   verifyInitData,
   getTelegramId,
