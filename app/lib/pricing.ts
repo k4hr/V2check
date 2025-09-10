@@ -1,6 +1,5 @@
 // app/lib/pricing.ts
-// Клиентский слой: явный реэкспорт серверных констант/типов.
-// Это устраняет ошибку импорта PRICES из ../lib/pricing в app/pro/page.tsx.
+// Клиент видит те же PRICES, что и сервер — без дублирования.
 export {
   PRICES,
   type Plan,
