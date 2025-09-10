@@ -1,11 +1,7 @@
-// v2check/lib/pricing.ts
-/**
- * Единый источник правды для тарифов (сервер).
- * Клиентский файл `app/lib/pricing.ts` делает просто реэкспорт.
- *
- * Важно: добавлен алиас 'HALF' => 'HALF_YEAR', чтобы не ломать уже существующие вызовы.
- * Значения ниже — примеры. Подставь ваши финальные цены/длительности, если они другие.
- */
+// lib/pricing.ts
+// Единый источник тарифов для сервера. Клиент реэкспортит из app/lib/pricing.ts.
+// Добавлено поле `stars` как алиас `amount`, чтобы не менять существующий код.
+// Добавлен алиас плана 'HALF' -> 'HALF_YEAR' (обе записи ссылаются на один объект).
 
 export type Plan = 'WEEK' | 'MONTH' | 'HALF' | 'HALF_YEAR' | 'YEAR';
 
@@ -14,15 +10,16 @@ export type PricingItem = {
   title: string;       // заголовок invoice
   description: string; // описание в invoice
   amount: number;      // цена в Stars
-  days: number;        // кол-во дней доступа
+  stars: number;       // АЛИАС для совместимости со старым кодом
+  days: number;        // длительность доступа
 };
 
-// Базовая запись для полугода
-const HALF_YEAR_ITEM: PricingItem = {
+const halfYear: PricingItem = {
   label: 'Полгода',
   title: 'Juristum Pro — Полгода',
   description: 'Доступ на 180 дней',
   amount: 499,
+  stars: 499,
   days: 180,
 };
 
@@ -32,6 +29,7 @@ export const PRICES: Record<Plan, PricingItem> = {
     title: 'Juristum Pro — Неделя',
     description: 'Доступ на 7 дней',
     amount: 29,
+    stars: 29,
     days: 7,
   },
   MONTH: {
@@ -39,15 +37,17 @@ export const PRICES: Record<Plan, PricingItem> = {
     title: 'Juristum Pro — Месяц',
     description: 'Доступ на 30 дней',
     amount: 99,
+    stars: 99,
     days: 30,
   },
-  HALF_YEAR: HALF_YEAR_ITEM,
-  HALF: HALF_YEAR_ITEM, // алиас на тот же план (совместимость со старым клиентом)
+  HALF_YEAR: halfYear,
+  HALF: halfYear, // алиас для совместимости с имеющимся кодом
   YEAR: {
     label: 'Год',
     title: 'Juristum Pro — Год',
     description: 'Доступ на 365 дней',
     amount: 899,
+    stars: 899,
     days: 365,
   },
 } as const;
@@ -55,8 +55,7 @@ export const PRICES: Record<Plan, PricingItem> = {
 export type PlanInput = keyof typeof PRICES;
 
 export function resolvePlan(plan: string | null | undefined): Plan {
-  const key = String(plan || '').toUpperCase() as Plan;
-  if (key in PRICES) return key;
-  // по умолчанию — Месяц
+  const k = String(plan || '').toUpperCase() as Plan;
+  if (k in PRICES) return k;
   return 'MONTH';
 }
