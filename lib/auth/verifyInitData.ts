@@ -1,80 +1,100 @@
 // lib/auth/verifyInitData.ts
-import type { NextRequest } from 'next/server'
-import crypto from 'crypto'
+// Полная проверка initData (HMAC) по спецификации Telegram Mini Apps.
+// Экспортирует verifyInitData, getTelegramId, getTelegramIdStrict.
+// Используется в API-ручках. Совместим с импортами как '@/lib/auth/verifyInitData'.
 
-/** Verifies Telegram WebApp initData with bot token and returns parsed payload */
-export function verifyInitData(initData: string, botToken: string) {
-  if (!initData) return { ok: false as const, error: 'EMPTY_INIT_DATA' }
-  if (!botToken) return { ok: false as const, error: 'EMPTY_BOT_TOKEN' }
+import crypto from 'crypto';
 
-  const params = new URLSearchParams(initData)
-  const hash = params.get('hash') || ''
-  params.delete('hash')
+export type VerifyOk =
+  | { ok: true; data: Record<string, any> }
+  | { ok: false; error: string };
 
-  const dataCheckString = Array.from(params.entries())
-    .map(([k, v]) => `${k}=${v}`)
-    .sort()
-    .join('\n')
+function getSecretKey(botToken: string) {
+  // secret_key = HMAC_SHA256("WebAppData", bot_token)
+  return crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+}
 
-  const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest()
-  const sign = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex')
+function parseInitData(initData: string): Record<string, any> {
+  const url = new URLSearchParams(initData);
+  const obj: Record<string, any> = {};
+  url.forEach((v, k) => {
+    if (k === 'user' || k === 'receiver' || k === 'chat_instance') {
+      try {
+        obj[k] = JSON.parse(v);
+      } catch {
+        obj[k] = v;
+      }
+    } else {
+      obj[k] = v;
+    }
+  });
+  return obj;
+}
 
-  if (sign !== hash) return { ok: false as const, error: 'BAD_SIGNATURE' }
+function buildCheckString(data: Record<string, any>) {
+  const entries = Object.entries(data)
+    .filter(([k]) => k !== 'hash')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`);
+  return entries.join('\n');
+}
 
-  const userJson = params.get('user')
-  const auth_date = params.get('auth_date') ? Number(params.get('auth_date')) : undefined
+/**
+ * verifyInitData(initData, botToken, maxAgeSeconds?)
+ * Возвращает { ok: true, data } при успехе, иначе { ok: false, error }.
+ */
+export function verifyInitData(
+  initData: string,
+  botToken: string,
+  maxAgeSeconds = 600
+): VerifyOk {
+  try {
+    if (!initData) return { ok: false, error: 'NO_INIT_DATA' };
+    if (!botToken) return { ok: false, error: 'NO_BOT_TOKEN' };
+    const data = parseInitData(initData);
+    const checkString = buildCheckString(data);
+    const secret = getSecretKey(botToken);
+    const hmac = crypto.createHmac('sha256', secret).update(checkString).digest('hex');
+    if (hmac !== data.hash) return { ok: false, error: 'BAD_HASH' };
 
-  let user: any = undefined
-  try { if (userJson) user = JSON.parse(userJson) } catch {}
-
-  const telegramId = user?.id ? String(user.id) : undefined
-
-  return {
-    ok: true as const,
-    payload: { user, auth_date },
-    data: { telegramId, user, auth_date },
+    const now = Math.floor(Date.now() / 1000);
+    const authDate = Number(data.auth_date || 0);
+    if (!authDate || now - authDate > maxAgeSeconds) {
+      return { ok: false, error: 'EXPIRED' };
+    }
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || 'VERIFY_ERROR' };
   }
 }
 
-/** Extracts Telegram user object from headers/cookie/query when initData is absent */
-export function parseTgUser(req: NextRequest): { id: string; [k: string]: any } | null {
-  const hdr = req.headers.get('x-telegram-user')
-  if (hdr) {
-    try { const u = JSON.parse(hdr); if (u?.id) return { ...u, id: String(u.id) } } catch {}
-  }
-  const c = req.cookies.get('tg_user')?.value
-  if (c) {
-    try { const u = JSON.parse(c); if (u?.id) return { ...u, id: String(u.id) } } catch {}
-  }
-  const tid = req.nextUrl.searchParams.get('tid')
-  if (tid) return { id: String(tid) }
-  return null
+/**
+ * Вспомогалки для API-ручек
+ * Ищем initData в заголовках x-telegram-init-data / x-init-data, либо в теле { initData }.
+ */
+async function extractInitDataFromRequest(req: Request): Promise<string> {
+  const h1 = req.headers.get('x-telegram-init-data');
+  const h2 = req.headers.get('x-init-data');
+  if (h1) return h1;
+  if (h2) return h2;
+  try {
+    const j = await req.clone().json().catch(() => ({}));
+    if (j?.initData) return String(j.initData);
+  } catch {}
+  return '';
 }
 
-/** Resolve Telegram ID. Throws on failure. */
-export async function getTelegramIdStrict(req: NextRequest): Promise<string> {
-  const override = req.headers.get('x-telegram-id')
-  if (override) return String(override)
-
-  const initData =
-    req.headers.get('x-telegram-init-data') ??
-    req.nextUrl.searchParams.get('initData') ??
-    req.cookies.get('tg_init_data')?.value ??
-    ''
-
-  const BOT_TOKEN = process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN || ''
-  if (initData) {
-    const v = verifyInitData(String(initData), String(BOT_TOKEN))
-    if (v.ok && v.data?.telegramId) return String(v.data.telegramId)
-  }
-
-  const u = parseTgUser(req)
-  if (u?.id) return String(u.id)
-
-  throw new Error('UNAUTHORIZED')
+export async function getTelegramId(req: Request, botToken?: string) {
+  const init = await extractInitDataFromRequest(req);
+  const token = botToken || process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN || '';
+  const v = verifyInitData(init, token);
+  if (!v.ok) return null;
+  const u = v.data?.user || {};
+  return u?.id ? String(u.id) : null;
 }
 
-/** Soft version: returns string or null */
-export async function getTelegramId(req: NextRequest): Promise<string | null> {
-  try { return await getTelegramIdStrict(req) } catch { return null }
+export async function getTelegramIdStrict(req: Request, botToken?: string) {
+  const tid = await getTelegramId(req, botToken);
+  if (!tid) throw new Error('UNAUTHORIZED');
+  return tid;
 }
