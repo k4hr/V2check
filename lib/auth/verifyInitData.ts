@@ -1,7 +1,6 @@
 // lib/auth/verifyInitData.ts
-// Полная проверка initData (HMAC) по спецификации Telegram Mini Apps.
-// Экспортирует verifyInitData, getTelegramId, getTelegramIdStrict.
-// Используется в API-ручках. Совместим с импортами как '@/lib/auth/verifyInitData'.
+// Полная проверка Telegram initData (HMAC) + удобные хелперы.
+// Совместимо с импортами как '@/lib/auth/verifyInitData'.
 
 import crypto from 'crypto';
 
@@ -10,20 +9,15 @@ export type VerifyOk =
   | { ok: false; error: string };
 
 function getSecretKey(botToken: string) {
-  // secret_key = HMAC_SHA256("WebAppData", bot_token)
   return crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
 }
 
 function parseInitData(initData: string): Record<string, any> {
-  const url = new URLSearchParams(initData);
+  const params = new URLSearchParams(initData);
   const obj: Record<string, any> = {};
-  url.forEach((v, k) => {
+  params.forEach((v, k) => {
     if (k === 'user' || k === 'receiver' || k === 'chat_instance') {
-      try {
-        obj[k] = JSON.parse(v);
-      } catch {
-        obj[k] = v;
-      }
+      try { obj[k] = JSON.parse(v); } catch { obj[k] = v; }
     } else {
       obj[k] = v;
     }
@@ -32,17 +26,13 @@ function parseInitData(initData: string): Record<string, any> {
 }
 
 function buildCheckString(data: Record<string, any>) {
-  const entries = Object.entries(data)
+  return Object.entries(data)
     .filter(([k]) => k !== 'hash')
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`);
-  return entries.join('\n');
+    .map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : v}`)
+    .join('\n');
 }
 
-/**
- * verifyInitData(initData, botToken, maxAgeSeconds?)
- * Возвращает { ok: true, data } при успехе, иначе { ok: false, error }.
- */
 export function verifyInitData(
   initData: string,
   botToken: string,
@@ -52,30 +42,23 @@ export function verifyInitData(
     if (!initData) return { ok: false, error: 'NO_INIT_DATA' };
     if (!botToken) return { ok: false, error: 'NO_BOT_TOKEN' };
     const data = parseInitData(initData);
-    const checkString = buildCheckString(data);
     const secret = getSecretKey(botToken);
-    const hmac = crypto.createHmac('sha256', secret).update(checkString).digest('hex');
-    if (hmac !== data.hash) return { ok: false, error: 'BAD_HASH' };
-
+    const check = buildCheckString(data);
+    const mac = crypto.createHmac('sha256', secret).update(check).digest('hex');
+    if (mac !== data.hash) return { ok: false, error: 'BAD_HASH' };
     const now = Math.floor(Date.now() / 1000);
     const authDate = Number(data.auth_date || 0);
-    if (!authDate || now - authDate > maxAgeSeconds) {
-      return { ok: false, error: 'EXPIRED' };
-    }
+    if (!authDate || now - authDate > maxAgeSeconds) return { ok: false, error: 'EXPIRED' };
     return { ok: true, data };
   } catch (e: any) {
     return { ok: false, error: e?.message || 'VERIFY_ERROR' };
   }
 }
 
-/**
- * Вспомогалки для API-ручек
- * Ищем initData в заголовках x-telegram-init-data / x-init-data, либо в теле { initData }.
- */
 async function extractInitDataFromRequest(req: Request): Promise<string> {
   const h1 = req.headers.get('x-telegram-init-data');
-  const h2 = req.headers.get('x-init-data');
   if (h1) return h1;
+  const h2 = req.headers.get('x-init-data');
   if (h2) return h2;
   try {
     const j = await req.clone().json().catch(() => ({}));
