@@ -1,12 +1,11 @@
 // app/api/favorites/route.ts
-// Фикс компиляции: убрали select с полем 'code' (его нет в схеме).
-// Остальную логику не меняем: HMAC-авторизация + список / добавление / удаление.
+// Фикс: убрали select с несуществующим полем, и сделали DELETE по строковому id.
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getTelegramIdStrict } from '@/lib/auth/verifyInitData';
 
-// GET: список избранного пользователя
+// GET: список избранного
 export async function GET(req: Request) {
   try {
     const telegramId = await getTelegramIdStrict(req);
@@ -16,7 +15,7 @@ export async function GET(req: Request) {
     const items = await prisma.favorite.findMany({
       where: { userId: user.id },
       orderBy: { id: 'desc' },
-      // ВАЖНО: не используем select с несуществующими полями
+      // без select — вернём все поля согласно реальной схеме
     });
 
     return NextResponse.json({ ok: true, items });
@@ -35,22 +34,18 @@ export async function POST(req: Request) {
     if (!user) return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 404 });
 
     const body = await req.json().catch(() => ({}));
-    // Не знаем точную схему Favorite — пишем безопасно:
-    // ожидаем хотя бы title/text и note; остальное как есть.
     const data: Record<string, any> = {
       userId: user.id,
       title: body.title ?? body.text ?? null,
       note: body.note ?? null,
     };
-    // Дополнительно, если есть, сохраним идентификатор документа / ссылку
     if (body.url != null) data.url = body.url;
     if (body.docId != null) data.docId = body.docId;
     if (body.code != null) data.code = body.code;
     if (body.text != null && data.title == null) data.title = body.text;
 
-    // @ts-ignore — позволяем лишние поля, если они есть в твоей схеме
+    // @ts-ignore — на случай, если в твоей схеме есть доп. поля
     const created = await prisma.favorite.create({ data });
-
     return NextResponse.json({ ok: true, item: created });
   } catch (e: any) {
     const msg = e?.message || 'Server error';
@@ -59,7 +54,7 @@ export async function POST(req: Request) {
   }
 }
 
-// DELETE: удалить из избранного (?id=)
+// DELETE: удалить из избранного (?id=<строка>)
 export async function DELETE(req: Request) {
   try {
     const telegramId = await getTelegramIdStrict(req);
@@ -67,13 +62,12 @@ export async function DELETE(req: Request) {
     if (!user) return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 404 });
 
     const url = new URL(req.url);
-    const idParam = url.searchParams.get('id');
-    const id = idParam ? Number(idParam) : NaN;
-    if (!Number.isFinite(id)) {
+    const id = url.searchParams.get('id')?.trim();
+    if (!id) {
       return NextResponse.json({ ok: false, error: 'BAD_ID' }, { status: 400 });
     }
 
-    // Безопасно: удаляем только записи этого пользователя
+    // Удаляем только запись, принадлежащую этому пользователю
     await prisma.favorite.deleteMany({ where: { id, userId: user.id } });
 
     return NextResponse.json({ ok: true });
