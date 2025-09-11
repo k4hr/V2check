@@ -1,4 +1,4 @@
-// app/pro/page.tsx — серверный wrapper для маршрута /pro
+// app/pro/page.tsx
 export const dynamic = 'force-dynamic';
 
 import ProClient from './ProClient';
