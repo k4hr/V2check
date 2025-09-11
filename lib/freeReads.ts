@@ -1,6 +1,6 @@
 // lib/freeReads.ts
 // Локальный лимит бесплатных открытий: 2 документа в сутки для не-PRO.
-// Добавлены алиасы: remaining, canOpen, registerOpen (для совместимости).
+// Добавлены алиасы с опциональным аргументом pro?: boolean для совместимости.
 
 const KEY_DATE = 'jr_free_reads_date';
 const KEY_COUNT = 'jr_free_reads_count';
@@ -15,7 +15,7 @@ function safeLocalStorage(): Storage | null {
   }
 }
 
-/** Текущее количество использованных бесплатных открытий за сегодня */
+/** Текущее число использованных бесплатных открытий за сегодня */
 export function getUsedToday(): number {
   const ls = safeLocalStorage();
   if (!ls) return 0;
@@ -61,20 +61,23 @@ export function dailyLimit(): number {
   return DAILY_LIMIT;
 }
 
-/* ==================== Алиасы для совместимости ==================== */
+/* ==================== Алиасы для совместимости со старым кодом ==================== */
 
-/** Осталось бесплатных открытий сегодня */
-export function remaining(): number {
+/** Осталось бесплатных открытий сегодня; если pro===true — возвращаем большое число */
+export function remaining(pro?: boolean): number {
+  if (pro) return 9999;
   return getLeftToday();
 }
 
-/** Можно ли открыть ещё один документ бесплатно */
-export function canOpen(): boolean {
+/** Можно ли открыть ещё один документ бесплатно; если pro===true — всегда true */
+export function canOpen(pro?: boolean): boolean {
+  if (pro) return true;
   return getLeftToday() > 0;
 }
 
-/** Регистрируем одно открытие (true/false по успеху) */
-export function registerOpen(): boolean {
+/** Регистрируем одно открытие; если pro===true — всегда true */
+export function registerOpen(pro?: boolean): boolean {
+  if (pro) return true;
   const r = consumeOne();
   return !!r.ok;
 }
