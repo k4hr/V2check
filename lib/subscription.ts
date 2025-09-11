@@ -5,8 +5,8 @@ export type UserLike = {
   subscriptionUntil?: string | Date | null;
 };
 
-/** Есть активная подписка? */
-export function isPro(user: UserLike | null | undefined): boolean {
+/** Есть активная подписка? (аргумент опционален для обратной совместимости) */
+export function isPro(user?: UserLike | null): boolean {
   if (!user?.subscriptionUntil) return false;
   const until = new Date(user.subscriptionUntil);
   if (Number.isNaN(until.getTime())) return false;
@@ -14,10 +14,9 @@ export function isPro(user: UserLike | null | undefined): boolean {
 }
 
 /** Красиво отобразить "Подписка до …" */
-export function formatUntil(user: UserLike | null | undefined): string | null {
+export function formatUntil(user?: UserLike | null): string | null {
   if (!isPro(user)) return null;
   const d = new Date(user!.subscriptionUntil as any);
-  // dd.mm.yyyy
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
@@ -25,7 +24,7 @@ export function formatUntil(user: UserLike | null | undefined): string | null {
 }
 
 /** Возвращает миллисекунд до истечения или null */
-export function msLeft(user: UserLike | null | undefined): number | null {
+export function msLeft(user?: UserLike | null): number | null {
   if (!isPro(user)) return null;
   const until = new Date(user!.subscriptionUntil as any).getTime();
   return Math.max(0, until - Date.now());
