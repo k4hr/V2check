@@ -1,19 +1,19 @@
-// v2check/scripts/check-db-url.mjs
-// Больше не логируем пароль/секреты. Только маска.
-const raw = process.env.DATABASE_URL || '';
+// scripts/check-db-url.mjs
+// Проверяет валидность DATABASE_URL, НО НЕ ПАДАЕТ даже при ошибке.
+// Это важно, чтобы процесс на Railway не умирал на старте.
+
 try {
-  const u = new URL(raw);
-  const masked =
-    `${u.protocol}//` +
-    `${u.username ? u.username + ':***@' : ''}` +
-    `${u.hostname}` +
-    `${u.port ? ':' + u.port : ''}` +
-    `${u.pathname}`;
-  console.log(`DATABASE_URL: ${masked || '(empty)'}`);
-} catch {
-  if (!raw) {
-    console.warn('WARN: DATABASE_URL is empty.');
+  const url = process.env.DATABASE_URL || '';
+  if (!url || !/^postgres(ql)?:\/\//i.test(url)) {
+    console.warn(
+      '[WARN] DATABASE_URL не задан или не похож на postgres://. ' +
+      'Сервис стартует, но все запросы к БД вернут ошибку до настройки переменной.'
+    );
+    process.exitCode = 0; // мягкий выход
   } else {
-    console.warn('WARN: DATABASE_URL format looks unusual.');
+    console.log('[OK] DATABASE_URL обнаружен.');
   }
+} catch (e) {
+  console.warn('[WARN] check-db-url.mjs ошибка:', e?.message || e);
+  process.exitCode = 0;
 }
