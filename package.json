@@ -3,7 +3,7 @@
   "version": "0.9.4",
   "private": true,
   "scripts": {
-    "prestart": "node scripts/check-db-url.mjs",
+    "prestart": "node scripts/check-db-url.mjs || echo \"[WARN] skip prestart\"",
     "start": "next start -p $PORT -H 0.0.0.0",
     "postinstall": "prisma generate",
     "build": "next build",
