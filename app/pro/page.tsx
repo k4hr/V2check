@@ -14,9 +14,7 @@ export default function ProPage(){
       const tg = w?.Telegram?.WebApp;
       tg?.ready?.();
       tg?.expand?.();
-      // Встроенная кнопка "Назад" в шапке Telegram
-      tg?.BackButton?.show?.();
-      tg?.BackButton?.onClick?.(()=>{
+      tg?.BackButton?.show?.(()=>{
         if (document.referrer) history.back();
         else window.location.href = '/';
       });
@@ -68,7 +66,6 @@ export default function ProPage(){
         <div style={{display:'grid', gap:12}}>
           {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
             const cfg = PRICES[p];
-            // вычислим бейджи
             let badge: JSX.Element | null = null;
             if (p === 'MONTH') {
               badge = <span className="badge badge--pop">Самый популярный</span>;
@@ -104,7 +101,6 @@ export default function ProPage(){
           })}
         </div>
 
-        {/* Нижний малозаметный футер */}
         <div style={{marginTop:'auto'}}>
           <p className="text-xs opacity-60" style={{fontSize:12, opacity:.55, textAlign:'center', marginTop:24}}>
             Подтверждая, вы соглашаетесь с <a href="/terms" style={{textDecoration:'underline'}}>условиями подписки</a>.
