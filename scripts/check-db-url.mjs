@@ -1,15 +1,9 @@
-// scripts/check-db-url.mjs
-// Проверяет валидность DATABASE_URL, НО НЕ ПАДАЕТ даже при ошибке.
-// Это важно, чтобы процесс на Railway не умирал на старте.
-
+// scripts/check-db-url.mjs — мягкая проверка БД, не роняет процесс
 try {
   const url = process.env.DATABASE_URL || '';
   if (!url || !/^postgres(ql)?:\/\//i.test(url)) {
-    console.warn(
-      '[WARN] DATABASE_URL не задан или не похож на postgres://. ' +
-      'Сервис стартует, но все запросы к БД вернут ошибку до настройки переменной.'
-    );
-    process.exitCode = 0; // мягкий выход
+    console.warn('[WARN] DATABASE_URL не задан или не похож на postgres://. Сервис стартует без БД.');
+    process.exitCode = 0; // не прерываем старт
   } else {
     console.log('[OK] DATABASE_URL обнаружен.');
   }
