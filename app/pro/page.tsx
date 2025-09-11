@@ -34,13 +34,9 @@ export default function ProPage(){
       }
       const link = String(data.link);
       const tg:any = (window as any).Telegram?.WebApp;
-      if (tg?.openInvoice){
-        tg.openInvoice(link, ()=>{});
-      } else if (tg?.openTelegramLink){
-        tg.openTelegramLink(link);
-      } else {
-        window.location.href = link;
-      }
+      if (tg?.openInvoice){ tg.openInvoice(link, ()=>{}); }
+      else if (tg?.openTelegramLink){ tg.openTelegramLink(link); }
+      else { window.location.href = link; }
     }catch(e:any){
       setMsg(e?.message || 'Неизвестная ошибка');
     }finally{
