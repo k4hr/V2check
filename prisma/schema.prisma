@@ -9,17 +9,17 @@ datasource db {
 }
 
 model User {
-  id                 String     @id @default(cuid())
-  telegramId         String     @unique
-  username           String?
-  firstName          String?
-  lastName           String?
-  photoUrl           String?
-  subscriptionUntil  DateTime?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @default(now())
+  id                String    @id @default(cuid())
+  telegramId        String    @unique
+  username          String?
+  firstName         String?
+  lastName          String?
+  photoUrl          String?
+  subscriptionUntil DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt @default(now())
 
-  favorites          Favorite[]
+  favorites         Favorite[]
 }
 
 model Favorite {
@@ -29,7 +29,7 @@ model Favorite {
   url       String?
   note      String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
