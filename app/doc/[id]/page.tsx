@@ -18,13 +18,13 @@ export default function DocPage() {
   useEffect(() => {
     if (!id) return;
 
-    // 1) грузим документ
+    // Загружаем документ
     fetch(`/content/laws/${encodeURIComponent(id)}.html`)
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error('Документ не найден'))))
       .then(setHtml)
       .catch(() => setHtml('<p>Документ не найден</p>'));
 
-    // 2) узнаём избранное асинхронно
+    // Узнаём состояние избранного
     (async () => {
       try {
         const v = await isFav(id);
@@ -43,7 +43,7 @@ export default function DocPage() {
       const v = await isFav(id);
       setFav(!!v);
     } catch {
-      // молча игнорим, UI не меняем
+      // тихо игнорируем ошибку, UI не меняем
     } finally {
       setBusy(false);
     }
@@ -51,21 +51,33 @@ export default function DocPage() {
 
   return (
     <main style={{ padding: 12 }}>
-      <TopBar
-        title="Документ"
-        right={
-          <button
-            type="button"
-            onClick={onFav}
-            disabled={busy}
-            aria-label={fav ? 'Убрать из избранного' : 'В избранное'}
-            className="icon-btn"
-            style={{ opacity: busy ? 0.6 : 1 }}
-          >
-            {fav ? '★' : '☆'}
-          </button>
-        }
-      />
+      {/* TopBar по его типам: только showBack */}
+      <TopBar showBack />
+
+      {/* Полоса заголовка + кнопка избранного (визуально как раньше) */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          justifyContent: 'space-between',
+          padding: '6px 4px',
+          marginTop: 4
+        }}
+      >
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Документ</h1>
+        <button
+          type="button"
+          onClick={onFav}
+          disabled={busy}
+          aria-label={fav ? 'Убрать из избранного' : 'В избранное'}
+          className="icon-btn"
+          style={{ opacity: busy ? 0.6 : 1, fontSize: 18, lineHeight: 1 }}
+        >
+          {fav ? '★' : '☆'}
+        </button>
+      </div>
+
       <article
         className="doc"
         dangerouslySetInnerHTML={{ __html: html }}
