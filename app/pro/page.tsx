@@ -1,4 +1,5 @@
 'use client';
+export const dynamic = 'force-dynamic';
 
 import { useEffect, useState } from 'react';
 import { PRICES, type Plan } from '../lib/pricing';
@@ -64,7 +65,6 @@ export default function ProPage(){
           </div>
         )}
 
-        
         <div style={{display:'grid', gap:12}}>
           {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
             const cfg = PRICES[p];
@@ -103,7 +103,6 @@ export default function ProPage(){
             );
           })}
         </div>
-
 
         {/* Нижний малозаметный футер */}
         <div style={{marginTop:'auto'}}>
