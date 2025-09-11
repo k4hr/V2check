@@ -1,5 +1,4 @@
-// app/pro/page.tsx
-// ВАЖНО: это СЕРВЕРНЫЙ файл (без 'use client'), именно здесь работает dynamic.
+// app/pro/page.tsx — серверный wrapper для маршрута /pro
 export const dynamic = 'force-dynamic';
 
 import ProClient from './ProClient';
