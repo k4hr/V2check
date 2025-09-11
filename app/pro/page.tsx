@@ -3,58 +3,89 @@
 import { useEffect, useState } from 'react';
 import { PRICES, type Plan } from '@/lib/pricing';
 
+type MeResp = { ok: boolean; user?: { subscriptionUntil?: string | null } };
+
 export default function ProPage() {
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      const w: any = window;
-      const tg = w?.Telegram?.WebApp;
-      tg?.ready?.();
-      tg?.expand?.();
+      const tg: any = (window as any)?.Telegram?.WebApp;
+      tg?.ready?.(); tg?.expand?.();
       tg?.BackButton?.show?.();
       tg?.BackButton?.onClick?.(() => {
-        if (document.referrer) history.back();
-        else window.location.href = '/';
+        if (document.referrer) history.back(); else window.location.href = '/';
       });
       return () => tg?.BackButton?.hide?.();
     } catch {}
   }, []);
 
-  async function openInvoiceSafe(link: string): Promise<'paid' | 'cancelled' | 'failed' | 'pending'> {
-    const w: any = window;
-    const tg = w?.Telegram?.WebApp;
+  // --- вспом. утилиты ---
+  function isActive(until?: string | null): boolean {
+    if (!until) return false;
+    const t = new Date(until).getTime();
+    return Number.isFinite(t) && t > Date.now();
+  }
 
-    // 1) Нормальный путь — Promise из openInvoice (SDK v7)
-    if (tg?.openInvoice && typeof tg.openInvoice === 'function') {
+  async function pollForActivation(timeoutMs = 90000, stepMs = 2000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
       try {
-        const status: any = await Promise.race([
-          tg.openInvoice(link),
-          // 2) Фолбэк по таймауту, чтобы не висело
-          new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 20000)),
-        ]);
-        if (status === 'paid' || status === 'cancelled' || status === 'failed' || status === 'pending') {
-          return status;
-        }
-        // некоторые клиенты могут не вернуть строку — считаем как "pending"
-        return 'pending';
-      } catch {
-        // поймаем редкие ошибки openInvoice
-      }
-    }
-
-    // 3) Резервный путь — открыть ссылку в Telegram
-    if (tg?.openTelegramLink) {
-      try {
-        tg.openTelegramLink(link);
-        return 'pending';
+        const r = await fetch('/api/me', { cache: 'no-store' });
+        const data: MeResp = await r.json();
+        if (data?.ok && isActive(data?.user?.subscriptionUntil)) return true;
       } catch {}
+      await new Promise((res) => setTimeout(res, stepMs));
     }
+    return false;
+  }
 
-    // 4) Самый последний шанс — обычный переход
-    window.location.href = link;
-    return 'pending';
+  async function openInvoiceSafe(link: string): Promise<'paid' | 'cancelled' | 'failed' | 'pending'> {
+    const tg: any = (window as any)?.Telegram?.WebApp;
+
+    // Вариант 1: Promise из openInvoice
+    const tryPromise = async () => {
+      if (!tg?.openInvoice) throw new Error('no openInvoice');
+      // гонка: промис openInvoice vs таймаут
+      const res: any = await Promise.race([
+        tg.openInvoice(link),
+        new Promise<'pending'>((r) => setTimeout(() => r('pending'), 20000)),
+      ]);
+      if (res === 'paid' || res === 'cancelled' || res === 'failed' || res === 'pending') return res;
+      return 'pending';
+    };
+
+    // Вариант 2: старый callback-API
+    const tryCallback = async () => {
+      if (!tg?.openInvoice) throw new Error('no openInvoice');
+      return await new Promise<'paid' | 'cancelled' | 'failed' | 'pending'>((resolve) => {
+        let done = false;
+        try {
+          tg.openInvoice(link, (status: any) => {
+            if (done) return;
+            done = true;
+            if (status === 'paid' || status === 'cancelled' || status === 'failed' || status === 'pending') {
+              resolve(status as any);
+            } else {
+              resolve('pending');
+            }
+          });
+          setTimeout(() => { if (!done) resolve('pending'); }, 20000);
+        } catch { resolve('pending'); }
+      });
+    };
+
+    // Вариант 3: openTelegramLink
+    const tryOpenLink = async () => {
+      if (tg?.openTelegramLink) { try { tg.openTelegramLink(link); } catch {} return 'pending' as const; }
+      window.location.href = link; return 'pending' as const;
+    };
+
+    // Пробуем: promise → callback → openTelegramLink
+    try { return await tryPromise(); } catch {}
+    try { return await tryCallback(); } catch {}
+    return await tryOpenLink();
   }
 
   async function buy(plan: Plan) {
@@ -69,19 +100,19 @@ export default function ProPage() {
       }
       const link = String(data.link);
 
+      // Открываем инвойс
       const status = await openInvoiceSafe(link);
+      if (status === 'failed') setMsg('Оплата не удалась. Попробуйте ещё раз.');
+      if (status === 'cancelled') setMsg('Оплата отменена.');
 
-      if (status === 'paid') {
-        // После оплаты можно вернуть на кабинет/обновить данные
+      // В любом случае запускаем пуллинг профиля: так мы поймаем успешный вебхук с задержкой
+      setMsg('Ожидание подтверждения оплаты… Если окно закрыто — проверьте историю платежей в Telegram.');
+      const ok = await pollForActivation(90000, 2000);
+      if (ok) {
         setMsg('Оплата прошла! Обновляем профиль…');
         setTimeout(() => (window.location.href = '/cabinet'), 800);
-      } else if (status === 'cancelled') {
-        setMsg('Оплата отменена.');
-      } else if (status === 'failed') {
-        setMsg('Оплата не удалась. Попробуйте ещё раз.');
       } else {
-        // pending — клиент не прислал финальный статус
-        setMsg('Ожидание подтверждения оплаты… Если окно закрыто — проверьте историю платежей в Telegram.');
+        setMsg('Не получили подтверждение. Если списание прошло — откройте «Кабинет», потяните вниз для обновления.');
       }
     } catch (e: any) {
       setMsg(e?.message || 'Неизвестная ошибка');
@@ -102,8 +133,7 @@ export default function ProPage() {
 
         {msg && (
           <div className="card" role="alert" style={{ marginBottom: 12, borderColor: 'rgba(255,180,0,.35)' }}>
-            <b>Статус оплаты</b>
-            <br />
+            <b>Статус оплаты</b><br />
             <span style={{ opacity: 0.85 }}>{msg}</span>
           </div>
         )}
