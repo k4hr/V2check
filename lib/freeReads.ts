@@ -1,6 +1,6 @@
 // lib/freeReads.ts
 // Локальный лимит бесплатных открытий: 2 документа в сутки для не-PRO.
-// Сохраняем в localStorage. На сервере (SSR) — безопасные заглушки.
+// Добавлены алиасы: remaining, canOpen, registerOpen (для совместимости).
 
 const KEY_DATE = 'jr_free_reads_date';
 const KEY_COUNT = 'jr_free_reads_count';
@@ -59,4 +59,22 @@ export function resetToday(): void {
 /** Ежедневный лимит (константа) */
 export function dailyLimit(): number {
   return DAILY_LIMIT;
+}
+
+/* ==================== Алиасы для совместимости ==================== */
+
+/** Осталось бесплатных открытий сегодня */
+export function remaining(): number {
+  return getLeftToday();
+}
+
+/** Можно ли открыть ещё один документ бесплатно */
+export function canOpen(): boolean {
+  return getLeftToday() > 0;
+}
+
+/** Регистрируем одно открытие (true/false по успеху) */
+export function registerOpen(): boolean {
+  const r = consumeOne();
+  return !!r.ok;
 }
