@@ -1,8 +1,8 @@
 // prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
-  // ВАЖНО: билдимся и для Alpine (musl) – это Railway/Nixpacks
-  binaryTargets = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
+  // Railway (Nixpacks) = Alpine (musl) с OpenSSL 3
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
