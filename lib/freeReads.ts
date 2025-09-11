@@ -1,6 +1,6 @@
 // lib/freeReads.ts
-// Локальный лимит бесплатных открытий: 2 документа в сутки для не-PRO.
-// Добавлены алиасы с опциональным аргументом pro?: boolean для совместимости.
+// Локальный лимит бесплатных открытий: 2 документа/сутки для не-PRO.
+// Совместимость со старым кодом: canOpen(id, pro?) и registerOpen(id, pro?)
 
 const KEY_DATE = 'jr_free_reads_date';
 const KEY_COUNT = 'jr_free_reads_count';
@@ -15,7 +15,7 @@ function safeLocalStorage(): Storage | null {
   }
 }
 
-/** Текущее число использованных бесплатных открытий за сегодня */
+/** Сколько уже использовано сегодня */
 export function getUsedToday(): number {
   const ls = safeLocalStorage();
   if (!ls) return 0;
@@ -26,12 +26,12 @@ export function getUsedToday(): number {
   return Number.isFinite(cnt) ? Math.max(0, cnt) : 0;
 }
 
-/** Сколько осталось бесплатных открытий */
+/** Сколько осталось бесплатных открытий сегодня */
 export function getLeftToday(): number {
   return Math.max(0, DAILY_LIMIT - getUsedToday());
 }
 
-/** Зарегистрировать одно открытие (если есть свободное место) */
+/** Зарегистрировать одно открытие (если есть лимит) */
 export function consumeOne(): { ok: boolean; left: number } {
   const ls = safeLocalStorage();
   if (!ls) return { ok: true, left: DAILY_LIMIT }; // на SSR не блокируем
@@ -61,22 +61,34 @@ export function dailyLimit(): number {
   return DAILY_LIMIT;
 }
 
-/* ==================== Алиасы для совместимости со старым кодом ==================== */
+/* ==================== Совместимость со старым API ==================== */
 
-/** Осталось бесплатных открытий сегодня; если pro===true — возвращаем большое число */
+/** Осталось бесплатных открытий; если pro===true — «без ограничений» */
 export function remaining(pro?: boolean): number {
   if (pro) return 9999;
   return getLeftToday();
 }
 
-/** Можно ли открыть ещё один документ бесплатно; если pro===true — всегда true */
-export function canOpen(pro?: boolean): boolean {
+/**
+ * Можно ли открыть документ бесплатно.
+ * Совм. сигнатуры:
+ *   canOpen(pro?: boolean)
+ *   canOpen(id?: string, pro?: boolean)
+ */
+export function canOpen(a?: string | boolean, b?: boolean): boolean {
+  const pro = typeof a === 'boolean' ? a : !!b;
   if (pro) return true;
   return getLeftToday() > 0;
 }
 
-/** Регистрируем одно открытие; если pro===true — всегда true */
-export function registerOpen(pro?: boolean): boolean {
+/**
+ * Регистрирует одно открытие.
+ * Совм. сигнатуры:
+ *   registerOpen(pro?: boolean)
+ *   registerOpen(id?: string, pro?: boolean)
+ */
+export function registerOpen(a?: string | boolean, b?: boolean): boolean {
+  const pro = typeof a === 'boolean' ? a : !!b;
   if (pro) return true;
   const r = consumeOne();
   return !!r.ok;
