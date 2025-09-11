@@ -1,5 +1,5 @@
 // lib/pricing.ts
-// Единый прайсинг (сервер/клиент). Поле `stars` сохранено как алиас для старого кода.
+// Единый прайсинг (сервер/клиент). Поле `stars` — алиас для старого кода.
 
 export type Plan = 'WEEK' | 'MONTH' | 'HALF' | 'HALF_YEAR' | 'YEAR';
 
@@ -7,12 +7,12 @@ export type PricingItem = {
   label: string;       // короткое имя тарифа
   title: string;       // заголовок для инвойса
   description: string; // описание для инвойса
-  amount: number;      // цена в Stars
+  amount: number;      // цена в Stars (XTR)
   stars: number;       // алиас для совместимости
   days: number;        // длительность в днях
 };
 
-// Полугодовой тариф (фикс: 180 дней, не 183!)
+// Полугодовой тариф (фикс: 180 дней)
 const HALFY: PricingItem = {
   label: 'Полгода',
   title: 'Juristum Pro — Полгода',
