@@ -1,15 +1,18 @@
 # ---------- deps ----------
-FROM node:20-alpine AS deps
+FROM node:20-slim AS deps
+ENV NODE_ENV=production
 WORKDIR /app
 
-# Prisma на Alpine требует OpenSSL (для надёжности ставим совместимость 1.1)
-RUN apk add --no-cache openssl1.1-compat || apk add --no-cache openssl
+# Базовые пакеты и openssl 3
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates openssl curl bash tini \
+    && rm -rf /var/lib/apt/lists/*
 
-# Копируем манифесты для установки зависимостей
+# Копируем манифесты
 COPY package.json ./
 COPY package-lock.json* ./
 
-# Если lock есть — npm ci, иначе npm install; БЕЗ скриптов (postinstall отключён)
+# Установка зависимостей без запуска скриптов (postinstall отключён)
 RUN if [ -f package-lock.json ]; then \
       npm ci --no-audit --no-fund --ignore-scripts ; \
     else \
@@ -17,31 +20,44 @@ RUN if [ -f package-lock.json ]; then \
     fi
 
 # ---------- builder ----------
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
+ENV NODE_ENV=production
 WORKDIR /app
 
-RUN apk add --no-cache openssl1.1-compat || apk add --no-cache openssl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates openssl curl bash \
+    && rm -rf /var/lib/apt/lists/*
 
-# Переносим node_modules из слоя deps
+# Переносим node_modules из deps
 COPY --from=deps /app/node_modules ./node_modules
 
-# Копируем весь проект (тут уже есть prisma/schema.prisma)
+# Весь проект
 COPY . .
 
-# Генерируем Prisma-клиента и билдим Next
+# Генерируем Prisma и билдим Next
+# Важно: postinstall у нас не срабатывал ранее, поэтому явно генерируем
 RUN npx prisma generate && npm run build
 
 # ---------- runner ----------
-FROM node:20-alpine AS runner
-WORKDIR /app
+FROM node:20-slim AS runner
 ENV NODE_ENV=production
 ENV PORT=3000
+WORKDIR /app
 
-# Копируем только то, что нужно для рантайма
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates openssl tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1001 nodeuser
+
+# Копируем артефакты
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
-COPY package.json ./
 COPY --from=builder /app/node_modules ./node_modules
+COPY package.json ./
+
+# Не рут
+USER nodeuser
 
 EXPOSE 3000
+ENTRYPOINT ["/usr/bin/tini","--"]
 CMD ["npm","run","start","-s"]
