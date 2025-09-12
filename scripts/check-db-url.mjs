@@ -1,7 +1,5 @@
-// scripts/check-db-url.mjs
-// Мягкая проверка, чтобы Next не падал на prestart
-const url = process.env.DATABASE_URL || '';
-if (!url) {
-  console.warn('[WARN] DATABASE_URL is empty. The app will run, but DB calls will fail.');
+// Лёгкая проверка перед start: не валим процесс на проде, только предупреждаем.
+const ok = !!process.env.DATABASE_URL;
+if (!ok) {
+  console.warn('[prestart] DATABASE_URL is not set. Prisma may fail to connect.');
 }
-process.exit(0);
