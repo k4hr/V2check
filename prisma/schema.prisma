@@ -1,8 +1,7 @@
-// prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
-  // Railway (Nixpacks) = Alpine (musl) с OpenSSL 3
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  // Debian (node:20-slim) с OpenSSL 3
+  binaryTargets = ["native", "linux-openssl-3.0.x"]
 }
 
 datasource db {
@@ -20,7 +19,6 @@ model User {
   subscriptionUntil  DateTime?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @default(now())
-
   favorites          Favorite[]
 }
 
@@ -32,8 +30,6 @@ model Favorite {
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
-
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   @@index([userId])
 }
