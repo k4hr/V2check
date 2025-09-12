@@ -1,38 +1,35 @@
-// app/api/_diag/route.ts
-import { NextResponse, type NextRequest } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-import { getTelegramId, getTelegramIdStrict } from '@/lib/auth/verifyInitData'
+import { NextResponse } from 'next/server';
 
-const prisma = new PrismaClient()
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-  try {
-    const telegramIdSoft = await getTelegramId(req)
-    const telegramIdHard = await getTelegramIdStrict(req).catch(() => null)
+async function safe<T>(p: Promise<T>) {
+  try { return { ok: true, data: await p }; } catch (e:any) { return { ok:false, error: e?.message || String(e) }; }
+}
 
-    let user: any = null
-    if (telegramIdSoft) {
-      user = await prisma.user.findUnique({
-        where: { telegramId: telegramIdSoft },
-        select: {
-          id: true,
-          telegramId: true,
-          subscriptionUntil: true,
-          createdAt: true
-        },
-      })
-    }
+export async function GET() {
+  // ленивый импорт, чтобы не падать при отсутствии БД
+  const { PrismaClient } = await import('@prisma/client');
+  const prisma = new PrismaClient();
 
-    return NextResponse.json({
-      ok: true,
-      telegramIdSoft,
-      telegramIdHard,
-      user,
-      envSample: {
-        hasBotToken: !!(process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN),
-      },
-    })
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 })
-  }
+  const env = {
+    NODE_ENV: process.env.NODE_ENV || 'unknown',
+    DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'empty',
+    BOT_TOKEN: process.env.BOT_TOKEN ? 'set' : 'empty',
+    TG_PROVIDER_TOKEN: process.env.TG_PROVIDER_TOKEN ? 'set' : 'empty',
+  };
+
+  // лёгкая проверка prisma: простой запрос now()
+  const db = await safe(prisma.$queryRawUnsafe('SELECT NOW()'));
+
+  // лёгкая проверка бота: getMe с таймаутом
+  const ctrl = new AbortController();
+  const t = setTimeout(()=>ctrl.abort(), 4000);
+  const bot = await safe(fetch(
+    `https://api.telegram.org/bot${process.env.BOT_TOKEN || 'x'}/getMe`,
+    { signal: ctrl.signal }
+  ).then(r=>r.json()));
+  clearTimeout(t);
+
+  return NextResponse.json({ ok:true, env, checks: { db, telegram: bot } }, { status: 200 });
 }
