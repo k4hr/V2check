@@ -1,60 +1,62 @@
+// app/pro/page.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import { PRICES, type Plan } from '@/lib/pricing';
+import type { Plan } from '@/lib/pricing';
+import { PRICES } from '@/lib/pricing';
 
 export default function ProPage(){
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   useEffect(()=>{
     try{
       const w:any = window;
       const tg = w?.Telegram?.WebApp;
-      tg?.ready?.();
-      tg?.expand?.();
-      // Встроенная кнопка "Назад" в шапке Telegram
+      tg?.ready?.(); tg?.expand?.();
       tg?.BackButton?.show?.();
-      tg?.BackButton?.onClick?.(()=>{
-        if (document.referrer) history.back();
-        else window.location.href = '/';
-      });
-      return () => tg?.BackButton?.hide?.();
+      const back = () => { if (document.referrer) history.back(); else window.location.href = '/'; };
+      tg?.BackButton?.onClick?.(back);
+      const onClosed = (d:any)=>{
+        setInfo('Ожидание подтверждения оплаты… Если окно закрыто — проверьте историю платежей.');
+        setBusy(null);
+      };
+      tg?.onEvent?.('invoiceClosed', onClosed);
+      return () => { tg?.BackButton?.hide?.(); tg?.offEvent?.('invoiceClosed', onClosed); };
     }catch{}
   },[]);
 
   async function buy(plan: Plan){
     if (busy) return;
-    setBusy(plan);
-    setMsg(null);
+    setBusy(plan); setMsg(null); setInfo(null);
     try{
       const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}`, { method: 'POST' });
       const data = await res.json().catch(()=>null);
-      if (!data?.ok || !data?.link){
+      if (!data?.ok || !data?.link) {
         throw new Error(data?.error || data?.detail?.description || 'Ошибка создания счёта');
       }
       const link = String(data.link);
       const tg:any = (window as any).Telegram?.WebApp;
-      if (tg?.openInvoice){
-        tg.openInvoice(link, ()=>{});
-      } else if (tg?.openTelegramLink){
-        tg.openTelegramLink(link);
-      } else {
-        window.location.href = link;
-      }
+      if (tg?.openInvoice) tg.openInvoice(link, ()=>{});
+      else if (tg?.openTelegramLink) tg.openTelegramLink(link);
+      else window.location.href = link;
     }catch(e:any){
       setMsg(e?.message || 'Неизвестная ошибка');
     }finally{
-      setBusy(null);
+      // do not clear busy here to keep button disabled while TG overlay is shown
+      setTimeout(()=>setBusy(null), 2000);
     }
   }
 
   return (
     <main>
-      <div className="safe" style={{maxWidth:560, margin:'0 auto', display:'flex', flexDirection:'column', minHeight:'calc(100dvh - 32px)'}}>
+      <div className="safe" style={{maxWidth:560, margin:'0 auto', display:'flex', flexDirection:'column',
+        minHeight:'calc(100dvh - 32px)'}}>
         <div style={{textAlign:'center'}}>
-          <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>Juristum Pro</h1>
+          <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>
+            Juristum Pro
+          </h1>
           <p style={{opacity:.85, marginBottom:20}}>Выберите тариф:</p>
         </div>
 
@@ -65,14 +67,18 @@ export default function ProPage(){
           </div>
         )}
 
+        {info && (
+          <div className="card" role="status" style={{marginBottom:12}}>
+            {info}
+          </div>
+        )}
+
         <div style={{display:'grid', gap:12}}>
           {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
             const cfg = PRICES[p];
-            // бейджи
-            let badge: ReactNode = null;
-            if (p === 'MONTH') {
-              badge = <span className="badge badge--pop">Самый популярный</span>;
-            } else if (p === 'HALF') {
+            let badge: React.ReactNode = null;
+            if (p === 'MONTH') badge = <span className="badge badge--pop">Самый популярный</span>;
+            else if (p === 'HALF') {
               const base = PRICES.MONTH.amount * 6;
               const save = Math.max(0, Math.round((1 - cfg.amount / base) * 100));
               badge = <span className="badge badge--save">Экономия {save}%</span>;
@@ -104,7 +110,6 @@ export default function ProPage(){
           })}
         </div>
 
-        {/* Нижний малозаметный футер */}
         <div style={{marginTop:'auto'}}>
           <p className="text-xs opacity-60" style={{fontSize:12, opacity:.55, textAlign:'center', marginTop:24}}>
             Подтверждая, вы соглашаетесь с <a href="/terms" style={{textDecoration:'underline'}}>условиями подписки</a>.
