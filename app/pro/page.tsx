@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { PRICES, type Plan } from '@/lib/pricing';
 
 export default function ProPage(){
@@ -13,6 +14,7 @@ export default function ProPage(){
       const tg = w?.Telegram?.WebApp;
       tg?.ready?.();
       tg?.expand?.();
+      // Встроенная кнопка "Назад" в шапке Telegram
       tg?.BackButton?.show?.();
       tg?.BackButton?.onClick?.(()=>{
         if (document.referrer) history.back();
@@ -32,46 +34,27 @@ export default function ProPage(){
       if (!data?.ok || !data?.link){
         throw new Error(data?.error || data?.detail?.description || 'Ошибка создания счёта');
       }
-
       const link = String(data.link);
-      const w:any = window;
-      const tg = w?.Telegram?.WebApp;
-
-      // Колбэк openInvoice может ничего не возвращать — страхуемся таймером
-      let finished = false;
-      const finish = () => { if (!finished) { finished = true; setBusy(null); } };
-      const t = setTimeout(finish, 4000);
-
+      const tg:any = (window as any).Telegram?.WebApp;
       if (tg?.openInvoice){
-        tg.openInvoice(link, (status: any) => {
-          clearTimeout(t);
-          // status: 'paid' | 'cancelled' | 'failed' | 'pending' ...
-          finish();
-          if (status && typeof status === 'object' && status?.status) {
-            if (status.status === 'failed') setMsg('Оплата не прошла. Попробуйте ещё раз.');
-          }
-        });
+        tg.openInvoice(link, ()=>{});
       } else if (tg?.openTelegramLink){
         tg.openTelegramLink(link);
-        clearTimeout(t); finish();
       } else {
         window.location.href = link;
-        clearTimeout(t); finish();
       }
     }catch(e:any){
-      setBusy(null);
       setMsg(e?.message || 'Неизвестная ошибка');
+    }finally{
+      setBusy(null);
     }
   }
 
   return (
     <main>
-      <div className="safe" style={{maxWidth:560, margin:'0 auto', display:'flex', flexDirection:'column',
-        minHeight:'calc(100dvh - 32px)'}}>
+      <div className="safe" style={{maxWidth:560, margin:'0 auto', display:'flex', flexDirection:'column', minHeight:'calc(100dvh - 32px)'}}>
         <div style={{textAlign:'center'}}>
-          <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>
-            Juristum Pro
-          </h1>
+          <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>Juristum Pro</h1>
           <p style={{opacity:.85, marginBottom:20}}>Выберите тариф:</p>
         </div>
 
@@ -85,7 +68,8 @@ export default function ProPage(){
         <div style={{display:'grid', gap:12}}>
           {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
             const cfg = PRICES[p];
-            let badge: JSX.Element | null = null;
+            // бейджи
+            let badge: ReactNode = null;
             if (p === 'MONTH') {
               badge = <span className="badge badge--pop">Самый популярный</span>;
             } else if (p === 'HALF') {
@@ -120,6 +104,7 @@ export default function ProPage(){
           })}
         </div>
 
+        {/* Нижний малозаметный футер */}
         <div style={{marginTop:'auto'}}>
           <p className="text-xs opacity-60" style={{fontSize:12, opacity:.55, textAlign:'center', marginTop:24}}>
             Подтверждая, вы соглашаетесь с <a href="/terms" style={{textDecoration:'underline'}}>условиями подписки</a>.
