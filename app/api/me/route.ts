@@ -1,76 +1,41 @@
 // app/api/me/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyInitData, getTelegramIdStrict } from '@/lib/auth/verifyInitData';
-
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+import { verifyInitData, extractTelegramId, getInitDataFrom } from '@/lib/auth/verifyInitData';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
-async function extractInitData(req: NextRequest): Promise<string> {
-  // 1) body { initData }, 2) header x-init-data, 3) ?initData=
+export async function POST(req: NextRequest) {
   try {
-    const body: any = await req.json().catch(() => null);
-    if (body && typeof body.initData === 'string') return body.initData;
-  } catch {}
-  const hdr = req.headers.get('x-init-data');
-  if (hdr) return hdr;
-  const url = new URL(req.url);
-  return url.searchParams.get('initData') || '';
-}
+    const initData = await getInitDataFrom(req);
 
-export async function GET(req: NextRequest) {
-  try {
-    if (!BOT_TOKEN) {
-      return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
+    // если нет токена бота — не заваливаем фронт, просто скажем нет подписки
+    if (!BOT_TOKEN || !initData || !verifyInitData(initData, BOT_TOKEN)) {
+      return NextResponse.json({ ok: true, subscription: null });
     }
 
-    const initData = await extractInitData(req);
-    if (!initData) {
-      return NextResponse.json({ ok: false, error: 'INIT_DATA_REQUIRED' }, { status: 400 });
+    const telegramId = extractTelegramId(initData);
+    if (!telegramId) {
+      return NextResponse.json({ ok: true, subscription: null });
     }
 
-    // verifyInitData теперь boolean
-    const verified = verifyInitData(initData, BOT_TOKEN);
-    if (!verified) {
-      return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
-    }
+    const user = await prisma.user.findUnique({ where: { telegramId } });
 
-    // Достаём telegramId из проверенного initData
-    const telegramId = getTelegramIdStrict(initData);
-
-    // Апсертим пользователя (по схеме: id:string, telegramId:string unique, ... )
-    const user = await prisma.user.upsert({
-      where: { telegramId },
-      update: { updatedAt: new Date() },
-      create: { telegramId },
-      select: {
-        id: true,
-        telegramId: true,
-        username: true,
-        firstName: true,
-        lastName: true,
-        photoUrl: true,
-        subscriptionUntil: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    // Признак активной подписки
     const now = new Date();
-    const isPro = !!(user.subscriptionUntil && new Date(user.subscriptionUntil) > now);
+    const until = user?.subscriptionUntil ?? null;
+    const isActive = until ? until.getTime() > now.getTime() : false;
 
     return NextResponse.json({
       ok: true,
-      user,
-      pro: isPro,
+      subscription: isActive ? { expiresAt: until!.toISOString() } : null,
+      // на будущее — вдруг пригодится на клиенте
+      user: user
+        ? { id: user.id, username: user.username, firstName: user.firstName, lastName: user.lastName }
+        : null,
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message || 'SERVER_ERROR' },
-      { status: 500 }
-    );
+    // даже при ошибке — возвращаем ок:true + нет подписки,
+    // чтобы на клиенте не появлялось «Не удалось получить статус»
+    return NextResponse.json({ ok: true, subscription: null });
   }
 }
