@@ -1,21 +1,12 @@
-// v2check/lib/prisma.ts
+// Синглтон Prisma для сервера (Next.js App Router)
 import { PrismaClient } from '@prisma/client';
 
-/**
- * Единый Prisma-клиент:
- * - именованный экспорт `prisma`
- * - и экспорт по умолчанию (для совместимости со старым кодом)
- */
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+const g = globalThis as unknown as { prisma?: PrismaClient };
 
-export const prisma =
-  globalForPrisma.prisma ??
+export const prisma: PrismaClient =
+  g.prisma ??
   new PrismaClient({
-    log: process.env.NODE_ENV === 'production' ? ['warn', 'error'] : ['warn', 'error'],
+    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error']
   });
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
-
-export default prisma;
+if (process.env.NODE_ENV !== 'production') g.prisma = prisma;
