@@ -1,6 +1,5 @@
-// Синглтон Prisma для сервера (Next.js App Router)
+// lib/prisma.ts — Синглтон Prisma для серверной среды (Next App Router)
 import { PrismaClient } from '@prisma/client';
-
 const g = globalThis as unknown as { prisma?: PrismaClient };
 
 export const prisma: PrismaClient =
