@@ -1,3 +1,4 @@
+// app/api/diag/route.ts — диагностика БД/бота
 import { NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -25,7 +26,7 @@ export async function GET() {
   const bot = await safe(fetch(
     `https://api.telegram.org/bot${process.env.BOT_TOKEN || 'x'}/getMe`,
     { signal: ctrl.signal }
-  ).then(r=>r.json()).catch((e)=>{ throw e; }));
+  ).then(r=>r.json()));
   clearTimeout(t);
 
   return NextResponse.json({ ok:true, env, checks: { db, telegram: bot } }, { status: 200 });
