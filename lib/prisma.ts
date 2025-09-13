@@ -1,11 +1,16 @@
-// lib/prisma.ts — Синглтон Prisma для серверной среды (Next App Router)
+// lib/prisma.ts
 import { PrismaClient } from '@prisma/client';
-const g = globalThis as unknown as { prisma?: PrismaClient };
 
-export const prisma: PrismaClient =
-  g.prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error']
-  });
+// Реюз клиента Prisma между перезагрузками модулей в dev
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-if (process.env.NODE_ENV !== 'production') g.prisma = prisma;
+export const prisma: PrismaClient = globalForPrisma.prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = prisma;
+}
+
+// Поддерживаем оба стиля импорта:
+//   import prisma from '@/lib/prisma'
+//   import { prisma } from '@/lib/prisma'
+export default prisma;
