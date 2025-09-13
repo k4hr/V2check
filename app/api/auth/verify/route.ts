@@ -7,28 +7,6 @@ export const dynamic = 'force-dynamic';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
-function readInitData(req: NextRequest): string {
-  // 1) тело JSON: { initData: "..." }
-  // 2) заголовок: x-init-data
-  // 3) query: ?initData=...
-  try {
-    // В body может не быть JSON — не падаем
-    // @ts-expect-error - body может отсутствовать
-    const clone = req.clone();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    return (async () => {
-      try {
-        const j = await clone.json().catch(() => null);
-        if (j && typeof j.initData === 'string') return j.initData as string;
-      } catch {}
-      return '';
-    })() as unknown as string;
-  } catch {
-    /* ignore */
-  }
-  return '';
-}
-
 export async function POST(req: NextRequest) {
   try {
     if (!BOT_TOKEN) {
@@ -38,44 +16,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Собираем initData из 3 источников
+    // 1) пытаемся прочитать из body
     let initData = '';
-    // 1) тело
     try {
       const body = await req.json().catch(() => null);
-      if (body && typeof body.initData === 'string') initData = body.initData;
-    } catch { /* ignore */ }
+      if (body && typeof body.initData === 'string') {
+        initData = body.initData;
+      }
+    } catch {
+      /* ignore */
+    }
 
-    // 2) заголовок
+    // 2) если нет — из заголовка
     if (!initData) {
       const fromHeader = req.headers.get('x-init-data');
       if (fromHeader) initData = fromHeader;
     }
 
-    // 3) query
+    // 3) если нет — из query
     if (!initData) {
       const url = new URL(req.url);
       const fromQuery = url.searchParams.get('initData');
       if (fromQuery) initData = fromQuery;
     }
 
-    if (!initData || typeof initData !== 'string') {
+    if (!initData) {
       return NextResponse.json(
         { ok: false, error: 'INIT_DATA_REQUIRED' },
         { status: 400 }
       );
     }
 
-    // Верификация HMAC — строго boolean
-    const verified: boolean = verifyInitData(initData, BOT_TOKEN);
-    if (!verified) {
+    // Проверка HMAC (строго boolean)
+    const ok = verifyInitData(initData, BOT_TOKEN);
+    if (!ok) {
       return NextResponse.json(
         { ok: false, error: 'INVALID_INIT_DATA' },
         { status: 401 }
       );
     }
 
-    // Достаём telegramId — если нет, 400
+    // Достаём telegramId
     let telegramId = '';
     try {
       telegramId = getTelegramIdStrict(initData);
@@ -86,10 +67,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    return NextResponse.json({
-      ok: true,
-      user: { telegramId },
-    });
+    return NextResponse.json({ ok: true, user: { telegramId } });
   } catch (e: any) {
     return NextResponse.json(
       { ok: false, error: e?.message || 'SERVER_ERROR' },
