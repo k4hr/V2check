@@ -1,84 +1,76 @@
-// v2check/app/api/me/route.ts
+// app/api/me/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyInitData } from '@/lib/auth/verifyInitData';
+import { verifyInitData, getTelegramIdStrict } from '@/lib/auth/verifyInitData';
 
-/**
- * Возвращает данные пользователя и статус подписки.
- * Принимает initData из:
- *  - заголовка x-telegram-init-data (middleware также копирует x-init-data сюда)
- *  - либо из JSON { initData } (fallback)
- */
-async function handle(req: NextRequest) {
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
+
+async function extractInitData(req: NextRequest): Promise<string> {
+  // 1) body { initData }, 2) header x-init-data, 3) ?initData=
   try {
-    const hdrInit =
-      req.headers.get('x-telegram-init-data') ||
-      req.headers.get('x-init-data') || // на всякий случай, если middleware не сработал
-      '';
-
-    const bodyInit = await req
-      .json()
-      .then((j) => (j?.initData as string) || '')
-      .catch(() => '');
-
-    const initData = hdrInit || bodyInit || '';
-    const BOT_TOKEN = process.env.TG_BOT_TOKEN || process.env.BOT_TOKEN || '';
-
-    const v = verifyInitData(initData, BOT_TOKEN);
-    if (!v.ok) {
-      return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
-    }
-
-    const u = v.data?.user || {};
-    const telegramId = String(u?.id ?? '');
-    if (!telegramId) {
-      return NextResponse.json({ ok: false, error: 'NO_TG_ID' }, { status: 401 });
-    }
-
-    // upsert пользователя в БД
-    const base = {
-      telegramId,
-      username: u.username ?? null,
-      firstName: u.first_name ?? null,
-      lastName: u.last_name ?? null,
-      photoUrl: u.photo_url ?? null,
-    };
-
-    const dbUser = await prisma.user.upsert({
-      where: { telegramId },
-      update: base,
-      create: base,
-      include: { favorites: false },
-    });
-
-    const until = dbUser.subscriptionUntil ? new Date(dbUser.subscriptionUntil) : null;
-    const isPro = until ? Date.now() < until.getTime() : false;
-
-    return NextResponse.json({
-      ok: true,
-      user: {
-        telegramId,
-        username: dbUser.username,
-        firstName: dbUser.firstName,
-        lastName: dbUser.lastName,
-        photoUrl: dbUser.photoUrl,
-        subscriptionUntil: until ? until.toISOString() : null,
-        isPro,
-      },
-    });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message || 'Server error' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(req: NextRequest) {
-  return handle(req);
+    const body: any = await req.json().catch(() => null);
+    if (body && typeof body.initData === 'string') return body.initData;
+  } catch {}
+  const hdr = req.headers.get('x-init-data');
+  if (hdr) return hdr;
+  const url = new URL(req.url);
+  return url.searchParams.get('initData') || '';
 }
 
 export async function GET(req: NextRequest) {
-  // Удобно иметь и GET, и POST — для отладки/диагностики.
-  return handle(req);
+  try {
+    if (!BOT_TOKEN) {
+      return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
+    }
+
+    const initData = await extractInitData(req);
+    if (!initData) {
+      return NextResponse.json({ ok: false, error: 'INIT_DATA_REQUIRED' }, { status: 400 });
+    }
+
+    // verifyInitData теперь boolean
+    const verified = verifyInitData(initData, BOT_TOKEN);
+    if (!verified) {
+      return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+    }
+
+    // Достаём telegramId из проверенного initData
+    const telegramId = getTelegramIdStrict(initData);
+
+    // Апсертим пользователя (по схеме: id:string, telegramId:string unique, ... )
+    const user = await prisma.user.upsert({
+      where: { telegramId },
+      update: { updatedAt: new Date() },
+      create: { telegramId },
+      select: {
+        id: true,
+        telegramId: true,
+        username: true,
+        firstName: true,
+        lastName: true,
+        photoUrl: true,
+        subscriptionUntil: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    // Признак активной подписки
+    const now = new Date();
+    const isPro = !!(user.subscriptionUntil && new Date(user.subscriptionUntil) > now);
+
+    return NextResponse.json({
+      ok: true,
+      user,
+      pro: isPro,
+    });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: e?.message || 'SERVER_ERROR' },
+      { status: 500 }
+    );
+  }
 }
