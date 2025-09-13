@@ -1,16 +1,15 @@
 // lib/prisma.ts
 import { PrismaClient } from '@prisma/client';
 
-// Реюз клиента Prisma между перезагрузками модулей в dev
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-
-export const prisma: PrismaClient = globalForPrisma.prisma ?? new PrismaClient();
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
+declare global {
+  // eslint-disable-next-line no-var
+  var _prisma: PrismaClient | undefined;
 }
 
-// Поддерживаем оба стиля импорта:
-//   import prisma from '@/lib/prisma'
-//   import { prisma } from '@/lib/prisma'
+export const prisma: PrismaClient = global._prisma ?? new PrismaClient();
+
+if (process.env.NODE_ENV !== 'production') {
+  global._prisma = prisma;
+}
+
 export default prisma;
