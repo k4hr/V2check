@@ -1,4 +1,5 @@
-// scripts/check-db-url.mjs — мягкая проверка ENV перед start
+// scripts/check-db-url.mjs
 if (!process.env.DATABASE_URL) {
-  console.warn('[prestart] DATABASE_URL is not set. Prisma may fail to connect.');
+  console.warn('[WARN] DATABASE_URL is not set');
+  process.exit(0);
 }
