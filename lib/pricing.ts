@@ -1,31 +1,54 @@
-// Прайсинг для Stars (XTR). Полгода = 180 дней.
+// lib/pricing.ts — прайсинг Stars (XTR). Полгода = 180 дней.
+// Экспортируем: PRICES, resolvePlan, типы.
 
 export type Plan = 'WEEK' | 'MONTH' | 'HALF' | 'HALF_YEAR' | 'YEAR';
 
 export type PricingItem = {
-  label: string;
-  title: string;
-  description: string;
-  amount: number;
-  stars: number;   // алиас для совместимости со старым кодом
-  days: number;
+  label: string;       // краткое название для UI
+  title: string;       // полное название (в инвойсе)
+  description: string; // описание для инвойса
+  amount: number;      // цена в звёздах (XTR)
+  stars: number;       // алиас для совместимости со старым кодом
+  days: number;        // длительность доступа
 };
 
+// Единая конфигурация для полугода — 180 дней
 const HALFY: PricingItem = {
   label: 'Полгода',
   title: 'Juristum Pro — Полгода',
   description: 'Доступ на 180 дней',
   amount: 499,
   stars: 499,
-  days: 180
+  days: 180,
 };
 
 export const PRICES: Record<Plan, PricingItem> = {
-  WEEK:  { label:'Неделя', title:'Juristum Pro — Неделя', description:'Доступ на 7 дней',   amount:29,  stars:29,  days:7 },
-  MONTH: { label:'Месяц',  title:'Juristum Pro — Месяц',  description:'Доступ на 30 дней',  amount:99,  stars:99,  days:30 },
-  HALF_YEAR: HALFY,
-  HALF: HALFY, // алиас
-  YEAR:  { label:'Год',    title:'Juristum Pro — Год',    description:'Доступ на 365 дней', amount:899, stars:899, days:365 }
+  WEEK: {
+    label: 'Неделя',
+    title: 'Juristum Pro — Неделя',
+    description: 'Доступ на 7 дней',
+    amount: 29,
+    stars: 29,
+    days: 7,
+  },
+  MONTH: {
+    label: 'Месяц',
+    title: 'Juristum Pro — Месяц',
+    description: 'Доступ на 30 дней',
+    amount: 99,
+    stars: 99,
+    days: 30,
+  },
+  HALF_YEAR: HALFY, // основной ключ на 180 дней
+  HALF: HALFY,      // алиас на тот же объект
+  YEAR: {
+    label: 'Год',
+    title: 'Juristum Pro — Год',
+    description: 'Доступ на 365 дней',
+    amount: 899,
+    stars: 899,
+    days: 365,
+  },
 } as const;
 
 export type PlanInput = keyof typeof PRICES;
