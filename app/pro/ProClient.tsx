@@ -1,16 +1,12 @@
-// app/pro/ProClient.tsx — клиентская логика /pro (дизайн не меняем)
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { PRICES, type Plan } from '@/lib/pricing';
 
 export default function ProClient() {
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
-
-  // Порядок отображения планов
-  const plans = useMemo<Plan[]>(() => ['WEEK', 'MONTH', 'HALF_YEAR', 'YEAR'], []);
-  const safePrices = (PRICES || {}) as typeof PRICES;
 
   useEffect(() => {
     try {
@@ -32,16 +28,22 @@ export default function ProClient() {
     setBusy(plan);
     setMsg(null);
     try {
-      const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}`, { method: 'POST' });
+      const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}`, {
+        method: 'POST',
+      });
       const data = await res.json().catch(() => null);
       if (!data?.ok || !data?.link) {
         throw new Error(data?.error || data?.detail?.description || 'Ошибка создания счёта');
       }
       const link = String(data.link);
       const tg: any = (window as any).Telegram?.WebApp;
-      if (tg?.openInvoice) tg.openInvoice(link, () => {});
-      else if (tg?.openTelegramLink) tg.openTelegramLink(link);
-      else window.location.href = link;
+      if (tg?.openInvoice) {
+        tg.openInvoice(link, () => {});
+      } else if (tg?.openTelegramLink) {
+        tg.openTelegramLink(link);
+      } else {
+        window.location.href = link;
+      }
     } catch (e: any) {
       setMsg(e?.message || 'Неизвестная ошибка');
     } finally {
@@ -49,50 +51,63 @@ export default function ProClient() {
     }
   }
 
+  const Plans: Plan[] = ['WEEK', 'MONTH', 'HALF', 'YEAR'];
+  const safePrices = PRICES;
+
   return (
     <main>
-      <div className="safe" style={{
-        maxWidth: 560, margin: '0 auto', display: 'flex',
-        flexDirection: 'column', minHeight: 'calc(100dvh - 32px)'
-      }}>
+      <div
+        className="safe"
+        style={{
+          maxWidth: 560,
+          margin: '0 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 'calc(100dvh - 32px)',
+        }}
+      >
         <div style={{ textAlign: 'center' }}>
-          <h1 style={{ fontFamily: 'var(--font-serif, inherit)', fontWeight: 700, fontSize: 28, marginBottom: 8 }}>
+          <h1
+            style={{
+              fontFamily: 'var(--font-serif, inherit)',
+              fontWeight: 700,
+              fontSize: 28,
+              marginBottom: 8,
+            }}
+          >
             Juristum Pro
           </h1>
-          <p style={{ opacity: .85, marginBottom: 20 }}>Выберите тариф:</p>
+          <p style={{ opacity: 0.85, marginBottom: 20 }}>Выберите тариф:</p>
         </div>
 
         {msg && (
-          <div className="card" role="alert" style={{ marginBottom: 12, borderColor: 'rgba(255,180,0,.35)' }}>
-            <b>Не получилось открыть оплату.</b><br/>
-            <span style={{ opacity: .85 }}>{msg}</span>
+          <div
+            className="card"
+            role="alert"
+            style={{ marginBottom: 12, borderColor: 'rgba(255,180,0,.35)' }}
+          >
+            <b>Не получилось открыть оплату.</b>
+            <br />
+            <span style={{ opacity: 0.85 }}>{msg}</span>
           </div>
         )}
 
         <div style={{ display: 'grid', gap: 12 }}>
-          {plans.map((p) => {
-            const cfg = safePrices[p as Plan];
-            if (!cfg) {
-              return (
-                <div key={p} className="card" role="alert">
-                  <b>Тариф недоступен</b>
-                  <div style={{ opacity: .8, fontSize: 12 }}>План {p} временно не настроен</div>
-                </div>
-              );
-            }
-
+          {Plans.map((p) => {
+            const cfg = safePrices[p];
             const monthAmount = safePrices?.MONTH?.amount ?? 0;
-            let badge: JSX.Element | null = null;
+
+            let badge: ReactNode = null;
 
             if (p === 'MONTH') {
               badge = <span className="badge badge--pop">Самый популярный</span>;
-            } else if (p === 'HALF_YEAR') {
+            } else if (p === 'HALF') {
               const base = monthAmount * 6;
-              const save = base > 0 ? Math.max(0, Math.round((1 - cfg.amount / base) * 100)) : 0;
+              const save = Math.max(0, Math.round((1 - cfg.amount / base) * 100));
               badge = <span className="badge badge--save">Экономия {save}%</span>;
             } else if (p === 'YEAR') {
               const base = monthAmount * 12;
-              const save = base > 0 ? Math.max(0, Math.round((1 - cfg.amount / base) * 100)) : 0;
+              const save = Math.max(0, Math.round((1 - cfg.amount / base) * 100));
               badge = <span className="badge badge--save">Экономия {save}%</span>;
             }
 
@@ -119,13 +134,26 @@ export default function ProClient() {
           })}
         </div>
 
-        {/* нижний незаметный футер — без изменений */}
         <div style={{ marginTop: 'auto' }}>
-          <p className="text-xs opacity-60" style={{ fontSize: 12, opacity: .55, textAlign: 'center', marginTop: 24 }}>
-            Подтверждая, вы соглашаетесь с <a href="/terms" style={{ textDecoration: 'underline' }}>условиями подписки</a>.
+          <p
+            className="text-xs opacity-60"
+            style={{ fontSize: 12, opacity: 0.55, textAlign: 'center', marginTop: 24 }}
+          >
+            Подтверждая, вы соглашаетесь с{' '}
+            <a href="/terms" style={{ textDecoration: 'underline' }}>
+              условиями подписки
+            </a>
+            .
           </p>
-          <p className="text-xs opacity-60" style={{ fontSize: 12, opacity: .55, textAlign: 'center' }}>
-            Также ознакомьтесь с <a href="/legal" style={{ textDecoration: 'underline' }}>правовой информацией</a>.
+          <p
+            className="text-xs opacity-60"
+            style={{ fontSize: 12, opacity: 0.55, textAlign: 'center' }}
+          >
+            Также ознакомьтесь с{' '}
+            <a href="/legal" style={{ textDecoration: 'underline' }}>
+              правовой информацией
+            </a>
+            .
           </p>
         </div>
       </div>
