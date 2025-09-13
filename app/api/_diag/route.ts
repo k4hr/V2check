@@ -1,33 +1,48 @@
-// app/api/diag/route.ts — диагностика БД/бота
+// app/api/_diag/route.ts
 import { NextResponse } from 'next/server';
+
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-async function safe<T>(p: Promise<T>) {
-  try { return { ok: true, data: await p }; } catch (e:any) { return { ok:false, error: e?.message || String(e) }; }
+type Ok<T> = { ok: true; data: T };
+type Err = { ok: false; error: string };
+
+async function safe<T>(p: Promise<T>): Promise<Ok<T> | Err> {
+  try {
+    const data = await p;
+    return { ok: true, data };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
 export async function GET() {
   const env = {
-    NODE_ENV: process.env.NODE_ENV || 'unknown',
+    NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL ? 'set' : 'empty',
     BOT_TOKEN: process.env.BOT_TOKEN ? 'set' : 'empty',
     TG_PROVIDER_TOKEN: process.env.TG_PROVIDER_TOKEN ? 'set' : 'empty',
   };
 
-  let db = { ok:false, error:'skipped' as string|undefined };
+  let db: Ok<any> | Err;
   try {
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    const { prisma } = await import('@/lib/prisma');
     db = await safe(prisma.$queryRawUnsafe('SELECT NOW()'));
-  } catch (e:any) { db = { ok:false, error:e?.message || String(e) }; }
+  } catch (e: any) {
+    db = { ok: false, error: e?.message || String(e) };
+  }
 
-  const ctrl = new AbortController(); const t = setTimeout(()=>ctrl.abort(), 4000);
-  const bot = await safe(fetch(
-    `https://api.telegram.org/bot${process.env.BOT_TOKEN || 'x'}/getMe`,
-    { signal: ctrl.signal }
-  ).then(r=>r.json()));
-  clearTimeout(t);
+  let telegram: Ok<any> | Err;
+  try {
+    const token = process.env.BOT_TOKEN ?? '';
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`, { signal: ctrl.signal });
+    clearTimeout(t);
+    telegram = await safe(res.json() as any);
+  } catch (e: any) {
+    telegram = { ok: false, error: e?.message || String(e) };
+  }
 
-  return NextResponse.json({ ok:true, env, checks: { db, telegram: bot } }, { status: 200 });
+  return NextResponse.json({ ok: true, env, checks: { db, telegram } });
 }
