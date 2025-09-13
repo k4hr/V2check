@@ -7,6 +7,7 @@ function getSecret(token: string) {
 
 export function verifyInitData(initData: string, botToken: string): boolean {
   if (!initData || !botToken) return false;
+
   const urlParams = new URLSearchParams(initData);
   const hash = urlParams.get('hash') || '';
   urlParams.delete('hash');
@@ -14,8 +15,7 @@ export function verifyInitData(initData: string, botToken: string): boolean {
   const data = Array.from(urlParams.entries())
     .map(([k, v]) => `${k}=${v}`)
     .sort()
-    .join('
-');
+    .join('\n'); // ← важно: именно '\n' одной строкой
 
   const hmac = crypto.createHmac('sha256', getSecret(botToken))
     .update(data)
@@ -25,7 +25,6 @@ export function verifyInitData(initData: string, botToken: string): boolean {
 }
 
 export function getTelegramIdStrict(initData: string): string {
-  // Parses initData `user` field and returns Telegram user id as string
   const params = new URLSearchParams(initData);
   const raw = params.get('user');
   if (!raw) throw new Error('NO_USER');
