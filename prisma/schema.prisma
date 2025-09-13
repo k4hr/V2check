@@ -1,6 +1,7 @@
+// prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
-  // Для node:20-slim (Debian, OpenSSL 3)
+  // Для Debian (node:20-slim) с OpenSSL 3
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
