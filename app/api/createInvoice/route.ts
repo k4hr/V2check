@@ -21,22 +21,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
     }
 
-    const apiUrl = `https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`;
-    const payload = `subs:${planKey}`;
-
-    // Stars (XTR) — сумма в минимальных единицах звёзд (у нас уже целые)
-    const res = await fetch(apiUrl, {
+    // Telegram Stars (XTR). amount — число звёзд
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/createInvoiceLink`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         title: price.title,
         description: price.description,
-        payload,
+        payload: `subs:${planKey}`,
         currency: 'XTR',
-        prices: [{ label: price.label, amount: price.stars }], // alias для совместимости
+        prices: [{ label: price.label, amount: price.stars }],
         provider_token: PROVIDER_TOKEN || undefined,
-        start_parameter: `subs_${planKey.toLowerCase()}`,
-      }),
+        start_parameter: `subs_${planKey.toLowerCase()}`
+      })
     });
 
     const data: any = await res.json().catch(() => null);
@@ -45,7 +42,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: detail, detail: data }, { status: 502 });
     }
 
-    return NextResponse.json({ ok: true, link: data.result, plan: planKey, days: price.days, amount: price.amount });
+    return NextResponse.json({
+      ok: true,
+      link: data.result,
+      plan: planKey,
+      days: price.days,
+      amount: price.amount
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
