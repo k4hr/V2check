@@ -1,63 +1,99 @@
-import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import type { NextRequest } from 'next/server';
+// app/api/auth/verify/route.ts
+import { NextResponse, type NextRequest } from 'next/server';
+import { verifyInitData, getTelegramIdStrict } from '@/lib/auth/verifyInitData';
 
-// Пытаемся использовать ваш существующий helper для верификации initData
-// Оставляем прежний путь импорта, чтобы не ломать структуру проекта.
-import { verifyInitData } from '../../../../lib/auth/verifyInitData';
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-const prisma = new PrismaClient();
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
+
+function readInitData(req: NextRequest): string {
+  // 1) тело JSON: { initData: "..." }
+  // 2) заголовок: x-init-data
+  // 3) query: ?initData=...
+  try {
+    // В body может не быть JSON — не падаем
+    // @ts-expect-error - body может отсутствовать
+    const clone = req.clone();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    return (async () => {
+      try {
+        const j = await clone.json().catch(() => null);
+        if (j && typeof j.initData === 'string') return j.initData as string;
+      } catch {}
+      return '';
+    })() as unknown as string;
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({} as any));
-    const initData: string | undefined =
-      body?.initData ||
-      req.headers.get('x-init-data') ||
-      undefined;
+    if (!BOT_TOKEN) {
+      return NextResponse.json(
+        { ok: false, error: 'BOT_TOKEN_MISSING' },
+        { status: 500 }
+      );
+    }
 
+    // Собираем initData из 3 источников
+    let initData = '';
+    // 1) тело
+    try {
+      const body = await req.json().catch(() => null);
+      if (body && typeof body.initData === 'string') initData = body.initData;
+    } catch { /* ignore */ }
+
+    // 2) заголовок
     if (!initData) {
-      return NextResponse.json({ ok: false, error: 'Missing initData' }, { status: 400 });
+      const fromHeader = req.headers.get('x-init-data');
+      if (fromHeader) initData = fromHeader;
     }
 
-    const botToken = process.env.BOT_TOKEN;
-    if (!botToken) {
-      return NextResponse.json({ ok: false, error: 'Missing BOT_TOKEN' }, { status: 500 });
+    // 3) query
+    if (!initData) {
+      const url = new URL(req.url);
+      const fromQuery = url.searchParams.get('initData');
+      if (fromQuery) initData = fromQuery;
     }
 
-    // Валидация Telegram initData
-    const verified = await verifyInitData(initData, botToken);
-    if (!verified || (typeof verified === 'object' && 'ok' in verified && !verified.ok)) {
-      return NextResponse.json({ ok: false, error: 'Invalid initData' }, { status: 401 });
+    if (!initData || typeof initData !== 'string') {
+      return NextResponse.json(
+        { ok: false, error: 'INIT_DATA_REQUIRED' },
+        { status: 400 }
+      );
     }
 
-    // Извлекаем user из initDataUnsafe (внутри verifyInitData обычно уже разобрано)
-    // На всякий случай парсим из search-строки сами.
-    const params = new URLSearchParams(initData);
-    const userStr = params.get('user');
-    const user = userStr ? JSON.parse(userStr) : undefined;
-
-    if (!user?.id) {
-      return NextResponse.json({ ok: false, error: 'No user in initData' }, { status: 400 });
+    // Верификация HMAC — строго boolean
+    const verified: boolean = verifyInitData(initData, BOT_TOKEN);
+    if (!verified) {
+      return NextResponse.json(
+        { ok: false, error: 'INVALID_INIT_DATA' },
+        { status: 401 }
+      );
     }
 
-    const data = {
-      telegramId: String(user.id),
-      username: user.username || null,
-      firstName: user.first_name || null,
-      lastName: user.last_name || null,
-      photoUrl: user.photo_url || null,
-    };
+    // Достаём telegramId — если нет, 400
+    let telegramId = '';
+    try {
+      telegramId = getTelegramIdStrict(initData);
+    } catch {
+      return NextResponse.json(
+        { ok: false, error: 'NO_TELEGRAM_ID' },
+        { status: 400 }
+      );
+    }
 
-    const dbUser = await prisma.user.upsert({
-      where: { telegramId: data.telegramId },
-      update: data,
-      create: { id: undefined as any, ...data } as any,
+    return NextResponse.json({
+      ok: true,
+      user: { telegramId },
     });
-
-    return NextResponse.json({ ok: true, user: dbUser });
   } catch (e: any) {
-    console.error('auth/verify error', e);
-    return NextResponse.json({ ok: false, error: e?.message || 'Server error' }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: e?.message || 'SERVER_ERROR' },
+      { status: 500 }
+    );
   }
 }
