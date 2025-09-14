@@ -1,55 +1,92 @@
 // lib/auth/verifyInitData.ts
-import crypto from 'crypto';
+import crypto from 'node:crypto';
 
-function getSecret(botToken: string) {
-  // TG TMA secret = HMAC_SHA256("WebAppData", BOT_TOKEN)
-  return crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+/**
+ * Строим секрет по правилам Telegram Mini Apps:
+ * secret = HMAC_SHA256(key="WebAppData", data=BOT_TOKEN)
+ */
+function buildSecret(botToken: string): Buffer {
+  const serviceKey = Buffer.from('WebAppData', 'utf8');
+  return crypto.createHmac('sha256', serviceKey).update(botToken).digest();
 }
 
-/** Возвращает true/false — корректен ли initData для данного бота */
+/**
+ * Собираем Data Check String:
+ *  - берём все пары кроме `hash`
+ *  - сортируем по ключу в алфавитном порядке
+ *  - склеиваем `key=value` через \n
+ */
+function buildDataCheckString(params: URLSearchParams): string {
+  const pairs: string[] = [];
+  params.forEach((value, key) => {
+    if (key === 'hash') return;
+    pairs.push(`${key}=${value}`);
+  });
+  pairs.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return pairs.join('\n');
+}
+
+/**
+ * ВАЛИДАЦИЯ initData — строго boolean.
+ */
 export function verifyInitData(initData: string, botToken: string): boolean {
-  if (!initData || !botToken) return false;
+  try {
+    if (!initData || !botToken) return false;
 
-  const params = new URLSearchParams(initData);
-  const hash = params.get('hash');
-  if (!hash) return false;
+    const params = new URLSearchParams(initData);
+    const gotHash = params.get('hash');
+    if (!gotHash) return false;
 
-  // canonical data
-  const dataCheckString = Array.from(params.entries())
-    .filter(([k]) => k !== 'hash')
-    .map(([k, v]) => `${k}=${v}`)
-    .sort()
-    .join('\n');
+    const dcs = buildDataCheckString(params);
+    const secret = buildSecret(botToken);
+    const expected = crypto.createHmac('sha256', secret).update(dcs).digest('hex');
 
-  const hmac = crypto.createHmac('sha256', getSecret(botToken)).update(dataCheckString).digest('hex');
-  return hmac === hash;
+    // сравнение в постоянном времени
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, 'hex'),
+      Buffer.from(gotHash, 'hex'),
+    );
+  } catch {
+    return false;
+  }
 }
 
-/** Достаёт telegramId из initData (если он там есть), иначе null */
-export function extractTelegramId(initData: string): string | null {
-  if (!initData) return null;
-  const params = new URLSearchParams(initData);
-  const userRaw = params.get('user');
-  if (!userRaw) return null;
+/**
+ * Возвращает Telegram ID как строку или null (без исключений).
+ */
+export function getTelegramId(initData: string): string | null {
   try {
-    const user = JSON.parse(userRaw) as { id?: number | string };
-    if (user && user.id != null) return String(user.id);
-  } catch {}
-  return null;
+    const params = new URLSearchParams(initData);
+    const userStr = params.get('user');
+    if (!userStr) return null;
+    const user = JSON.parse(userStr) as { id?: number | string };
+    if (!user || typeof user.id === 'undefined' || user.id === null) return null;
+    return String(user.id);
+  } catch {
+    return null;
+  }
 }
 
-/** Универсальный геттер initData из Next Request или строки */
-export async function getInitDataFrom(reqOrStr: Request | string): Promise<string> {
-  if (typeof reqOrStr === 'string') return reqOrStr;
-  // при вызове из TMA кладём initData в заголовок x-init-data
-  const fromHeader = reqOrStr.headers.get('x-init-data');
-  if (fromHeader) return fromHeader;
+/**
+ * Жёсткая версия: бросает, если ID не найден.
+ */
+export function getTelegramIdStrict(initData: string): string {
+  const id = getTelegramId(initData);
+  if (!id) throw new Error('NO_TELEGRAM_ID');
+  return id;
+}
 
-  // запасной путь: из query ?initData=...
-  try {
-    const url = new URL(reqOrStr.url);
-    const q = url.searchParams.get('initData') || url.searchParams.get('initdata');
-    if (q) return q;
-  } catch {}
-  return '';
+/**
+ * Аккуратно достаём initData из запроса:
+ * 1) заголовок x-init-data
+ * 2) query ?initData=
+ * (body намеренно НЕ читаем — чтобы не ловить ошибки/parsing при пустом теле)
+ */
+export function getInitDataFrom(req: Request): string {
+  // @ts-expect-error — в NextRequest есть .headers и .url как у Fetch Request
+  const hdr = req.headers?.get?.('x-init-data') as string | null;
+  if (hdr) return hdr;
+  // @ts-expect-error — в NextRequest есть .url
+  const url = new URL(req.url);
+  return url.searchParams.get('initData') || '';
 }
