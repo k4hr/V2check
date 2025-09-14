@@ -90,3 +90,13 @@ export function getInitDataFrom(req: Request): string {
   const url = new URL(req.url);
   return url.searchParams.get('initData') || '';
 }
+
+// --- Backward‑compat aliases ---
+/** Старое имя, часто встречается в проекте. */
+export function extractTelegramId(initData: string): string {
+  return getTelegramId(initData) || '';
+}
+/** Для совместимости с импортами вида { getInitData } */
+export function getInitData(req: Request): string {
+  return getInitDataFrom(req);
+}
