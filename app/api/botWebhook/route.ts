@@ -13,13 +13,13 @@ type TgUpdate = {
   update_id?: number;
   pre_checkout_query?: {
     id: string;
-    from: { id: number };
+    from: { id: number; username?: string };
     invoice_payload: string;
   };
   message?: {
     message_id?: number;
-    from?: { id?: number };
-    chat?: { id?: number };
+    from?: { id?: number; username?: string };
+    chat?: { id?: number; username?: string };
     successful_payment?: {
       invoice_payload: string;
       telegram_payment_charge_id?: string;
@@ -63,22 +63,29 @@ export async function POST(req: NextRequest) {
 
     const update = (await req.json().catch(() => ({}))) as TgUpdate;
 
+    // Быстрый ответ на pre_checkout_query (оставим как было)
     if (update.pre_checkout_query) {
       const { id } = update.pre_checkout_query;
       await tg('answerPreCheckoutQuery', { pre_checkout_query_id: id, ok: true });
       return NextResponse.json({ ok: true, stage: 'pre_checkout_ok' });
     }
 
+    // Успешный платёж -> продлеваем подписку и сохраняем username (если есть)
     const sp = update.message?.successful_payment;
     const chatId = update.message?.chat?.id || update.message?.from?.id;
     if (sp && chatId) {
       const plan = planFromPayload(sp.invoice_payload);
       if (!plan) return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
 
+      const username =
+        update.message?.from?.username ||
+        update.message?.chat?.username ||
+        null;
+
       const u = await prisma.user.upsert({
         where: { telegramId: String(chatId) },
-        create: { telegramId: String(chatId) },
-        update: {},
+        create: { telegramId: String(chatId), ...(username ? { username } : {}) },
+        update: { ...(username ? { username } : {}) },
       });
 
       const now = new Date();
