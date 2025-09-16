@@ -7,6 +7,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
+const WH_SECRET = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '').trim();
 
 type TgUpdate = {
   update_id?: number;
@@ -16,22 +17,21 @@ type TgUpdate = {
     invoice_payload: string;
   };
   message?: {
-    message_id: number;
-    chat: { id: number };
-    from: { id: number };
+    message_id?: number;
+    from?: { id?: number };
+    chat?: { id?: number };
     successful_payment?: {
-      total_amount: number;
-      currency: string;
       invoice_payload: string;
       telegram_payment_charge_id?: string;
       provider_payment_charge_id?: string;
-    };
-  };
+      currency?: string;
+      total_amount?: number;
+    }
+  }
 };
 
 async function tg(method: string, payload: any) {
-  const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
-  const res = await fetch(url, {
+  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -55,17 +55,20 @@ function addDays(base: Date, days: number): Date {
 export async function POST(req: NextRequest) {
   try {
     if (!BOT_TOKEN) return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
-    const update = (await req.json().catch(() => ({}))) as TgUpdate;
 
-    // 1) Required for Telegram Payments: answer pre_checkout_query fast
-    if (update.pre_checkout_query) {
-      const { id, invoice_payload } = update.pre_checkout_query;
-      const plan = planFromPayload(invoice_payload);
-      await tg('answerPreCheckoutQuery', { pre_checkout_query_id: id, ok: true });
-      return NextResponse.json({ ok: true, stage: 'pre_checkout_ok', plan });
+    if (WH_SECRET) {
+      const got = (req.headers.get('x-telegram-bot-api-secret-token') || '').trim();
+      if (got !== WH_SECRET) return NextResponse.json({ ok:false, error:'WEBHOOK_FORBIDDEN' }, { status:403 });
     }
 
-    // 2) Successful payment -> extend subscription
+    const update = (await req.json().catch(() => ({}))) as TgUpdate;
+
+    if (update.pre_checkout_query) {
+      const { id } = update.pre_checkout_query;
+      await tg('answerPreCheckoutQuery', { pre_checkout_query_id: id, ok: true });
+      return NextResponse.json({ ok: true, stage: 'pre_checkout_ok' });
+    }
+
     const sp = update.message?.successful_payment;
     const chatId = update.message?.chat?.id || update.message?.from?.id;
     if (sp && chatId) {
@@ -87,10 +90,12 @@ export async function POST(req: NextRequest) {
         data: { subscriptionUntil: until, updatedAt: new Date() },
       });
 
-      await tg('sendMessage', {
-        chat_id: chatId,
-        text: `✅ Подписка активна до ${until.toISOString().slice(0,10)}. Спасибо за покупку!`,
-      });
+      try {
+        await tg('sendMessage', {
+          chat_id: chatId,
+          text: `✅ Подписка активна до ${until.toISOString().slice(0,10)}. Спасибо за покупку!`,
+        });
+      } catch {}
 
       return NextResponse.json({ ok: true, stage: 'subscription_extended', plan, until });
     }
