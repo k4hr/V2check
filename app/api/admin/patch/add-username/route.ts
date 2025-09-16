@@ -25,16 +25,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
     }
 
-    // добавляем все три колонки, если их нет
+    // добавляем недостающие колонки, если их нет
     const sql = [
-      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username" TEXT;',
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username"  TEXT;',
       'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "firstName" TEXT;',
-      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastName" TEXT;'
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastName"  TEXT;',
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "photoUrl"  TEXT;'
     ];
-
-    for (const s of sql) {
-      await prisma.$executeRawUnsafe(s);
-    }
+    for (const s of sql) await prisma.$executeRawUnsafe(s);
 
     return NextResponse.json({ ok: true, applied: true, sql });
   } catch (e: any) {
@@ -42,5 +40,4 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET для удобного вызова из браузера
 export const GET = POST;
