@@ -1,4 +1,3 @@
-// app/api/admin/patch/add-username/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -26,11 +25,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
     }
 
-    // Разовый безопасный патч: добавляем колонку username, если её нет
-    const sql = 'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username" TEXT;';
-    const result = await prisma.$executeRawUnsafe(sql);
+    // добавляем все три колонки, если их нет
+    const sql = [
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username" TEXT;',
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "firstName" TEXT;',
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastName" TEXT;'
+    ];
 
-    return NextResponse.json({ ok: true, applied: true, result, sql });
+    for (const s of sql) {
+      await prisma.$executeRawUnsafe(s);
+    }
+
+    return NextResponse.json({ ok: true, applied: true, sql });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
