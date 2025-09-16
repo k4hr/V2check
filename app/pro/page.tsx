@@ -18,8 +18,15 @@ export default function ProPage(){
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/'; };
       tg?.BackButton?.onClick?.(back);
+
       const onClosed = (d:any)=>{
-        setInfo('Ожидание подтверждения оплаты… Если окно закрыто — проверьте историю платежей.');
+        if (d?.status === 'paid') {
+          try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
+          setInfo('Оплата подтверждена. Обновляем статус…');
+          setTimeout(()=>{ window.location.href = '/cabinet'; }, 400);
+        } else {
+          setInfo('Окно оплаты закрыто. Если оплата прошла — проверьте статус в кабинете.');
+        }
         setBusy(null);
       };
       tg?.onEvent?.('invoiceClosed', onClosed);
@@ -32,11 +39,9 @@ export default function ProPage(){
     setBusy(plan); setMsg(null); setInfo(null);
     try{
       const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}`, { method: 'POST' });
-      const data = await res.json().catch(()=>null);
-      if (!data?.ok || !data?.link) {
-        throw new Error(data?.error || data?.detail?.description || 'Ошибка создания счёта');
-      }
-      const link = String(data.link);
+      const { ok, link, error } = await res.json();
+      if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
+
       const tg:any = (window as any).Telegram?.WebApp;
       if (tg?.openInvoice) tg.openInvoice(link, ()=>{});
       else if (tg?.openTelegramLink) tg.openTelegramLink(link);
@@ -44,62 +49,37 @@ export default function ProPage(){
     }catch(e:any){
       setMsg(e?.message || 'Неизвестная ошибка');
     }finally{
-      // do not clear busy here to keep button disabled while TG overlay is shown
-      setTimeout(()=>setBusy(null), 2000);
+      setTimeout(()=>setBusy(null), 1200);
     }
   }
 
   return (
     <main>
-      <div className="safe" style={{maxWidth:560, margin:'0 auto', display:'flex', flexDirection:'column',
-        minHeight:'calc(100dvh - 32px)'}}>
-        <div style={{textAlign:'center'}}>
-          <h1 style={{fontFamily:'var(--font-serif, inherit)', fontWeight:700, fontSize:28, marginBottom:8}}>
-            Juristum Pro
-          </h1>
-          <p style={{opacity:.85, marginBottom:20}}>Выберите тариф:</p>
-        </div>
+      <div className="safe" style={{
+        maxWidth:560, margin:'0 auto', display:'flex', flexDirection:'column',
+        gap:12, padding:20
+      }}>
+        <h1 style={{ textAlign:'center' }}>Подписка Juristum Pro</h1>
+        {msg && <p style={{color:'crimson', textAlign:'center'}}>{msg}</p>}
+        {info && <p style={{opacity:.7, textAlign:'center'}}>{info}</p>}
 
-        {msg && (
-          <div className="card" role="alert" style={{marginBottom:12, borderColor:'rgba(255,180,0,.35)'}}>
-            <b>Не получилось открыть оплату.</b><br/>
-            <span style={{opacity:.85}}>{msg}</span>
-          </div>
-        )}
-
-        {info && (
-          <div className="card" role="status" style={{marginBottom:12}}>
-            {info}
-          </div>
-        )}
-
-        <div style={{display:'grid', gap:12}}>
-          {(['WEEK','MONTH','HALF','YEAR'] as Plan[]).map((p)=>{
-            const cfg = PRICES[p];
-            let badge: React.ReactNode = null;
-            if (p === 'MONTH') badge = <span className="badge badge--pop">Самый популярный</span>;
-            else if (p === 'HALF') {
-              const base = PRICES.MONTH.amount * 6;
-              const save = Math.max(0, Math.round((1 - cfg.amount / base) * 100));
-              badge = <span className="badge badge--save">Экономия {save}%</span>;
-            } else if (p === 'YEAR') {
-              const base = PRICES.MONTH.amount * 12;
-              const save = Math.max(0, Math.round((1 - cfg.amount / base) * 100));
-              badge = <span className="badge badge--save">Экономия {save}%</span>;
-            }
+        <div style={{ display:'grid', gap:12 }}>
+          {Object.entries(PRICES).map(([key, cfg]) => {
+            const plan = key as Plan;
+            const can = !busy || busy === plan;
             return (
               <button
-                key={p}
-                type="button"
-                onClick={()=>buy(p)}
+                key={key}
+                disabled={!can}
                 className="list-btn"
-                disabled={!!busy}
-                aria-label={`Купить: ${cfg.label}`}
+                style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+                         border:'1px solid #333', borderRadius:12, padding:'12px 16px',
+                         opacity: can ? 1 : .6 }}
+                onClick={()=>buy(plan)}
               >
-                <span className="list-btn__left" style={{gap:12}}>
+                <span className="list-btn__left">
                   <span className="list-btn__emoji">⭐</span>
-                  <b>{cfg.label}</b>
-                  {badge && <span style={{marginLeft:6}}>{badge}</span>}
+                  <b>{cfg.title}</b>
                 </span>
                 <span className="list-btn__right">
                   <span>{cfg.amount} ⭐</span>
