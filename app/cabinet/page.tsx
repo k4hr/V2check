@@ -48,7 +48,7 @@ export default function CabinetPage() {
         setStatusText('Подписка не активна.');
       }
     } catch (e:any) {
-      setError(e?.message || 'Ошибка запроса');
+      setError(null); // скрываем красные ошибки, если что-то не так
     } finally {
       setLoadingStatus(false);
     }
@@ -60,22 +60,16 @@ export default function CabinetPage() {
     setUser(WebApp?.initDataUnsafe?.user || null);
     const initData = WebApp?.initData || '';
     if (initData) loadSubscription(initData);
-    else if (DEBUG) loadSubscription(); // режим браузерной проверки
+    else if (DEBUG) loadSubscription(); // режим браузера
   }, []);
-
-  const refresh = () => {
-    try {
-      const initData = (window as any)?.Telegram?.WebApp?.initData || '';
-      if (initData) loadSubscription(initData);
-      else if (DEBUG) loadSubscription();
-    } catch {}
-  }
 
   return (
     <div style={{ padding: 20 }}>
       <h1 style={{ textAlign: 'center' }}>Личный кабинет</h1>
       {user ? (
-        <p style={{ textAlign: 'center' }}>Здравствуйте, <b>{user.first_name}</b></p>
+        <p style={{ textAlign: 'center' }}>
+          Здравствуйте, <b>{user.first_name}</b>
+        </p>
       ) : (
         <p style={{ textAlign: 'center' }}>
           {DEBUG ? 'Браузерный режим (debug).' : 'Данные пользователя недоступны.'}
@@ -83,19 +77,19 @@ export default function CabinetPage() {
       )}
 
       <div style={{ marginTop: 16 }}>
-        <div style={{ margin: '0 auto', maxWidth: 680, padding: 12, border: '1px solid #333', borderRadius: 12 }}>
+        <div style={{
+          margin: '0 auto',
+          maxWidth: 680,
+          padding: 12,
+          border: '1px solid #333',
+          borderRadius: 12
+        }}>
           <h3 style={{ marginTop: 0, textAlign: 'center' }}>Статус подписки</h3>
           <p style={{ textAlign: 'center' }}>
             {loadingStatus ? 'Проверяем подписку…' : statusText}
           </p>
-          {error && <p style={{color:'crimson', textAlign:'center'}}>{error}</p>}
 
           <div style={{ display:'grid', gap:12, marginTop:12 }}>
-            <button className="list-btn" onClick={refresh}
-              style={{border:'1px solid #333', borderRadius:12, padding:'10px 14px'}}>
-              🔄 Обновить статус
-            </button>
-
             <Link href="/pro" className="list-btn" style={{ textDecoration:'none' }}>
               <span className="list-btn__left">
                 <span className="list-btn__emoji">⭐</span>
