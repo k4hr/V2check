@@ -1,14 +1,10 @@
 // app/api/admin/patch/add-username/route.ts
-/* Fix TS build: ensure this file is a proper module and a Next.js route */
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
-// tiny export to make TS happy in strict setups
-export const __mod = true;
 
 const ADMIN_KEY = (process.env.ADMIN_KEY || '').trim();
 
@@ -30,7 +26,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
     }
 
-    // Safe patch: add column if not exists
+    // Разовый безопасный патч: добавляем колонку username, если её нет
     const sql = 'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username" TEXT;';
     const result = await prisma.$executeRawUnsafe(sql);
 
@@ -40,7 +36,5 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// GET для удобного вызова из браузера
 export const GET = POST;
-
-// default empty export is harmless for route files and helps certain TS configs
-export default {};
