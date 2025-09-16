@@ -1,9 +1,8 @@
 'use client';
 import React, { useEffect, useState } from 'react';
 
-// Next.js App Router page — must export default component
-export default function Page(): JSX.Element {
-  const [data, setData] = useState<any>(null);
+export default function Page() {
+  const [data, setData] = useState(null as any);
   const [err, setErr] = useState<string | null>(null);
   const [rawInit, setRawInit] = useState<string>('');
 
