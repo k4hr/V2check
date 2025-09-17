@@ -16,7 +16,6 @@ model User {
   username           String?
   firstName          String?
   lastName           String?
-  photoUrl           String?
   subscriptionUntil  DateTime?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @default(now())
@@ -32,5 +31,6 @@ model Favorite {
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
