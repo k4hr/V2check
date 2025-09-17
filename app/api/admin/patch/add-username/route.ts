@@ -17,26 +17,44 @@ function getAdminKey(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!ADMIN_KEY) {
-      return NextResponse.json({ ok: false, error: 'ADMIN_KEY_MISSING' }, { status: 500 });
-    }
-    const provided = getAdminKey(req);
-    if (provided !== ADMIN_KEY) {
-      return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
-    }
+    if (!ADMIN_KEY) return NextResponse.json({ ok:false, error:'ADMIN_KEY_MISSING' }, { status:500 });
+    if (getAdminKey(req) !== ADMIN_KEY) return NextResponse.json({ ok:false, error:'FORBIDDEN' }, { status:403 });
 
-    // добавляем недостающие колонки, если их нет
     const sql = [
-      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username"  TEXT;',
+      // 1) Колонки согласно schema.prisma
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "username" TEXT;',
       'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "firstName" TEXT;',
       'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "lastName"  TEXT;',
-      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "photoUrl"  TEXT;'
-    ];
-    for (const s of sql) await prisma.$executeRawUnsafe(s);
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "subscriptionUntil" TIMESTAMP;',
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP;',
+      'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP;',
 
-    return NextResponse.json({ ok: true, applied: true, sql });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
+      // 2) Значения по умолчанию и наполнение для старых строк
+      'UPDATE "User" SET "createdAt" = COALESCE("createdAt", now());',
+      'UPDATE "User" SET "updatedAt" = COALESCE("updatedAt", now());',
+      'ALTER TABLE "User" ALTER COLUMN "createdAt" SET DEFAULT now();',
+      'ALTER TABLE "User" ALTER COLUMN "updatedAt" SET DEFAULT now();',
+      'ALTER TABLE "User" ALTER COLUMN "createdAt" SET NOT NULL;',
+      'ALTER TABLE "User" ALTER COLUMN "updatedAt" SET NOT NULL;',
+
+      // 3) Ограничения/индексы (аккуратно, если уже есть — не дублируем)
+      `DO $$ BEGIN
+         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'User_pkey') THEN
+           ALTER TABLE "User" ADD CONSTRAINT "User_pkey" PRIMARY KEY ("id");
+         END IF;
+       END $$;`,
+      `DO $$ BEGIN
+         IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'User_telegramId_key') THEN
+           CREATE UNIQUE INDEX "User_telegramId_key" ON "User"("telegramId");
+         END IF;
+       END $$;`
+    ];
+
+    for (const s of sql) { await prisma.$executeRawUnsafe(s); }
+
+    return NextResponse.json({ ok:true, applied:true });
+  } catch (e:any) {
+    return NextResponse.json({ ok:false, error: e?.message || 'SERVER_ERROR' }, { status:500 });
   }
 }
 
