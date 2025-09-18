@@ -2,15 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-// Если у тебя есть FREE_LIMIT в lib/catalog — используем. Иначе дефолт 2.
-let FREE_LIMIT_FALLBACK = 2;
-try {
-  // @ts-ignore — модуль может отсутствовать в ранних версиях
-  const cat = await import('@/lib/catalog');
-  if (cat?.FREE_LIMIT && typeof cat.FREE_LIMIT === 'number') FREE_LIMIT_FALLBACK = cat.FREE_LIMIT;
-} catch {}
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
+
+// Если в других местах уже есть константа, не страшно — здесь локальный fallback.
+const FREE_LIMIT = 2;
 
 type SubResp = {
   ok: boolean;
@@ -52,7 +48,7 @@ export default function LibraryPage() {
       const active = !!data?.subscription?.active;
       setIsPro(active);
       setExpiresAt(data?.subscription?.expiresAt ?? null);
-    } catch (e: any) {
+    } catch {
       setErr('Не удалось получить статус подписки');
       setIsPro(false);
       setExpiresAt(null);
@@ -70,18 +66,12 @@ export default function LibraryPage() {
       if (initData) loadMe(initData);
       else if (DEBUG) loadMe();
     } catch {
-      // Браузерный режим без TMA
       if (DEBUG) loadMe();
     }
   }, []);
 
-  // Текст шапки: если Pro — показываем подписку. Иначе лимит.
-  let headerText: JSX.Element = (
-    <span>
-      Здравствуйте{userName ? `, ${userName}` : ''}. Сегодня бесплатно: {FREE_LIMIT_FALLBACK}{' '}
-      документ(а). Для безлимита — <Link href="/pro" style={{ textDecoration: 'underline' }}>оформите Pro</Link>.
-    </span>
-  );
+  // Формируем текст шапки
+  let headerText: React.ReactNode;
   if (isPro) {
     const human = (() => {
       if (!expiresAt) return null;
@@ -95,6 +85,13 @@ export default function LibraryPage() {
       <span>
         Здравствуйте{userName ? `, ${userName}` : ''}. У вас оформлена подписка <b>Juristum Pro</b>
         {human ? ` до ${human}` : ''}.
+      </span>
+    );
+  } else {
+    headerText = (
+      <span>
+        Здравствуйте{userName ? `, ${userName}` : ''}. Сегодня бесплатно: {FREE_LIMIT} документ(а). Для безлимита —{' '}
+        <Link href="/pro" style={{ textDecoration: 'underline' }}>оформите Pro</Link>.
       </span>
     );
   }
