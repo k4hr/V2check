@@ -1,90 +1,152 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
-import { CATEGORIES, type Category } from '@/lib/catalog';
+import { useEffect, useState } from 'react';
+// Если у тебя есть FREE_LIMIT в lib/catalog — используем. Иначе дефолт 2.
+let FREE_LIMIT_FALLBACK = 2;
+try {
+  // @ts-ignore — модуль может отсутствовать в ранних версиях
+  const cat = await import('@/lib/catalog');
+  if (cat?.FREE_LIMIT && typeof cat.FREE_LIMIT === 'number') FREE_LIMIT_FALLBACK = cat.FREE_LIMIT;
+} catch {}
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
-function getDebugId(): string | null {
-  try {
-    const u = new URL(window.location.href);
-    const id = u.searchParams.get('id');
-    return id && /^\d{3,15}$/.test(id) ? id : null;
-  } catch { return null; }
-}
+type SubResp = {
+  ok: boolean;
+  user?: { telegramId?: string };
+  subscription?: { active: boolean; expiresAt?: string | null };
+};
 
-async function fetchMe(initData?: string) {
-  let endpoint = '/api/me';
-  const headers: Record<string, string> = {};
-  if (initData) headers['x-init-data'] = initData;
-  else if (DEBUG) {
-    const id = getDebugId();
-    if (id) endpoint = `/api/me?id=${encodeURIComponent(id)}`;
+export default function LibraryPage() {
+  const [userName, setUserName] = useState<string | null>(null);
+  const [isPro, setIsPro] = useState<boolean>(false);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  function getDebugId(): string | null {
+    try {
+      const u = new URL(window.location.href);
+      const id = u.searchParams.get('id');
+      if (id && /^\d{3,15}$/.test(id)) return id;
+      return null;
+    } catch {
+      return null;
+    }
   }
-  const r = await fetch(endpoint, { method: 'POST', headers });
-  return r.json().catch(()=>({ ok:false }));
-}
 
-function todayKey() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `jr.free.v1.${y}-${m}-${day}`;
-}
+  async function loadMe(initData?: string) {
+    setErr(null);
+    try {
+      let endpoint = '/api/me';
+      const headers: Record<string, string> = {};
+      if (initData) headers['x-init-data'] = initData;
+      else if (DEBUG) {
+        const id = getDebugId();
+        if (id) endpoint = `/api/me?id=${encodeURIComponent(id)}`;
+      }
+      const resp = await fetch(endpoint, { method: 'POST', headers });
+      const data: SubResp = await resp.json();
+      if (!resp.ok || !data?.ok) throw new Error(data as any);
 
-function getUsedToday(): string[] {
-  try {
-    const raw = localStorage.getItem(todayKey());
-    const arr = JSON.parse(raw || '[]');
-    return Array.isArray(arr) ? arr : [];
-  } catch { return []; }
-}
-
-export default function LibraryRootPage() {
-  const [pro, setPro] = useState(false);
-  const [hello, setHello] = useState<string | null>(null);
-  const used = useMemo(() => getUsedToday(), []);
-  const left = Math.max(0, 2 - used.length);
+      const active = !!data?.subscription?.active;
+      setIsPro(active);
+      setExpiresAt(data?.subscription?.expiresAt ?? null);
+    } catch (e: any) {
+      setErr('Не удалось получить статус подписки');
+      setIsPro(false);
+      setExpiresAt(null);
+    }
+  }
 
   useEffect(() => {
     try {
-      const tg: any = (window as any)?.Telegram?.WebApp;
-      tg?.ready?.(); tg?.expand?.();
-      setHello(tg?.initDataUnsafe?.user?.first_name || null);
+      const tg: any = (window as any).Telegram?.WebApp;
+      tg?.ready?.();
+      tg?.expand?.();
+      setUserName(tg?.initDataUnsafe?.user?.username || tg?.initDataUnsafe?.user?.first_name || null);
+
       const initData = tg?.initData || '';
-      fetchMe(initData).then((data) => {
-        const active = Boolean(data?.subscription?.active);
-        setPro(active);
-      }).catch(()=>{});
-    } catch {}
+      if (initData) loadMe(initData);
+      else if (DEBUG) loadMe();
+    } catch {
+      // Браузерный режим без TMA
+      if (DEBUG) loadMe();
+    }
   }, []);
 
+  // Текст шапки: если Pro — показываем подписку. Иначе лимит.
+  let headerText: JSX.Element = (
+    <span>
+      Здравствуйте{userName ? `, ${userName}` : ''}. Сегодня бесплатно: {FREE_LIMIT_FALLBACK}{' '}
+      документ(а). Для безлимита — <Link href="/pro" style={{ textDecoration: 'underline' }}>оформите Pro</Link>.
+    </span>
+  );
+  if (isPro) {
+    const human = (() => {
+      if (!expiresAt) return null;
+      const d = new Date(expiresAt);
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${dd}.${mm}.${yyyy}`;
+    })();
+    headerText = (
+      <span>
+        Здравствуйте{userName ? `, ${userName}` : ''}. У вас оформлена подписка <b>Juristum Pro</b>
+        {human ? ` до ${human}` : ''}.
+      </span>
+    );
+  }
+
   return (
-    <main>
-      <div className="safe" style={{ maxWidth: 680, margin: '0 auto', padding: 20 }}>
-        <h1 style={{ textAlign: 'center' }}>Каталог</h1>
+    <main style={{ padding: 20 }}>
+      <h1 style={{ textAlign: 'center' }}>Каталог</h1>
+      <p style={{ opacity: 0.8, textAlign: 'center', maxWidth: 700, margin: '0 auto' }}>
+        {headerText}
+      </p>
+      {err && <p style={{ color: 'crimson', textAlign: 'center' }}>{err}</p>}
 
-        <p style={{ opacity: .7, textAlign: 'center', marginTop: -4 }}>
-          {hello ? <>Здравствуйте, <b>{hello}</b>.</> : null} Сегодня бесплатно: <b>{left}</b> документ(а).
-          {' '}Для безлимита — <Link href="/pro" style={{ textDecoration: 'underline' }}>оформите Pro</Link>.
-        </p>
+      <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
+        <Link href="/library/constitution" className="list-btn" prefetch={false} style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">🧻</span>
+            <b>Конституция РФ</b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
 
-        <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-          {CATEGORIES.map((c: Category) => (
-            <Link key={c.slug} href={`/library/${c.slug}`} className="list-btn" style={{
-              textDecoration: 'none', border: '1px solid #333', borderRadius: 12, padding: '12px 16px',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-            }}>
-              <span className="list-btn__left" style={{ display:'flex', gap:10, alignItems:'center' }}>
-                <span className="list-btn__emoji" aria-hidden="true">{c.emoji}</span>
-                <b>{c.title}</b>
-              </span>
-              <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-            </Link>
-          ))}
-        </div>
+        <Link href="/library/codes" className="list-btn" prefetch={false} style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">⚖️</span>
+            <b>Кодексы РФ</b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+
+        <Link href="/library/charters" className="list-btn" prefetch={false} style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">📘</span>
+            <b>Уставы</b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+
+        <Link href="/library/pdd" className="list-btn" prefetch={false} style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">🚗</span>
+            <b>ПДД</b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+
+        <Link href="/library/federal-laws" className="list-btn" prefetch={false} style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">🏛️</span>
+            <b>Федеральные законы</b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
       </div>
     </main>
   );
