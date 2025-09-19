@@ -9,7 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 FROM base AS deps
 COPY package.json ./
 COPY package-lock.json* ./
-# Если есть lock — используем ci; иначе install
 RUN if [ -f package-lock.json ]; then \
       npm ci --no-audit --no-fund --ignore-scripts ; \
     else \
@@ -20,10 +19,12 @@ RUN if [ -f package-lock.json ]; then \
 FROM base AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
-# Копируем исходники (в т.ч. prisma/)
 COPY . .
 
-# === DIAG Prisma: показать схему, убрать BOM, валидировать, сгенерить
+# ВАЖНО: фиктивный DATABASE_URL только для валидации/генерации Prisma
+ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
+
+# Диагностика Prisma: показать схему, убрать BOM, validate+generate
 RUN set -eux; \
   echo "== Prisma files =="; \
   ls -la prisma || true; \
@@ -41,10 +42,10 @@ ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 
-# Безопасный user
+# Некорневой пользователь
 RUN useradd -m -u 1001 nodeuser
 
-# Только то, что нужно для рантайма
+# Рантайм-артефакты
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
