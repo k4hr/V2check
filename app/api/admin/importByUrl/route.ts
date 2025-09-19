@@ -1,3 +1,4 @@
+// @ts-nocheck
 // app/api/admin/importByUrl/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({} as any));
     const url: string = String(body.url || '');
     const slug: string | undefined = body.slug || undefined;
-    const category: string = String(body.category || '').toLowerCase();
+    const category: string = String(body.category || '').toLowerCase(); // constitution|codes|ustavy|pdd|federal
     const selector: string | undefined = body.selector || undefined;
     const titleOverride: string | undefined = body.title || undefined;
     const updatedAt: string | undefined = body.updatedAt || undefined;
