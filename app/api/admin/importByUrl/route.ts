@@ -7,21 +7,20 @@ export const dynamic = 'force-dynamic';
 
 const ADMIN_SECRET = (process.env.ADMIN_SECRET || '').trim();
 
-// --- опционально: ограничить домены-источники
+// Белый список доменов-источников
 const ALLOW = new Set<string>([
   'pravo.gov.ru',
   'publication.pravo.gov.ru',
-  'www.consultant.ru',  
-  'kremlin.ru',// можно убрать, если не хочешь
+  'kremlin.ru',
+  'www.consultant.ru',
   'base.garant.ru',
   'rg.ru',
 ]);
 
-// Ленивая загрузка библиотек, чтобы не утяжелять старт
 async function extractHtml(url: string, selector?: string) {
+  // ЛЕНИВЫЕ импорты — пакеты нужны только на сервере
   const { JSDOM } = await import('jsdom');
   const sanitizeHtml = (await import('sanitize-html')).default;
-  // Readability пригодится, если нет селектора
   const { Readability } = await import('@mozilla/readability');
 
   const res = await fetch(url, { redirect: 'follow' });
@@ -37,22 +36,20 @@ async function extractHtml(url: string, selector?: string) {
     if (!el) throw new Error(`selector not found: ${selector}`);
     raw = el.innerHTML;
   } else {
-    // пробуем Readability
     const reader = new Readability(doc);
     const art = reader.parse();
     raw = art?.content || doc.body.innerHTML;
   }
 
-  // Санитизация: разрешим базовую разметку
   const clean = sanitizeHtml(raw, {
-    allowedTags: sanitizeHtml.defaults.allowedTags.concat(['h1','h2','h3','table','thead','tbody','tr','td','th','sup','sub']),
+    allowedTags: sanitizeHtml.defaults.allowedTags.concat([
+      'h1','h2','h3','table','thead','tbody','tr','td','th','sup','sub'
+    ]),
     allowedAttributes: { '*': ['id','class','href','name','colspan','rowspan'] },
     allowedSchemes: ['http','https','mailto'],
   });
 
-  // Заголовок
-  const title =
-    (doc.querySelector('h1')?.textContent || doc.title || '').trim() || 'Без названия';
+  const title = (doc.querySelector('h1')?.textContent || doc.title || '').trim() || 'Без названия';
 
   return { contentHtml: clean, detectedTitle: title };
 }
@@ -66,14 +63,13 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({} as any));
     const url: string = String(body.url || '');
     const slug: string | undefined = body.slug || undefined;
-    const category: string = String(body.category || '').toLowerCase(); // constitution|codes|ustavy|pdd|federal
+    const category: string = String(body.category || '').toLowerCase();
     const selector: string | undefined = body.selector || undefined;
     const titleOverride: string | undefined = body.title || undefined;
     const updatedAt: string | undefined = body.updatedAt || undefined;
 
     if (!url || !category) return NextResponse.json({ ok:false, error:'url_and_category_required' }, { status:400 });
 
-    // Проверка домена
     try {
       const u = new URL(url);
       if (ALLOW.size && !ALLOW.has(u.hostname)) {
@@ -85,12 +81,14 @@ export async function POST(req: NextRequest) {
 
     const { contentHtml, detectedTitle } = await extractHtml(url, selector);
     const title = (titleOverride || detectedTitle).trim();
-    const safeSlug = (slug || (title.toLowerCase()
-      .replace(/[^\p{Letter}\p{Number}]+/gu,'-')
-      .replace(/^-+|-+$/g,'')
-      .slice(0,80))) || `doc-${Date.now()}`;
+    const safeSlug =
+      (slug ||
+        (title
+          .toLowerCase()
+          .replace(/[^\p{Letter}\p{Number}]+/gu, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 80))) || `doc-${Date.now()}`;
 
-    // upsert Doc
     const doc = await prisma.doc.upsert({
       where: { slug: safeSlug },
       create: {
@@ -108,13 +106,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // новая версия
     const ver = await prisma.docVersion.create({
       data: { docId: doc.id, contentHtml },
     });
 
     return NextResponse.json({ ok:true, docId: doc.id, slug: doc.slug, versionId: ver.id });
-  } catch (e:any) {
+  } catch (e: any) {
     return NextResponse.json({ ok:false, error: e?.message || 'SERVER_ERROR' }, { status:500 });
   }
 }
