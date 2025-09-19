@@ -1,7 +1,6 @@
 // prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
-  // Для Debian (node:20-slim) с OpenSSL 3
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -11,15 +10,15 @@ datasource db {
 }
 
 model User {
-  id                 String     @id @default(cuid())
-  telegramId         String     @unique
-  username           String?
-  firstName          String?
-  lastName           String?
-  subscriptionUntil  DateTime?
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @default(now())
-  favorites          Favorite[]
+  id                String     @id @default(cuid())
+  telegramId        String     @unique
+  username          String?
+  firstName         String?
+  lastName          String?
+  subscriptionUntil DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @default(now())
+  favorites         Favorite[]
 }
 
 model Favorite {
@@ -33,4 +32,26 @@ model Favorite {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/* ---- НОВОЕ: документы библиотеки ---- */
+model Doc {
+  id        String        @id @default(cuid())
+  slug      String        @unique
+  title     String
+  category  String        // "constitution" | "codes" | "ustavy" | "pdd" | "federal" и т.п.
+  sourceUrl String?
+  updatedAt DateTime      @default(now())
+  createdAt DateTime      @default(now())
+  versions  DocVersion[]
+}
+
+model DocVersion {
+  id          String   @id @default(cuid())
+  docId       String
+  contentHtml String   // очищенный HTML, который рендерим внутри приложения
+  createdAt   DateTime @default(now())
+  doc         Doc      @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@index([docId])
 }
