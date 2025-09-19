@@ -26,19 +26,26 @@ export async function POST(req: NextRequest) {
 
     const doc = await prisma.doc.upsert({
       where: { slug },
-      create: { slug, title, category, sourceUrl: sourceUrl || null, updatedAt: updatedAt ? new Date(updatedAt) : new Date() },
-      update: { title, category, sourceUrl: sourceUrl || null, updatedAt: updatedAt ? new Date(updatedAt) : new Date() }
+      create: {
+        slug, title, category,
+        sourceUrl: sourceUrl || null,
+        updatedAt: updatedAt ? new Date(updatedAt) : new Date()
+      },
+      update: {
+        title, category,
+        sourceUrl: sourceUrl || null,
+        updatedAt: updatedAt ? new Date(updatedAt) : new Date()
+      }
     });
 
     await prisma.docVersion.create({
       data: {
         docId: doc.id,
         contentHtml: String(contentHtml),
-        createdAt: new Date()
       }
     });
 
-    return NextResponse.json({ ok:true, id:doc.id });
+    return NextResponse.json({ ok:true, id: doc.id });
   } catch (e:any) {
     return NextResponse.json({ ok:false, error:e?.message || 'SERVER_ERROR' }, { status:500 });
   }
