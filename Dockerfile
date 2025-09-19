@@ -9,11 +9,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 FROM base AS deps
 COPY package.json ./
 COPY package-lock.json* ./
+# Основные зависимости проекта
 RUN if [ -f package-lock.json ]; then \
       npm ci --no-audit --no-fund --ignore-scripts ; \
     else \
       npm install --no-audit --no-fund --ignore-scripts ; \
     fi
+# ДОСТАВЛЯЕМ либы для importByUrl (в образ; репо править не нужно)
+RUN npm install --no-audit --no-fund jsdom sanitize-html @mozilla/readability
 
 # ---------- builder ----------
 FROM base AS builder
@@ -21,10 +24,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# ВАЖНО: фиктивный DATABASE_URL только для валидации/генерации Prisma
+# Фиктивный DATABASE_URL только для prisma validate/generate (в рантайме перекроется настоящим)
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
 
-# Диагностика Prisma: показать схему, убрать BOM, validate+generate
+# Диагностика Prisma
 RUN set -eux; \
   echo "== Prisma files =="; \
   ls -la prisma || true; \
@@ -33,7 +36,7 @@ RUN set -eux; \
   npx prisma validate --schema=prisma/schema.prisma; \
   npx prisma generate --schema=prisma/schema.prisma
 
-# Сборка Next
+# Сборка Next.js
 RUN npm run build
 
 # ---------- runner ----------
