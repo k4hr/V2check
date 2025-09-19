@@ -9,6 +9,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- Users ---
 model User {
   id                String     @id @default(cuid())
   telegramId        String     @unique
@@ -21,6 +22,7 @@ model User {
   favorites         Favorite[]
 }
 
+// --- Favorites ---
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
@@ -34,12 +36,12 @@ model Favorite {
   @@index([userId])
 }
 
-/* ---- НОВОЕ: документы библиотеки ---- */
+// --- Library docs (new) ---
 model Doc {
   id        String        @id @default(cuid())
   slug      String        @unique
   title     String
-  category  String        // "constitution" | "codes" | "ustavy" | "pdd" | "federal" и т.п.
+  category  String        // "constitution" | "codes" | "ustavy" | "pdd" | "federal"
   sourceUrl String?
   updatedAt DateTime      @default(now())
   createdAt DateTime      @default(now())
@@ -49,7 +51,7 @@ model Doc {
 model DocVersion {
   id          String   @id @default(cuid())
   docId       String
-  contentHtml String   // очищенный HTML, который рендерим внутри приложения
+  contentHtml String
   createdAt   DateTime @default(now())
   doc         Doc      @relation(fields: [docId], references: [id], onDelete: Cascade)
 
