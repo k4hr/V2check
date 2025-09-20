@@ -10,7 +10,7 @@ const ROOT_TOPICS = [
   { key: 'labor', label: 'Трудовые вопросы' },
   { key: 'housing', label: 'Жильё и недвижимость' },
   { key: 'consumer', label: 'Права потребителей' },
-  { key: 'family', label: 'Семейные и алименты' },
+  { key: 'family', label: 'Семейные вопросы' },
   { key: 'traffic', label: 'Штрафы и ДТП' },
   { key: 'other', label: 'Другое' },
 ] as const;
@@ -51,18 +51,30 @@ export default function AssistantPage() {
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // Получение статуса подписки
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`/api/me${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, { cache: 'no-store' });
-        const data = await res.json();
-        setIsPro(Boolean(data?.subscription?.active));
-      } catch {
-        setIsPro(false);
-      }
-    })();
-  }, [tgId]);
+useEffect(() => {
+  (async () => {
+    try {
+      const w: any = window;
+      const initData: string | undefined = w?.Telegram?.WebApp?.initData;
+
+      const res = await fetch(`/api/me${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
+        method: 'POST',
+        // ВАЖНО: отдаём initData, чтобы /api/me смог проверить HMAC
+        headers: {
+          'Content-Type': 'application/json',
+          ...(initData ? { 'x-init-data': initData } : {}),
+        },
+        cache: 'no-store',
+      });
+
+      const data = await res.json();
+      // если всё ок — отмечаем Pro
+      setIsPro(Boolean(data?.subscription?.active));
+    } catch {
+      setIsPro(false);
+    }
+  })();
+}, [tgId]);
 
   // Автоскролл чата
   useEffect(() => {
