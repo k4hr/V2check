@@ -10,6 +10,7 @@ type MeResp = {
   subscription?: { active: boolean; expiresAt?: string | null };
 };
 
+// ✅ FIX: добавлен 'chat' в union
 type Phase = 'root' | 'sub' | 'followups' | 'freeinput' | 'chat';
 
 export default function AssistantPage() {
@@ -172,6 +173,8 @@ export default function AssistantPage() {
   }
 
   // ====== Render ======
+  const IN_CHAT = phase === 'chat';
+
   const content = (() => {
     // 1) Корень: выбираем категорию
     if (phase === 'root') {
@@ -366,10 +369,10 @@ export default function AssistantPage() {
         </div>
 
         {/* Нижняя панель показывается только в режимах, где нужен инпут */}
-        {(phase === 'chat') ? null : (
+        {IN_CHAT ? null : (
           <div style={{ padding: 12, borderTop: '1px solid var(--border)' }}>
             {/* Доп.кнопка Pro — только если нет подписки и мы ещё не в чате */}
-            {!isPro && phase !== 'chat' && (
+            {!isPro && !IN_CHAT && (
               <div style={{ display: 'grid', gap: 8 }}>
                 <Link href="/pro" className="list-btn" style={{ textDecoration: 'none' }}>
                   <span className="list-btn__left">
