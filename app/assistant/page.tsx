@@ -67,7 +67,7 @@ export default function AssistantPage() {
 
   return (
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center' }}>Юридический ассистент (AI)</h1>
+      <h1 style={{ textAlign: 'center' }}>Юридический ассистент</h1>
 
       <div style={{
         marginTop: 16,
