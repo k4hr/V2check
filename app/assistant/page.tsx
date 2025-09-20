@@ -2,16 +2,32 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+/** Сообщение чата */
 type Msg = { role: 'user' | 'assistant'; content: string };
+/** Фазы навигации */
 type Phase = 'root' | 'sub' | 'chat';
 
+/** Элемент уточняющего вопроса */
+type QItem = {
+  text: string;                         // Текст вопроса
+  mode?: 'input' | 'choice';            // По умолчанию 'input'
+  options?: string[];                   // Варианты для выбора, если mode === 'choice'
+};
+
 const ROOT_TOPICS = [
-  { key: 'labor',    label: 'Трудовые вопросы' },
-  { key: 'housing',  label: 'Жильё и недвижимость' },
-  { key: 'consumer', label: 'Права потребителей' },
-  { key: 'family',   label: 'Семейные вопросы' },
-  { key: 'traffic',  label: 'Штрафы и ДТП' },
-  { key: 'other',    label: 'Другое' },
+  { key: 'labor',       label: 'Трудовые споры' },
+  { key: 'housing',     label: 'Жилищные правоотношения' },
+  { key: 'consumer',    label: 'Защита прав потребителей' },
+  { key: 'family',      label: 'Семейные правоотношения' },
+  { key: 'traffic',     label: 'Дорожно-транспортные споры' },
+  { key: 'inheritance', label: 'Наследственные дела' },
+  { key: 'land',        label: 'Земельные и имущественные споры' },
+  { key: 'debt',        label: 'Договоры и взыскание задолженности' },
+  { key: 'banking',     label: 'Банковские и кредитные споры' },
+  { key: 'exec',        label: 'Исполнительное производство (ФССП)' },
+  { key: 'admin',       label: 'Административные правонарушения' },
+  { key: 'taxes',       label: 'Налоговые вопросы' },
+  { key: 'other',       label: 'Другое' },
 ] as const;
 
 const COMPACT_BTN_STYLE: React.CSSProperties = {
@@ -25,38 +41,515 @@ const COMPACT_BTN_STYLE: React.CSSProperties = {
   color: 'inherit',
 };
 
+/** Подкатегории */
+const SUB_TOPICS: Record<string, { key: string; label: string }[]> = {
+  labor: [
+    { key: 'dismissal',  label: 'Увольнение/сокращение' },
+    { key: 'salary',     label: 'Задержка/невыплата зарплаты' },
+    { key: 'contract',   label: 'Трудовой договор/условия' },
+    { key: 'vacation',   label: 'Отпуск/больничный' },
+    { key: 'discipline', label: 'Дисциплинарное взыскание' },
+    { key: 'overtime',   label: 'Сверхурочная/ночная работа' },
+    { key: 'safety',     label: 'Охрана труда/несчастный случай' },
+    { key: 'transfer',   label: 'Перевод/изменение условий труда' },
+    { key: 'other',      label: 'Другое' },
+  ],
+  housing: [
+    { key: 'rent',        label: 'Наём/аренда жилья' },
+    { key: 'purchase',    label: 'Купля-продажа, ДКП' },
+    { key: 'registration',label: 'Регистрация/выселение' },
+    { key: 'neighbors',   label: 'Соседи/шум/затопление' },
+    { key: 'utilities',   label: 'Коммунальные услуги, УК/ТСЖ' },
+    { key: 'construction',label: 'ДДУ/застройщик/новостройка' },
+    { key: 'hoa',         label: 'ТСЖ/собрания/домовое имущество' },
+    { key: 'other',       label: 'Другое' },
+  ],
+  consumer: [
+    { key: 'return',   label: 'Возврат/обмен товара' },
+    { key: 'service',  label: 'Ненадлежащая услуга' },
+    { key: 'online',   label: 'Онлайн-покупка/маркетплейсы' },
+    { key: 'warranty', label: 'Гарантия/ремонт/неустойка' },
+    { key: 'digital',  label: 'Цифровые товары/подписки' },
+    { key: 'travel',   label: 'Туристические услуги' },
+    { key: 'other',    label: 'Другое' },
+  ],
+  family: [
+    { key: 'divorce',   label: 'Расторжение брака' },
+    { key: 'alimony',   label: 'Алименты' },
+    { key: 'children',  label: 'Опека/общение/место жительства' },
+    { key: 'property',  label: 'Раздел имущества' },
+    { key: 'paternity', label: 'Отцовство' },
+    { key: 'guardianship', label: 'Опека/попечительство' },
+    { key: 'other',     label: 'Другое' },
+  ],
+  traffic: [
+    { key: 'fine',       label: 'Штраф/постановление' },
+    { key: 'accident',   label: 'ДТП/возмещение вреда' },
+    { key: 'rights',     label: 'Лишение права управления' },
+    { key: 'osago',      label: 'ОСАГО/КАСКО/выплаты' },
+    { key: 'carDeal',    label: 'Купля-продажа авто/автосалоны' },
+    { key: 'parking',    label: 'Эвакуация/парковка' },
+    { key: 'other',      label: 'Другое' },
+  ],
+  inheritance: [
+    { key: 'acceptance', label: 'Принятие наследства/сроки' },
+    { key: 'will',       label: 'Завещание/оспаривание' },
+    { key: 'share',      label: 'Обязательная/супружеская доля' },
+    { key: 'division',   label: 'Споры между наследниками' },
+    { key: 'other',      label: 'Другое' },
+  ],
+  land: [
+    { key: 'boundaries', label: 'Межевание/границы/самозахват' },
+    { key: 'cadastral',  label: 'Кадастровая стоимость/ошибки' },
+    { key: 'easement',   label: 'Сервитут/проезд/проход' },
+    { key: 'permits',    label: 'Самовольная постройка/узаконение' },
+    { key: 'other',      label: 'Другое' },
+  ],
+  debt: [
+    { key: 'loan',          label: 'Займ/расписка/долг' },
+    { key: 'contractBreach',label: 'Нарушение договора/неустойка' },
+    { key: 'pretrial',      label: 'Претензия/досудебный порядок' },
+    { key: 'writ',          label: 'Судебный приказ/исковое' },
+    { key: 'cession',       label: 'Уступка права требования' },
+    { key: 'other',         label: 'Другое' },
+  ],
+  banking: [
+    { key: 'credit',       label: 'Кредитный договор' },
+    { key: 'collectors',   label: 'Коллекторы/взыскание' },
+    { key: 'fraud',        label: 'Мошеннические списания/чарджбэк' },
+    { key: 'insurance',    label: 'Навязанная страховка' },
+    { key: 'creditHistory',label: 'Кредитная история/БКИ' },
+    { key: 'other',        label: 'Другое' },
+  ],
+  exec: [
+    { key: 'bailiffs',   label: 'Действия приставов/жалобы' },
+    { key: 'arrest',     label: 'Арест счетов/имущества' },
+    { key: 'installment',label: 'Отсрочка/рассрочка' },
+    { key: 'termination',label: 'Окончание/возврат ИЛ' },
+    { key: 'other',      label: 'Другое' },
+  ],
+  admin: [
+    { key: 'protocol',   label: 'Протокол по КоАП/защита' },
+    { key: 'appeal',     label: 'Обжалование постановления' },
+    { key: 'inspection', label: 'Проверки госорганов' },
+    { key: 'other',      label: 'Другое' },
+  ],
+  taxes: [
+    { key: 'deductions',  label: 'Налоговые вычеты/3-НДФЛ' },
+    { key: 'selfEmp',     label: 'Самозанятые/НПД' },
+    { key: 'ip',          label: 'ИП/режимы налогообложения' },
+    { key: 'claims',      label: 'Требования/штрафы ФНС' },
+    { key: 'propertyTax', label: 'Имущественные налоги/льготы' },
+    { key: 'other',       label: 'Другое' },
+  ],
+  other: [{ key: 'other', label: 'Другое' }],
+};
+
+/** Уточняющие вопросы: где можно — делаем mode:'choice' с вариантами */
+const RAW_FOLLOWUPS: Record<string, Record<string, (string | QItem)[]>> = {
+  labor: {
+    dismissal: [
+      { text: 'Кем инициировано увольнение?', mode: 'choice', options: ['Работник', 'Работодатель'] },
+      { text: 'Имеется приказ/уведомление под подпись?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Соблюдены ли основания (статья ТК РФ)?', mode: 'choice', options: ['Да', 'Нет/сомневаюсь'] },
+      'Дата события?',
+    ],
+    salary: [
+      'Период и размер задолженности?',
+      { text: 'Есть трудовой договор?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Выплаты производятся частично?', mode: 'choice', options: ['Полностью не платят', 'Частично платят'] },
+      { text: 'Писали претензию/обращались в ГИТ?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    contract: [
+      { text: 'Договор подписан?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Вид договора?', mode: 'choice', options: ['Бессрочный', 'Срочный', 'ГПХ/аутстафф'] },
+      'Какие условия нарушены (оклад, функция, режим)?',
+    ],
+    vacation: [
+      { text: 'Тип отпуска/отсутствия?', mode: 'choice', options: ['Ежегодный', 'Без содержания', 'Больничный'] },
+      { text: 'Проблема?', mode: 'choice', options: ['Не предоставили', 'Не оплатили', 'Задержка оплаты'] },
+      'Какие документы оформлялись?',
+    ],
+    discipline: [
+      { text: 'Вид взыскания?', mode: 'choice', options: ['Замечание', 'Выговор', 'Увольнение'] },
+      { text: 'Брали объяснение и издали приказ?', mode: 'choice', options: ['Да', 'Нет/затрудняюсь'] },
+      'Есть доказательства проступка?',
+    ],
+    overtime: [
+      { text: 'Что именно?', mode: 'choice', options: ['Сверхурочная', 'Ночная', 'Выходной/праздник'] },
+      { text: 'Есть приказы/табели учета?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Оплата/отгулы предоставлялись?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    safety: [
+      { text: 'Случай признан производственным (акт Н-1)?', mode: 'choice', options: ['Да', 'Нет/не знаю'] },
+      'Имеются меддокументы/расследование?',
+      'Предъявлялись требования к работодателю/ФСС?',
+    ],
+    transfer: [
+      { text: 'Что изменили?', mode: 'choice', options: ['Функция', 'Место работы', 'Оплата труда', 'График'] },
+      { text: 'Есть ваше письменное согласие?', mode: 'choice', options: ['Да', 'Нет'] },
+      'Дата и основание перевода/изменения?',
+    ],
+    other: ['Опишите ситуацию кратко.'],
+  },
+
+  housing: {
+    rent: [
+      { text: 'Статус?', mode: 'choice', options: ['Наймодатель', 'Наниматель'] },
+      { text: 'Есть письменный договор и акт приёма-передачи?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Суть спора?', mode: 'choice', options: ['Долг', 'Выселение', 'Порча имущества', 'Депозит', 'Иное'] },
+    ],
+    purchase: [
+      { text: 'Тип сделки?', mode: 'choice', options: ['ДКП', 'Ипотека', 'Уступка', 'Новостройка (ДДУ)'] },
+      { text: 'Документы в наличии?', mode: 'choice', options: ['ДКП/Расписка', 'Ипотечный договор', 'Не всё/сомневаюсь'] },
+      { text: 'Нарушение?', mode: 'choice', options: ['Срыв сроков', 'Недостатки', 'Не выдают ПС/ключи', 'Иное'] },
+    ],
+    registration: [
+      { text: 'Действие?', mode: 'choice', options: ['Регистрация', 'Снятие с учёта'] },
+      'Кто собственник и есть ли согласие?',
+      'Были ли отказы ранее?',
+    ],
+    neighbors: [
+      { text: 'Характер проблемы?', mode: 'choice', options: ['Шум', 'Затопление', 'Запах', 'Угрозы/конфликт'] },
+      { text: 'Фиксация обращений в УК/полицию?', mode: 'choice', options: ['Есть', 'Нет'] },
+      'Есть ущерб имуществу/здоровью?',
+    ],
+    utilities: [
+      { text: 'Что нарушено?', mode: 'choice', options: ['Перебои', 'Качество', 'Тарифы/начисления'] },
+      { text: 'Акты/претензии есть?', mode: 'choice', options: ['Да', 'Нет'] },
+      'Период проблемы и суммы?',
+    ],
+    construction: [
+      { text: 'Договор и стадия?', mode: 'choice', options: ['ДДУ', 'ЖСК/ПЖСК', 'Ключи/сдача'] },
+      { text: 'Нарушение?', mode: 'choice', options: ['Срок', 'Качество', 'Неустойка/штраф'] },
+      'Экспертиза/расчёт неустойки делались?',
+    ],
+    hoa: [
+      { text: 'Сфера?', mode: 'choice', options: ['Общее собрание', 'Начисления', 'Домовое имущество'] },
+      'Есть протокол/реестр/уведомления?',
+      'В чём нарушение процедуры/содержания?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  consumer: {
+    return: [
+      'Дата покупки и стоимость?',
+      { text: 'Существенный недостаток?', mode: 'choice', options: ['Да', 'Нет/не уверен'] },
+      { text: 'Чек/документы сохранены?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Претензия уже направлена?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    service: [
+      { text: 'Тип услуги?', mode: 'choice', options: ['Ремонт', 'Связь', 'Образование', 'Иное'] },
+      'Есть договор/акт/переписка, в чём нарушение?',
+      { text: 'Требование к исполнителю?', mode: 'choice', options: ['Устранить', 'Вернуть деньги', 'Неустойка/штраф'] },
+    ],
+    online: [
+      { text: 'Площадка?', mode: 'choice', options: ['Ozon', 'WB', 'Y.Market', 'Иное'] },
+      { text: 'Статус проблемы?', mode: 'choice', options: ['Не доставили', 'Не тот товар', 'Брак', 'Отказ в возврате'] },
+      'Есть переписка/ответ поддержки?',
+    ],
+    warranty: [
+      'Срок эксплуатации и характер поломки?',
+      { text: 'Результат диагностики/ответ СЦ?', mode: 'choice', options: ['Отказ', 'Приняли', 'Нет ответа'] },
+      { text: 'Требование?', mode: 'choice', options: ['Ремонт', 'Замена', 'Возврат денег', 'Неустойка'] },
+    ],
+    digital: [
+      { text: 'Тип цифрового товара?', mode: 'choice', options: ['Подписка', 'ПО/лицензия', 'Игра/контент'] },
+      { text: 'Нарушение?', mode: 'choice', options: ['Автосписание', 'Нет доступа', 'Некачественный сервис'] },
+      'Есть оферта/переписка с поддержкой?',
+    ],
+    travel: [
+      { text: 'Проблема?', mode: 'choice', options: ['Отмена', 'Перенос', 'Некачественная услуга'] },
+      'Даты/стоимость и документы?',
+      { text: 'Требование заявлялось?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  family: {
+    divorce: [
+      { text: 'Есть несовершеннолетние дети?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Согласие сторон на развод?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Споры по имуществу/алименты будут?', mode: 'choice', options: ['Да', 'Нет/пока неизвестно'] },
+    ],
+    alimony: [
+      { text: 'Есть решение/соглашение?', mode: 'choice', options: ['Судебное', 'Нотариальное', 'Нет'] },
+      'Размер (доля/сумма) и задолженность?',
+      { text: 'ФССП ведёт производство?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    children: [
+      { text: 'Предмет спора?', mode: 'choice', options: ['Место жительства', 'Порядок общения', 'Опека'] },
+      { text: 'Идёт суд/есть заключение ООП?', mode: 'choice', options: ['Да', 'Нет'] },
+      'Есть характеристики/мед.справки/иные доказательства?',
+    ],
+    property: [
+      'Состав совместного имущества и даты приобретения?',
+      { text: 'Есть брачный договор?', mode: 'choice', options: ['Да', 'Нет'] },
+      'Ипотека/кредиты/оценка — уточните.',
+    ],
+    paternity: [
+      { text: 'Вопрос?', mode: 'choice', options: ['Установление', 'Оспаривание'] },
+      { text: 'ДНК-исследование?', mode: 'choice', options: ['Планируется', 'Проводилось', 'Нет/затрудняюсь'] },
+      'Запись об отце в акте есть/нет?',
+    ],
+    guardianship: [
+      { text: 'Форма?', mode: 'choice', options: ['Опека', 'Попечительство'] },
+      { text: 'Заключение ООП?', mode: 'choice', options: ['Есть', 'Нет'] },
+      'Есть возражения родственников?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  traffic: {
+    fine: [
+      'Статья/дата постановления?',
+      { text: 'Срок обжалования не истёк?', mode: 'choice', options: ['Да', 'Нет/сомневаюсь'] },
+      { text: 'Доказательства есть?', mode: 'choice', options: ['Видео/фото', 'Свидетели', 'Нет'] },
+    ],
+    accident: [
+      { text: 'Кто признан виновным?', mode: 'choice', options: ['Я', 'Вторая сторона', 'Не определено'] },
+      { text: 'ОСАГО у сторон?', mode: 'choice', options: ['У всех', 'У кого-то нет', 'Не знаю'] },
+      'Размер ущерба/экспертиза?',
+    ],
+    rights: [
+      'Статья лишения и дата протокола?',
+      { text: 'Дело уже в суде?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Есть процессуальные нарушения?', mode: 'choice', options: ['Есть', 'Нет/не уверен'] },
+    ],
+    osago: [
+      { text: 'Проблема?', mode: 'choice', options: ['Отказ', 'Занижение', 'Затягивание'] },
+      'Номер дела/выплаты и расчёты/экспертизы?',
+      { text: 'Претензия направлена?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    carDeal: [
+      { text: 'Тип сделки?', mode: 'choice', options: ['ДКП', 'Трейд-ин', 'Кредит', 'Гарантия'] },
+      { text: 'Недостатки/дефекты/ПТС?', mode: 'choice', options: ['Есть', 'Нет/не знаю'] },
+      'Заявлялось требование продавцу? Ответ?',
+    ],
+    parking: [
+      { text: 'Ситуация?', mode: 'choice', options: ['Эвакуация', 'Штраф', 'Повреждение'] },
+      { text: 'Документы/фото есть?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Сроки обжалования не пропущены?', mode: 'choice', options: ['Да', 'Нет/не уверен'] },
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  inheritance: {
+    acceptance: [
+      'Дата открытия наследства?',
+      { text: 'Срок (6 мес.) пропущен?', mode: 'choice', options: ['Да', 'Нет', 'Частично/сомневаюсь'] },
+      'Состав наследства и наследники?',
+    ],
+    will: [
+      { text: 'Документ?', mode: 'choice', options: ['Завещание', 'Совместное завещание', 'Наследственный договор'] },
+      { text: 'Основание оспаривания?', mode: 'choice', options: ['Недееспособность', 'Давление', 'Формальные нарушения', 'Иное'] },
+      'Какие доказательства имеются?',
+    ],
+    share: [
+      { text: 'Кто претендует?', mode: 'choice', options: ['Нетрудоспособный', 'Супруг(а)', 'Иное лицо'] },
+      'Состав и режим имущества?',
+      'Споры о фактическом принятии?',
+    ],
+    division: [
+      'Объекты и стоимость?',
+      'Позиции наследников/были договорённости?',
+      'Проводилась оценка/опись?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  land: {
+    boundaries: [
+      { text: 'Предмет?', mode: 'choice', options: ['Межа', 'Площадь', 'Самозахват'] },
+      { text: 'Документы?', mode: 'choice', options: ['Межевой план', 'ЕГРН', 'Акты согласования', 'Нет'] },
+      'Была кадастровая съёмка/экспертиза?',
+    ],
+    cadastral: [
+      { text: 'Спор о чём?', mode: 'choice', options: ['Ошибка', 'Величина стоимости'] },
+      'Дата определения/отчёт оценщика?',
+      { text: 'Обращались в комиссию при Росреестре?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    easement: [
+      { text: 'Нужен проход/проезд/коммуникации?', mode: 'choice', options: ['Проход', 'Проезд', 'Коммуникации'] },
+      { text: 'Отказ собственника?', mode: 'choice', options: ['Есть', 'Нет/не обращались'] },
+      'Были переговоры/оценка платы?',
+    ],
+    permits: [
+      { text: 'Объект?', mode: 'choice', options: ['Самострой', 'Реконструкция', 'Иное'] },
+      { text: 'Разрешение/уведомление?', mode: 'choice', options: ['Есть', 'Нет'] },
+      'Что хотите: узаконить/снести/узаконить реконструкцию?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  debt: {
+    loan: [
+      { text: 'Документ?', mode: 'choice', options: ['Расписка', 'Договор займа', 'Нет'] },
+      'Сумма и дата возврата?',
+      { text: 'Были платежи/переписка?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    contractBreach: [
+      { text: 'Тип договора?', mode: 'choice', options: ['Подряд', 'Поставка', 'Услуги', 'Аренда', 'Иное'] },
+      'В чём нарушение и доказательства?',
+      'Претензия направлена? Срок исполнения?',
+    ],
+    pretrial: [
+      { text: 'Претензия направлена?', mode: 'choice', options: ['Да', 'Нет'] },
+      'Какие требования и расчёт суммы?',
+      'Есть доказательства направления (почта/ЭДО)?',
+    ],
+    writ: [
+      { text: 'Формат?', mode: 'choice', options: ['Судебный приказ', 'Иск'] },
+      { text: 'Основания для отмены приказа?', mode: 'choice', options: ['Есть', 'Нет/не знаю'] },
+      'Подведомственность/подсудность определены?',
+    ],
+    cession: [
+      { text: 'Сделка?', mode: 'choice', options: ['Уступка', 'Суброгация'] },
+      'Должник уведомлён? Возражает?',
+      'Переходили ли обеспечительные меры/залог?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  banking: {
+    credit: [
+      { text: 'Тип кредита?', mode: 'choice', options: ['Потребительский', 'Ипотека', 'Карта'] },
+      { text: 'Спор?', mode: 'choice', options: ['Проценты/комиссии', 'График/досрочное', 'Иное'] },
+      'Есть переписка/претензия/ответ банка?',
+    ],
+    collectors: [
+      { text: 'Кто взыскатель?', mode: 'choice', options: ['Банк', 'МФО', 'Коллекторы'] },
+      { text: 'Нарушают 230-ФЗ?', mode: 'choice', options: ['Да', 'Нет/не уверен'] },
+      'Есть записи звонков/жалобы?',
+    ],
+    fraud: [
+      { text: 'Тип списания?', mode: 'choice', options: ['Перевод', 'Покупка', 'Снятие наличных'] },
+      'Дата события и заявления в банк/полицию?',
+      { text: 'Чарджбэк инициирован?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    insurance: [
+      { text: 'Какая услуга?', mode: 'choice', options: ['Страхование жизни', 'Фин.защита', 'Иное'] },
+      { text: 'Обращались в «период охлаждения»?', mode: 'choice', options: ['Да', 'Нет', 'Просрочен'] },
+      'Ответ банка/страховщика?',
+    ],
+    creditHistory: [
+      { text: 'Есть отчёт БКИ?', mode: 'choice', options: ['Да', 'Нет'] },
+      'Какую запись оспариваете и последствия?',
+      'Писали в банк/БКИ? Ответ имеется?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  exec: {
+    bailiffs: [
+      'Номер ИП и основание?',
+      { text: 'Нарушение приставов?', mode: 'choice', options: ['Бездействие', 'Незаконные действия'] },
+      'Жалобы/ходатайства подавались? Ответы?',
+    ],
+    arrest: [
+      { text: 'Что арестовано?', mode: 'choice', options: ['Счета', 'Зарплата', 'Имущество', 'Запрет выезда'] },
+      { text: 'Есть соцвыплаты/минимальный доход?', mode: 'choice', options: ['Да', 'Нет'] },
+      { text: 'Требование?', mode: 'choice', options: ['Снять арест', 'Снять частично'] },
+    ],
+    installment: [
+      'Сумма долга и доходы?',
+      { text: 'Что нужно?', mode: 'choice', options: ['Отсрочка', 'Рассрочка'] },
+      'Предлагали график/доказывали тяжёлое положение?',
+    ],
+    termination: [
+      { text: 'Что произошло?', mode: 'choice', options: ['Окончание ИП', 'Возврат ИЛ'] },
+      { text: 'Основание?', mode: 'choice', options: ['Оплата долга', 'Не найден должник', 'Истёк срок', 'Иное'] },
+      'Нужно оспорить или вернуть ИЛ?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  admin: {
+    protocol: [
+      'Статья КоАП/постановление и дата?',
+      { text: 'Процедура соблюдена?', mode: 'choice', options: ['Да', 'Нет/сомневаюсь'] },
+      { text: 'Доказательства невиновности?', mode: 'choice', options: ['Есть', 'Нет'] },
+    ],
+    appeal: [
+      'Дата получения постановления?',
+      { text: 'Срок на обжалование?', mode: 'choice', options: ['Не истёк', 'Истёк/не уверен'] },
+      'Какие доводы и документы прилагаете?',
+    ],
+    inspection: [
+      { text: 'Орган и предмет проверки?', mode: 'choice', options: ['Роспотребнадзор', 'Трудовая', 'Прокуратура', 'Иное'] },
+      'Есть акты/предписания/протоколы?',
+      'Что оспаривается (результаты/сроки/штраф)?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  taxes: {
+    deductions: [
+      { text: 'Вид вычета?', mode: 'choice', options: ['Имущественный', 'Социальный', 'Инвестиционный'] },
+      'Период, суммы и подтверждающие документы?',
+      { text: '3-НДФЛ уже подавали?', mode: 'choice', options: ['Да', 'Нет'] },
+    ],
+    selfEmp: [
+      'Регион и доходы?',
+      { text: 'Проблема?', mode: 'choice', options: ['Начисления', 'Штрафы', 'Блокировка'] },
+      'Переписка с ФНС/«Мой налог» есть?',
+    ],
+    ip: [
+      { text: 'Режим?', mode: 'choice', options: ['УСН', 'ОСН', 'ПСН'] },
+      { text: 'Спор?', mode: 'choice', options: ['Камеральная', 'Доначисления', 'ККТ/касса'] },
+      'Решения ФНС/документы приложите.',
+    ],
+    claims: [
+      { text: 'Требование/штраф ФНС?', mode: 'choice', options: ['Есть', 'Нет (проект)'] },
+      { text: 'Нужна рассрочка/отсрочка?', mode: 'choice', options: ['Да', 'Нет'] },
+      'Возражения поданы/сроки?',
+    ],
+    propertyTax: [
+      { text: 'Какой налог?', mode: 'choice', options: ['Земля', 'Транспорт', 'Недвижимость'] },
+      'Период и основание спора (льгота/ставка/база)?',
+      'Обращались в ИФНС/МФЦ, ответы есть?',
+    ],
+    other: ['Опишите ситуацию.'],
+  },
+
+  other: { other: ['Опишите проблему и желаемый результат.'] },
+};
+
+/** Нормализация: строка → QItem(input) */
+function norm(items: (string | QItem)[] | undefined): QItem[] {
+  if (!items) return [];
+  return items.map((it) =>
+    typeof it === 'string' ? { text: it, mode: 'input' } : ({ text: it.text, mode: it.mode ?? 'input', options: it.options })
+  );
+}
+
 export default function AssistantPage() {
-  // Навигация
   const [phase, setPhase] = useState<Phase>('root');
   const [selectedRoot, setSelectedRoot] = useState<string>('');
   const [selectedSub,  setSelectedSub]  = useState<string>('');
 
-  // Последовательные уточняющие
   const [followupIdx, setFollowupIdx] = useState<number>(0);
   const [followupAnswers, setFollowupAnswers] = useState<string[]>([]);
 
-  // Контекст + чат
-  const [contextTags, setContextTags] = useState<string[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isPro, setIsPro] = useState<boolean>(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // ?id= дебаг
   const tgId = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const u = new URL(window.location.href);
     return u.searchParams.get('id') || '';
   }, []);
 
-  // Инициализация TWA
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // Подтянем статус Pro
+  // Получаем статус Pro
   useEffect(() => {
     (async () => {
       try {
@@ -65,119 +558,26 @@ export default function AssistantPage() {
 
         const res = await fetch(`/api/me${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(initData ? { 'x-init-data': initData } : {}),
-          },
+          headers: { 'Content-Type': 'application/json', ...(initData ? { 'x-init-data': initData } : {}) },
           cache: 'no-store',
         });
         const data = await res.json();
         setIsPro(Boolean(data?.subscription?.active));
-      } catch {
-        setIsPro(false);
-      }
+      } catch { setIsPro(false); }
     })();
   }, [tgId]);
 
-  // Автоскролл
   useEffect(() => {
     boxRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' });
   }, [messages]);
 
-  // Подкатегории
-  const SUB_TOPICS: Record<string, { key: string; label: string }[]> = {
-    labor: [
-      { key: 'dismissal', label: 'Увольнение/сокращение' },
-      { key: 'salary',    label: 'Задержка зарплаты' },
-      { key: 'contract',  label: 'Трудовой договор' },
-      { key: 'vacation',  label: 'Отпуск/больничный' },
-      { key: 'other',     label: 'Другое' },
-    ],
-    housing: [
-      { key: 'rent',      label: 'Аренда/найм' },
-      { key: 'purchase',  label: 'Покупка/продажа' },
-      { key: 'neighbors', label: 'Соседи/шум' },
-      { key: 'utilities', label: 'Коммунальные/управляйка' },
-      { key: 'other',     label: 'Другое' },
-    ],
-    consumer: [
-      { key: 'return',  label: 'Возврат/обмен товара' },
-      { key: 'service', label: 'Плохая услуга' },
-      { key: 'online',  label: 'Онлайн-покупка' },
-      { key: 'warranty',label: 'Гарантия' },
-      { key: 'other',   label: 'Другое' },
-    ],
-    family: [
-      { key: 'divorce',  label: 'Развод' },
-      { key: 'alimony',  label: 'Алименты' },
-      { key: 'children', label: 'Дети/опека' },
-      { key: 'property', label: 'Имущество/брачный договор' },
-      { key: 'other',    label: 'Другое' },
-    ],
-    traffic: [
-      { key: 'fine',   label: 'Штраф' },
-      { key: 'accident', label: 'ДТП' },
-      { key: 'rights', label: 'Лишение прав' },
-      { key: 'osago',  label: 'ОСАГО/КАСКО' },
-      { key: 'other',  label: 'Другое' },
-    ],
-    other: [
-      { key: 'other', label: 'Другое' },
-    ],
-  };
-
-  // Уточняющие вопросы
-  const FOLLOWUPS: Record<string, Record<string, string[]>> = {
-    labor: {
-      dismissal: ['Инициатор увольнения?', 'Есть приказ/уведомление?', 'Дата события?'],
-      salary:    ['Срок задержки?', 'Есть трудовой договор?', 'Платят частично или вовсе нет?'],
-      contract:  ['Подписан ли договор?', 'Есть допсоглашения?', 'Какой график/ставка?'],
-      vacation:  ['Тип отпуска/больничного?', 'Отказали или задерживают оплату?', 'Документы прилагались?'],
-      other:     ['Опишите кратко проблему.'],
-    },
-    housing: {
-      rent:      ['Вы арендодатель или наниматель?', 'Есть договор?', 'Какой спор возник?'],
-      purchase:  ['Тип сделки?', 'Есть расписка/ДКП?', 'Стадия сейчас?'],
-      neighbors: ['Характер проблемы?', 'Обращались в УК/полицию?', 'Доказательства есть?'],
-      utilities: ['Что именно не так?', 'Проблема сколько длится?', 'Обращались ли в УК?'],
-      other:     ['Опишите кратко проблему.'],
-    },
-    consumer: {
-      return:   ['Когда купили?', 'Чек/документы есть?', 'Продавец отказал?'],
-      service:  ['Какая услуга?', 'Договор/акт есть?', 'В чём нарушение?'],
-      online:   ['Маркетплейс/сайт?', 'Статус заказа?', 'Переписка/доказательства есть?'],
-      warranty: ['Срок эксплуатации?', 'Диагностика была?', 'Отказ по гарантии?'],
-      other:    ['Опишите кратко проблему.'],
-    },
-    family: {
-      divorce:  ['Есть дети?', 'Согласие сторон?', 'Имущественные споры?'],
-      alimony:  ['Есть решение/соглашение?', 'Сумма/процент?', 'Есть задолженность?'],
-      children: ['Опека/место жительства/порядок общения?', 'Идёт ли суд сейчас?'],
-      property: ['Есть брачный договор?', 'Что делите?', 'Добрачное/совместно нажитое?'],
-      other:    ['Опишите кратко проблему.'],
-    },
-    traffic: {
-      fine:   ['Статья/вид штрафа?', 'Когда получено постановление?', 'Срок обжалования не прошёл?'],
-      accident:['Есть схема/справка?', 'Кто виновник по версии ГИБДД?', 'Есть ОСАГО у сторон?'],
-      rights: ['Статья лишения?', 'Когда составлен протокол?', 'Срок рассмотрения идёт?'],
-      osago:  ['Какая страховая?', 'Что произошло?', 'Что подано уже?'],
-      other:  ['Опишите кратко проблему.'],
-    },
-    other: {
-      other: ['Опишите кратко проблему.'],
-    },
-  };
-
-  const followupQuestions = useMemo<string[]>(() => {
+  // Текущие уточняющие
+  const followupQuestions: QItem[] = useMemo(() => {
     if (!selectedRoot || !selectedSub) return [];
-    return FOLLOWUPS[selectedRoot]?.[selectedSub] ?? [];
+    return norm(RAW_FOLLOWUPS[selectedRoot]?.[selectedSub]);
   }, [selectedRoot, selectedSub]);
 
-  function pushTag(tag: string) {
-    setContextTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]));
-  }
-
-  // Старт: выбор корневой категории
+  // Навигация
   function startSub(rootKey: string) {
     setSelectedRoot(rootKey);
     setSelectedSub('');
@@ -185,26 +585,26 @@ export default function AssistantPage() {
     setFollowupAnswers([]);
     setMessages([]);
     setPhase('sub');
-    setContextTags([`root:${rootKey}`]);
   }
 
-  // Выбор подкатегории → сразу начинаем последовательные вопросы в чате
   function chooseSub(subKey: string) {
     setSelectedSub(subKey);
-    pushTag(`sub:${subKey}`);
     setFollowupIdx(0);
     setFollowupAnswers([]);
     setMessages([]);
 
-    const q = FOLLOWUPS[selectedRoot]?.[subKey] ?? [];
+    const q = followupQuestionsFor(rootKey = selectedRoot, subKey);
     if (q.length > 0) {
-      setMessages([{ role: 'assistant', content: q[0] }]);
+      setMessages([{ role: 'assistant', content: q[0].text }]);
       setPhase('chat');
     } else {
-      // если нет вопросов — сразу просим описать проблему (и дальше paywall/AI)
       setMessages([{ role: 'assistant', content: 'Опишите вашу ситуацию.' }]);
       setPhase('chat');
     }
+  }
+
+  function followupQuestionsFor(root: string, sub: string): QItem[] {
+    return norm(RAW_FOLLOWUPS[root]?.[sub]);
   }
 
   // Paywall
@@ -220,18 +620,15 @@ export default function AssistantPage() {
     ]);
   }
 
-  // Отправка реплики (во время уточняющих — идём по порядку; после — обычный чат к ИИ)
-  async function send(text: string) {
-    const prompt = text.trim();
+  // Отправка (и обработка последовательных уточняющих)
+  async function send(userText: string) {
+    const prompt = userText.trim();
     if (!prompt || loading) return;
 
-    // зафиксировали ответ пользователя
     setMessages((m) => [...m, { role: 'user', content: prompt }]);
 
-    // Если мы ещё в режиме уточняющих:
-    const stillClarify = followupIdx < followupQuestions.length;
-    if (stillClarify) {
-      // сохраним ответ
+    // Если мы ещё в блоке уточняющих
+    if (followupIdx < followupQuestions.length) {
       setFollowupAnswers((a) => {
         const next = [...a];
         next[followupIdx] = prompt;
@@ -240,37 +637,29 @@ export default function AssistantPage() {
 
       const nextIdx = followupIdx + 1;
       if (nextIdx < followupQuestions.length) {
-        // показываем следующий вопрос
         setFollowupIdx(nextIdx);
-        setMessages((m) => [...m, { role: 'assistant', content: followupQuestions[nextIdx] }]);
+        setMessages((m) => [...m, { role: 'assistant', content: followupQuestions[nextIdx].text }]);
         return;
       }
 
-      // это был последний уточняющий — дальше paywall/ИИ
-      setFollowupIdx(nextIdx); // = questions.length
-      if (!isPro) {
-        showPaywall();
-        return;
-      }
-      // С подпиской — отправляем сводку + последний ответ в ИИ
-      return askAIWithContext();
-    }
-
-    // Если уточняющие уже закончены — это обычный чат к ИИ
-    if (!isPro) {
-      showPaywall();
+      // Уточняющие закончились → ответ/пейволл
+      setFollowupIdx(nextIdx);
+      if (!isPro) { showPaywall(); return; }
+      await askAIWithContext();
       return;
     }
+
+    // Обычный чат после уточняющих
+    if (!isPro) { showPaywall(); return; }
     await askAIWithContext(prompt);
   }
 
-  // Собираем контекст и шлём в /api/assistant/ask
   async function askAIWithContext(optionalUserMessage?: string) {
     setLoading(true);
     try {
       const qaPairs =
         followupQuestions.length > 0
-          ? followupQuestions.map((q, i) => `• ${q} — ${followupAnswers[i] ?? ''}`).join('\n')
+          ? followupQuestions.map((q, i) => `• ${q.text} — ${followupAnswers[i] ?? ''}`).join('\n')
           : '';
 
       const systemContext =
@@ -279,16 +668,14 @@ export default function AssistantPage() {
 
       const history: Msg[] = [
         { role: 'user', content: systemContext },
-        ...messages.slice(-8), // последние реплики
+        ...messages.slice(-8),
       ];
-      if (optionalUserMessage) {
-        history.push({ role: 'user', content: optionalUserMessage });
-      }
+      if (optionalUserMessage) history.push({ role: 'user', content: optionalUserMessage });
 
       const res = await fetch(`/api/assistant/ask${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: optionalUserMessage ?? 'Сформируй разбор и шаги действий.', history }),
+        body: JSON.stringify({ prompt: optionalUserMessage ?? 'Сформируй разбор и пошаговые действия.', history }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -304,7 +691,12 @@ export default function AssistantPage() {
     }
   }
 
-  // Отправка из поля ввода
+  // Быстрый выбор опции (для вопросов mode:'choice')
+  function chooseOption(opt: string) {
+    // имитируем ответ пользователя кнопкой
+    void send(opt);
+  }
+
   function onSend() {
     const val = input.trim();
     if (!val) return;
@@ -312,42 +704,26 @@ export default function AssistantPage() {
     void send(val);
   }
 
-  // Кнопка «Назад»
   function goBack() {
     if (phase === 'sub') {
-      // назад к корневым
       setPhase('root');
       setSelectedRoot('');
       setSelectedSub('');
       setFollowupIdx(0);
       setFollowupAnswers([]);
       setMessages([]);
-      setContextTags([]);
       return;
     }
-
     if (phase === 'chat') {
-      // если мы в режиме уточняющих вопросов и уже показан >= 1-й
       if (followupIdx > 0 && followupIdx <= followupQuestions.length) {
-        // убрать текущий вопрос (асистент в конце)
         setMessages((m) => {
           const mm = [...m];
-          // если последний ассистент — это текущий вопрос, удалим его
-          const last = mm[mm.length - 1];
-          if (last && last.role === 'assistant' && followupQuestions[followupIdx - 1] !== last.content) {
-            // ничего
-          }
-          // чаще порядок: ... user answer (idx-1), assistant question (idx)
-          // при back перед ответом удаляем последний ассистент-вопрос
           if (mm.length && mm[mm.length - 1]?.role === 'assistant') mm.pop();
           return mm;
         });
         setFollowupIdx((i) => Math.max(0, i - 1));
-        // ответ на предыдущий вопрос можно оставить; пользователь его уже дал
         return;
       }
-
-      // иначе выходим к списку подкатегорий
       setPhase('sub');
       setMessages([]);
       setFollowupIdx(0);
@@ -356,11 +732,16 @@ export default function AssistantPage() {
     }
   }
 
+  // Текущий уточняющий вопрос (если есть) — для показа кнопок
+  const currentQ: QItem | undefined =
+    phase === 'chat' && followupIdx < followupQuestions.length
+      ? followupQuestions[followupIdx]
+      : undefined;
+
   return (
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
       <h1 style={{ textAlign: 'center' }}>Юридический ассистент</h1>
 
-      {/* Кнопка Назад (показываем везде, кроме root) */}
       {phase !== 'root' && (
         <div style={{ marginTop: 8 }}>
           <button onClick={goBack} className="list-btn" style={{ ...COMPACT_BTN_STYLE, maxWidth: 140 }}>
@@ -393,7 +774,7 @@ export default function AssistantPage() {
         </div>
       )}
 
-      {/* Этап 3: чат (в т.ч. последовательные уточняющие) */}
+      {/* Этап 3: чат */}
       {phase === 'chat' && (
         <div
           style={{
@@ -417,6 +798,22 @@ export default function AssistantPage() {
             ))}
             {loading && <div style={{ opacity: .6, fontSize: 14 }}>Думаю…</div>}
           </div>
+
+          {/* Панель быстрых ответов для вопросов с фиксированным выбором */}
+          {currentQ && currentQ.mode === 'choice' && currentQ.options?.length ? (
+            <div style={{ padding: '8px 10px', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {currentQ.options.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => chooseOption(opt)}
+                  className="list-btn"
+                  style={{ padding: '6px 10px', borderRadius: 8, fontSize: 13 }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          ) : null}
 
           <div style={{ padding: 10, borderTop: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', gap: 8 }}>
