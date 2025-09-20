@@ -6,14 +6,25 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 type Msg = { role: 'user' | 'assistant'; content: string };
 /** Фазы навигации */
 type Phase = 'root' | 'sub' | 'chat';
-
 /** Элемент уточняющего вопроса */
 type QItem = {
-  text: string;                         // Текст вопроса
-  mode?: 'input' | 'choice';            // По умолчанию 'input'
-  options?: string[];                   // Варианты для выбора, если mode === 'choice'
+  text: string;
+  mode?: 'input' | 'choice';
+  options?: string[];
 };
 
+const COMPACT_BTN_STYLE: React.CSSProperties = {
+  textAlign: 'left',
+  border: '1px solid var(--border, #333)',
+  borderRadius: 10,
+  padding: '8px 12px',
+  fontSize: 14,
+  lineHeight: 1.3,
+  background: 'transparent',
+  color: 'inherit',
+};
+
+/** Темы (как ты прислал) */
 const ROOT_TOPICS = [
   { key: 'labor',       label: 'Трудовые споры' },
   { key: 'housing',     label: 'Жилищные правоотношения' },
@@ -30,18 +41,7 @@ const ROOT_TOPICS = [
   { key: 'other',       label: 'Другое' },
 ] as const;
 
-const COMPACT_BTN_STYLE: React.CSSProperties = {
-  textAlign: 'left',
-  border: '1px solid var(--border, #333)',
-  borderRadius: 10,
-  padding: '8px 12px',
-  fontSize: 14,
-  lineHeight: 1.3,
-  background: 'transparent',
-  color: 'inherit',
-};
-
-/** Подкатегории */
+/** Подкатегории (как ты прислал) */
 const SUB_TOPICS: Record<string, { key: string; label: string }[]> = {
   labor: [
     { key: 'dismissal',  label: 'Увольнение/сокращение' },
@@ -145,7 +145,7 @@ const SUB_TOPICS: Record<string, { key: string; label: string }[]> = {
   other: [{ key: 'other', label: 'Другое' }],
 };
 
-/** Уточняющие вопросы: где можно — делаем mode:'choice' с вариантами */
+/** Уточняющие вопросы (как ты прислал) */
 const RAW_FOLLOWUPS: Record<string, Record<string, (string | QItem)[]>> = {
   labor: {
     dismissal: [
@@ -517,10 +517,12 @@ const RAW_FOLLOWUPS: Record<string, Record<string, (string | QItem)[]>> = {
 };
 
 /** Нормализация: строка → QItem(input) */
-function norm(items: (string | QItem)[] | undefined): QItem[] {
+function norm(items?: (string | QItem)[]): QItem[] {
   if (!items) return [];
   return items.map((it) =>
-    typeof it === 'string' ? { text: it, mode: 'input' } : ({ text: it.text, mode: it.mode ?? 'input', options: it.options })
+    typeof it === 'string'
+      ? { text: it, mode: 'input' as const }
+      : ({ text: it.text, mode: it.mode ?? 'input', options: it.options })
   );
 }
 
@@ -536,20 +538,23 @@ export default function AssistantPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isPro, setIsPro] = useState<boolean>(false);
+
   const boxRef = useRef<HTMLDivElement>(null);
 
+  // ?id= для дебага
   const tgId = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const u = new URL(window.location.href);
     return u.searchParams.get('id') || '';
   }, []);
 
+  // Telegram WebApp init
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // Получаем статус Pro
+  // Проверка подписки
   useEffect(() => {
     (async () => {
       try {
@@ -567,12 +572,13 @@ export default function AssistantPage() {
     })();
   }, [tgId]);
 
+  // Автоскролл
   useEffect(() => {
     boxRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' });
   }, [messages]);
 
-  // Текущие уточняющие
-  const followupQuestions: QItem[] = useMemo(() => {
+  // Текущий набор уточняющих
+  const followupQuestions = useMemo<QItem[]>(() => {
     if (!selectedRoot || !selectedSub) return [];
     return norm(RAW_FOLLOWUPS[selectedRoot]?.[selectedSub]);
   }, [selectedRoot, selectedSub]);
@@ -587,13 +593,17 @@ export default function AssistantPage() {
     setPhase('sub');
   }
 
+  function followupQuestionsFor(root: string, sub: string): QItem[] {
+    return norm(RAW_FOLLOWUPS[root]?.[sub]);
+  }
+
   function chooseSub(subKey: string) {
     setSelectedSub(subKey);
     setFollowupIdx(0);
     setFollowupAnswers([]);
     setMessages([]);
 
-    const q = followupQuestionsFor(rootKey = selectedRoot, subKey);
+    const q = followupQuestionsFor(selectedRoot, subKey); // фикс: НИКАКИХ rootKey = selectedRoot
     if (q.length > 0) {
       setMessages([{ role: 'assistant', content: q[0].text }]);
       setPhase('chat');
@@ -603,11 +613,7 @@ export default function AssistantPage() {
     }
   }
 
-  function followupQuestionsFor(root: string, sub: string): QItem[] {
-    return norm(RAW_FOLLOWUPS[root]?.[sub]);
-  }
-
-  // Paywall
+  // Paywall (без бесплатных ответов)
   function showPaywall() {
     setMessages((m) => [
       ...m,
@@ -620,14 +626,14 @@ export default function AssistantPage() {
     ]);
   }
 
-  // Отправка (и обработка последовательных уточняющих)
+  // Отправка (уточняющие → затем ИИ; без Pro — пейволл)
   async function send(userText: string) {
     const prompt = userText.trim();
     if (!prompt || loading) return;
 
     setMessages((m) => [...m, { role: 'user', content: prompt }]);
 
-    // Если мы ещё в блоке уточняющих
+    // Ещё есть уточняющие?
     if (followupIdx < followupQuestions.length) {
       setFollowupAnswers((a) => {
         const next = [...a];
@@ -642,14 +648,14 @@ export default function AssistantPage() {
         return;
       }
 
-      // Уточняющие закончились → ответ/пейволл
+      // Уточнения закончились
       setFollowupIdx(nextIdx);
       if (!isPro) { showPaywall(); return; }
       await askAIWithContext();
       return;
     }
 
-    // Обычный чат после уточняющих
+    // Обычный чат
     if (!isPro) { showPaywall(); return; }
     await askAIWithContext(prompt);
   }
@@ -691,12 +697,12 @@ export default function AssistantPage() {
     }
   }
 
-  // Быстрый выбор опции (для вопросов mode:'choice')
+  // Быстрый выбор (для mode:'choice')
   function chooseOption(opt: string) {
-    // имитируем ответ пользователя кнопкой
     void send(opt);
   }
 
+  // Отправка из поля ввода
   function onSend() {
     const val = input.trim();
     if (!val) return;
@@ -704,6 +710,7 @@ export default function AssistantPage() {
     void send(val);
   }
 
+  // Назад
   function goBack() {
     if (phase === 'sub') {
       setPhase('root');
@@ -718,6 +725,7 @@ export default function AssistantPage() {
       if (followupIdx > 0 && followupIdx <= followupQuestions.length) {
         setMessages((m) => {
           const mm = [...m];
+          // чаще всего последний ассистент — текущий вопрос → уберём
           if (mm.length && mm[mm.length - 1]?.role === 'assistant') mm.pop();
           return mm;
         });
@@ -732,11 +740,13 @@ export default function AssistantPage() {
     }
   }
 
-  // Текущий уточняющий вопрос (если есть) — для показа кнопок
+  // Текущий уточняющий (для кнопок выбора)
   const currentQ: QItem | undefined =
     phase === 'chat' && followupIdx < followupQuestions.length
       ? followupQuestions[followupIdx]
       : undefined;
+
+  const choiceModeActive = Boolean(currentQ && currentQ.mode === 'choice' && currentQ.options?.length);
 
   return (
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
@@ -754,7 +764,12 @@ export default function AssistantPage() {
       {phase === 'root' && (
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           {ROOT_TOPICS.map((t) => (
-            <button key={t.key} className="list-btn" onClick={() => startSub(t.key)} style={{ ...COMPACT_BTN_STYLE }}>
+            <button
+              key={t.key}
+              className="list-btn"
+              onClick={() => startSub(t.key)}
+              style={{ ...COMPACT_BTN_STYLE }}
+            >
               <span className="list-btn__left"><b>{t.label}</b></span>
               <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
             </button>
@@ -766,7 +781,12 @@ export default function AssistantPage() {
       {phase === 'sub' && selectedRoot && (
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           {SUB_TOPICS[selectedRoot].map((s) => (
-            <button key={s.key} className="list-btn" onClick={() => chooseSub(s.key)} style={{ ...COMPACT_BTN_STYLE }}>
+            <button
+              key={s.key}
+              className="list-btn"
+              onClick={() => chooseSub(s.key)}
+              style={{ ...COMPACT_BTN_STYLE }}
+            >
               <span className="list-btn__left"><b>{s.label}</b></span>
               <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
             </button>
@@ -799,10 +819,10 @@ export default function AssistantPage() {
             {loading && <div style={{ opacity: .6, fontSize: 14 }}>Думаю…</div>}
           </div>
 
-          {/* Панель быстрых ответов для вопросов с фиксированным выбором */}
-          {currentQ && currentQ.mode === 'choice' && currentQ.options?.length ? (
+          {/* Кнопки выбора для вопросов с фиксированными вариантами */}
+          {choiceModeActive ? (
             <div style={{ padding: '8px 10px', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {currentQ.options.map((opt) => (
+              {currentQ!.options!.map((opt) => (
                 <button
                   key={opt}
                   onClick={() => chooseOption(opt)}
@@ -820,16 +840,17 @@ export default function AssistantPage() {
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => (e.key === 'Enter' ? onSend() : null)}
-                placeholder="Сообщение…"
+                onKeyDown={(e) => (!choiceModeActive && e.key === 'Enter' ? onSend() : null)}
+                placeholder={choiceModeActive ? 'Выберите вариант выше' : 'Сообщение…'}
+                disabled={choiceModeActive}
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)',
-                  background: 'transparent', color: 'inherit', outline: 'none', fontSize: 14
+                  background: 'transparent', color: 'inherit', outline: 'none', fontSize: 14, opacity: choiceModeActive ? 0.6 : 1
                 }}
               />
               <button
                 onClick={onSend}
-                disabled={loading || !input.trim()}
+                disabled={choiceModeActive || loading || !input.trim()}
                 className="list-btn"
                 style={{ padding: '0 16px' }}
               >
