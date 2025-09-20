@@ -3,16 +3,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
-type Phase = 'root' | 'sub' | 'followups' | 'freeinput' | 'chat';
+type Phase = 'root' | 'sub' | 'chat';
 
-// Верхние категории
 const ROOT_TOPICS = [
-  { key: 'labor', label: 'Трудовые вопросы' },
-  { key: 'housing', label: 'Жильё и недвижимость' },
+  { key: 'labor',    label: 'Трудовые вопросы' },
+  { key: 'housing',  label: 'Жильё и недвижимость' },
   { key: 'consumer', label: 'Права потребителей' },
-  { key: 'family', label: 'Семейные вопросы' },
-  { key: 'traffic', label: 'Штрафы и ДТП' },
-  { key: 'other', label: 'Другое' },
+  { key: 'family',   label: 'Семейные вопросы' },
+  { key: 'traffic',  label: 'Штрафы и ДТП' },
+  { key: 'other',    label: 'Другое' },
 ] as const;
 
 const COMPACT_BTN_STYLE: React.CSSProperties = {
@@ -27,56 +26,60 @@ const COMPACT_BTN_STYLE: React.CSSProperties = {
 };
 
 export default function AssistantPage() {
+  // Навигация
   const [phase, setPhase] = useState<Phase>('root');
   const [selectedRoot, setSelectedRoot] = useState<string>('');
-  const [contextTags, setContextTags] = useState<string[]>([]);
+  const [selectedSub,  setSelectedSub]  = useState<string>('');
 
+  // Последовательные уточняющие
+  const [followupIdx, setFollowupIdx] = useState<number>(0);
+  const [followupAnswers, setFollowupAnswers] = useState<string[]>([]);
+
+  // Контекст + чат
+  const [contextTags, setContextTags] = useState<string[]>([]);
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-
   const [isPro, setIsPro] = useState<boolean>(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // ?id= из URL (как в /api/me?id=...)
+  // ?id= дебаг
   const tgId = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const u = new URL(window.location.href);
     return u.searchParams.get('id') || '';
   }, []);
 
-  // Инициализация Telegram WebApp
+  // Инициализация TWA
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-useEffect(() => {
-  (async () => {
-    try {
-      const w: any = window;
-      const initData: string | undefined = w?.Telegram?.WebApp?.initData;
+  // Подтянем статус Pro
+  useEffect(() => {
+    (async () => {
+      try {
+        const w: any = window;
+        const initData: string | undefined = w?.Telegram?.WebApp?.initData;
 
-      const res = await fetch(`/api/me${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
-        method: 'POST',
-        // ВАЖНО: отдаём initData, чтобы /api/me смог проверить HMAC
-        headers: {
-          'Content-Type': 'application/json',
-          ...(initData ? { 'x-init-data': initData } : {}),
-        },
-        cache: 'no-store',
-      });
+        const res = await fetch(`/api/me${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(initData ? { 'x-init-data': initData } : {}),
+          },
+          cache: 'no-store',
+        });
+        const data = await res.json();
+        setIsPro(Boolean(data?.subscription?.active));
+      } catch {
+        setIsPro(false);
+      }
+    })();
+  }, [tgId]);
 
-      const data = await res.json();
-      // если всё ок — отмечаем Pro
-      setIsPro(Boolean(data?.subscription?.active));
-    } catch {
-      setIsPro(false);
-    }
-  })();
-}, [tgId]);
-
-  // Автоскролл чата
+  // Автоскролл
   useEffect(() => {
     boxRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' });
   }, [messages]);
@@ -85,37 +88,40 @@ useEffect(() => {
   const SUB_TOPICS: Record<string, { key: string; label: string }[]> = {
     labor: [
       { key: 'dismissal', label: 'Увольнение/сокращение' },
-      { key: 'salary', label: 'Задержка зарплаты' },
-      { key: 'contract', label: 'Трудовой договор' },
-      { key: 'vacation', label: 'Отпуск/больничный' },
-      { key: 'other', label: 'Другое' },
+      { key: 'salary',    label: 'Задержка зарплаты' },
+      { key: 'contract',  label: 'Трудовой договор' },
+      { key: 'vacation',  label: 'Отпуск/больничный' },
+      { key: 'other',     label: 'Другое' },
     ],
     housing: [
-      { key: 'rent', label: 'Аренда/найм' },
-      { key: 'purchase', label: 'Покупка/продажа' },
+      { key: 'rent',      label: 'Аренда/найм' },
+      { key: 'purchase',  label: 'Покупка/продажа' },
       { key: 'neighbors', label: 'Соседи/шум' },
       { key: 'utilities', label: 'Коммунальные/управляйка' },
-      { key: 'other', label: 'Другое' },
+      { key: 'other',     label: 'Другое' },
     ],
     consumer: [
-      { key: 'return', label: 'Возврат/обмен товара' },
+      { key: 'return',  label: 'Возврат/обмен товара' },
       { key: 'service', label: 'Плохая услуга' },
-      { key: 'online', label: 'Онлайн-покупка' },
-      { key: 'warranty', label: 'Гарантия' },
-      { key: 'other', label: 'Другое' },
+      { key: 'online',  label: 'Онлайн-покупка' },
+      { key: 'warranty',label: 'Гарантия' },
+      { key: 'other',   label: 'Другое' },
     ],
     family: [
-      { key: 'divorce', label: 'Развод' },
-      { key: 'alimony', label: 'Алименты' },
+      { key: 'divorce',  label: 'Развод' },
+      { key: 'alimony',  label: 'Алименты' },
       { key: 'children', label: 'Дети/опека' },
       { key: 'property', label: 'Имущество/брачный договор' },
-      { key: 'other', label: 'Другое' },
+      { key: 'other',    label: 'Другое' },
     ],
     traffic: [
-      { key: 'fine', label: 'Штраф' },
+      { key: 'fine',   label: 'Штраф' },
       { key: 'accident', label: 'ДТП' },
       { key: 'rights', label: 'Лишение прав' },
-      { key: 'osago', label: 'ОСАГО/КАСКО' },
+      { key: 'osago',  label: 'ОСАГО/КАСКО' },
+      { key: 'other',  label: 'Другое' },
+    ],
+    other: [
       { key: 'other', label: 'Другое' },
     ],
   };
@@ -124,59 +130,84 @@ useEffect(() => {
   const FOLLOWUPS: Record<string, Record<string, string[]>> = {
     labor: {
       dismissal: ['Инициатор увольнения?', 'Есть приказ/уведомление?', 'Дата события?'],
-      salary: ['Срок задержки?', 'Есть трудовой договор?', 'Платят частично или вовсе нет?'],
-      contract: ['Подписан ли договор?', 'Есть допсоглашения?', 'Какой график/ставка?'],
-      vacation: ['Тип отпуска/больничного?', 'Отказали или задерживают оплату?', 'Документы прилагались?'],
-      other: ['Опишите кратко проблему.'],
+      salary:    ['Срок задержки?', 'Есть трудовой договор?', 'Платят частично или вовсе нет?'],
+      contract:  ['Подписан ли договор?', 'Есть допсоглашения?', 'Какой график/ставка?'],
+      vacation:  ['Тип отпуска/больничного?', 'Отказали или задерживают оплату?', 'Документы прилагались?'],
+      other:     ['Опишите кратко проблему.'],
     },
     housing: {
-      rent: ['Вы арендодатель или наниматель?', 'Есть договор?', 'Какой спор возник?'],
-      purchase: ['Тип сделки?', 'Есть расписка/ДКП?', 'Стадия сейчас?'],
+      rent:      ['Вы арендодатель или наниматель?', 'Есть договор?', 'Какой спор возник?'],
+      purchase:  ['Тип сделки?', 'Есть расписка/ДКП?', 'Стадия сейчас?'],
       neighbors: ['Характер проблемы?', 'Обращались в УК/полицию?', 'Доказательства есть?'],
       utilities: ['Что именно не так?', 'Проблема сколько длится?', 'Обращались ли в УК?'],
-      other: ['Опишите кратко проблему.'],
+      other:     ['Опишите кратко проблему.'],
     },
     consumer: {
-      return: ['Когда купили?', 'Чек/документы есть?', 'Продавец отказал?'],
-      service: ['Какая услуга?', 'Договор/акт есть?', 'В чём нарушение?'],
-      online: ['Маркетплейс/сайт?', 'Статус заказа?', 'Переписка/доказательства есть?'],
+      return:   ['Когда купили?', 'Чек/документы есть?', 'Продавец отказал?'],
+      service:  ['Какая услуга?', 'Договор/акт есть?', 'В чём нарушение?'],
+      online:   ['Маркетплейс/сайт?', 'Статус заказа?', 'Переписка/доказательства есть?'],
       warranty: ['Срок эксплуатации?', 'Диагностика была?', 'Отказ по гарантии?'],
-      other: ['Опишите кратко проблему.'],
+      other:    ['Опишите кратко проблему.'],
     },
     family: {
-      divorce: ['Есть дети?', 'Согласие сторон?', 'Имущественные споры?'],
-      alimony: ['Есть решение/соглашение?', 'Сумма/процент?', 'Есть задолженность?'],
+      divorce:  ['Есть дети?', 'Согласие сторон?', 'Имущественные споры?'],
+      alimony:  ['Есть решение/соглашение?', 'Сумма/процент?', 'Есть задолженность?'],
       children: ['Опека/место жительства/порядок общения?', 'Идёт ли суд сейчас?'],
       property: ['Есть брачный договор?', 'Что делите?', 'Добрачное/совместно нажитое?'],
-      other: ['Опишите кратко проблему.'],
+      other:    ['Опишите кратко проблему.'],
     },
     traffic: {
-      fine: ['Статья/вид штрафа?', 'Когда получено постановление?', 'Срок обжалования не прошёл?'],
-      accident: ['Есть схема/справка?', 'Кто виновник по версии ГИБДД?', 'Есть ОСАГО у сторон?'],
+      fine:   ['Статья/вид штрафа?', 'Когда получено постановление?', 'Срок обжалования не прошёл?'],
+      accident:['Есть схема/справка?', 'Кто виновник по версии ГИБДД?', 'Есть ОСАГО у сторон?'],
       rights: ['Статья лишения?', 'Когда составлен протокол?', 'Срок рассмотрения идёт?'],
-      osago: ['Какая страховая?', 'Что произошло?', 'Что подано уже?'],
+      osago:  ['Какая страховая?', 'Что произошло?', 'Что подано уже?'],
+      other:  ['Опишите кратко проблему.'],
+    },
+    other: {
       other: ['Опишите кратко проблему.'],
     },
   };
+
+  const followupQuestions = useMemo<string[]>(() => {
+    if (!selectedRoot || !selectedSub) return [];
+    return FOLLOWUPS[selectedRoot]?.[selectedSub] ?? [];
+  }, [selectedRoot, selectedSub]);
 
   function pushTag(tag: string) {
     setContextTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]));
   }
 
+  // Старт: выбор корневой категории
   function startSub(rootKey: string) {
     setSelectedRoot(rootKey);
-    pushTag(`root:${rootKey}`);
-    if (SUB_TOPICS[rootKey]?.length) setPhase('sub');
-    else setPhase('freeinput');
+    setSelectedSub('');
+    setFollowupIdx(0);
+    setFollowupAnswers([]);
+    setMessages([]);
+    setPhase('sub');
+    setContextTags([`root:${rootKey}`]);
   }
 
+  // Выбор подкатегории → сразу начинаем последовательные вопросы в чате
   function chooseSub(subKey: string) {
+    setSelectedSub(subKey);
     pushTag(`sub:${subKey}`);
-    if (FOLLOWUPS[selectedRoot]?.[subKey]?.length) setPhase('followups');
-    else setPhase('freeinput');
+    setFollowupIdx(0);
+    setFollowupAnswers([]);
+    setMessages([]);
+
+    const q = FOLLOWUPS[selectedRoot]?.[subKey] ?? [];
+    if (q.length > 0) {
+      setMessages([{ role: 'assistant', content: q[0] }]);
+      setPhase('chat');
+    } else {
+      // если нет вопросов — сразу просим описать проблему (и дальше paywall/AI)
+      setMessages([{ role: 'assistant', content: 'Опишите вашу ситуацию.' }]);
+      setPhase('chat');
+    }
   }
 
-  // PAYWALL перед ответом (если нет Pro)
+  // Paywall
   function showPaywall() {
     setMessages((m) => [
       ...m,
@@ -187,42 +218,82 @@ useEffect(() => {
           'оформите подписку Juristum Pro.',
       },
     ]);
-    setPhase('chat');
   }
 
-  async function sendToAI(text: string) {
+  // Отправка реплики (во время уточняющих — идём по порядку; после — обычный чат к ИИ)
+  async function send(text: string) {
     const prompt = text.trim();
     if (!prompt || loading) return;
 
-    // Сначала фиксируем сообщение пользователя в чате
+    // зафиксировали ответ пользователя
     setMessages((m) => [...m, { role: 'user', content: prompt }]);
 
-    // Если нет подписки — не ходим в API, сразу показываем paywall
+    // Если мы ещё в режиме уточняющих:
+    const stillClarify = followupIdx < followupQuestions.length;
+    if (stillClarify) {
+      // сохраним ответ
+      setFollowupAnswers((a) => {
+        const next = [...a];
+        next[followupIdx] = prompt;
+        return next;
+      });
+
+      const nextIdx = followupIdx + 1;
+      if (nextIdx < followupQuestions.length) {
+        // показываем следующий вопрос
+        setFollowupIdx(nextIdx);
+        setMessages((m) => [...m, { role: 'assistant', content: followupQuestions[nextIdx] }]);
+        return;
+      }
+
+      // это был последний уточняющий — дальше paywall/ИИ
+      setFollowupIdx(nextIdx); // = questions.length
+      if (!isPro) {
+        showPaywall();
+        return;
+      }
+      // С подпиской — отправляем сводку + последний ответ в ИИ
+      return askAIWithContext();
+    }
+
+    // Если уточняющие уже закончены — это обычный чат к ИИ
     if (!isPro) {
       showPaywall();
       return;
     }
+    await askAIWithContext(prompt);
+  }
 
+  // Собираем контекст и шлём в /api/assistant/ask
+  async function askAIWithContext(optionalUserMessage?: string) {
     setLoading(true);
     try {
+      const qaPairs =
+        followupQuestions.length > 0
+          ? followupQuestions.map((q, i) => `• ${q} — ${followupAnswers[i] ?? ''}`).join('\n')
+          : '';
+
+      const systemContext =
+        `Категории: root=${selectedRoot || '—'}, sub=${selectedSub || '—'}.\n` +
+        (qaPairs ? `Уточняющие:\n${qaPairs}\n` : '');
+
+      const history: Msg[] = [
+        { role: 'user', content: systemContext },
+        ...messages.slice(-8), // последние реплики
+      ];
+      if (optionalUserMessage) {
+        history.push({ role: 'user', content: optionalUserMessage });
+      }
+
       const res = await fetch(`/api/assistant/ask${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          history: [
-            { role: 'user', content: `Категории: ${contextTags.join(', ') || 'не выбраны'}` },
-            ...messages.slice(-6),
-          ],
-        }),
+        body: JSON.stringify({ prompt: optionalUserMessage ?? 'Сформируй разбор и шаги действий.', history }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
         const err = data?.error || `HTTP_${res.status}`;
-        setMessages((m) => [
-          ...m,
-          { role: 'assistant', content: `Ошибка: ${err}. Попробуйте ещё раз.` },
-        ]);
+        setMessages((m) => [...m, { role: 'assistant', content: `Ошибка: ${err}. Попробуйте ещё раз.` }]);
       } else {
         setMessages((m) => [...m, { role: 'assistant', content: data.answer }]);
       }
@@ -230,31 +301,79 @@ useEffect(() => {
       setMessages((m) => [...m, { role: 'assistant', content: 'Сбой сети. Попробуйте ещё раз.' }]);
     } finally {
       setLoading(false);
-      setPhase('chat');
     }
   }
 
-  function handleFreeSubmit() {
+  // Отправка из поля ввода
+  function onSend() {
     const val = input.trim();
     if (!val) return;
     setInput('');
-    sendToAI(val);
+    void send(val);
+  }
+
+  // Кнопка «Назад»
+  function goBack() {
+    if (phase === 'sub') {
+      // назад к корневым
+      setPhase('root');
+      setSelectedRoot('');
+      setSelectedSub('');
+      setFollowupIdx(0);
+      setFollowupAnswers([]);
+      setMessages([]);
+      setContextTags([]);
+      return;
+    }
+
+    if (phase === 'chat') {
+      // если мы в режиме уточняющих вопросов и уже показан >= 1-й
+      if (followupIdx > 0 && followupIdx <= followupQuestions.length) {
+        // убрать текущий вопрос (асистент в конце)
+        setMessages((m) => {
+          const mm = [...m];
+          // если последний ассистент — это текущий вопрос, удалим его
+          const last = mm[mm.length - 1];
+          if (last && last.role === 'assistant' && followupQuestions[followupIdx - 1] !== last.content) {
+            // ничего
+          }
+          // чаще порядок: ... user answer (idx-1), assistant question (idx)
+          // при back перед ответом удаляем последний ассистент-вопрос
+          if (mm.length && mm[mm.length - 1]?.role === 'assistant') mm.pop();
+          return mm;
+        });
+        setFollowupIdx((i) => Math.max(0, i - 1));
+        // ответ на предыдущий вопрос можно оставить; пользователь его уже дал
+        return;
+      }
+
+      // иначе выходим к списку подкатегорий
+      setPhase('sub');
+      setMessages([]);
+      setFollowupIdx(0);
+      setFollowupAnswers([]);
+      return;
+    }
   }
 
   return (
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
       <h1 style={{ textAlign: 'center' }}>Юридический ассистент</h1>
 
-      {/* === Этап 1: категории === */}
+      {/* Кнопка Назад (показываем везде, кроме root) */}
+      {phase !== 'root' && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={goBack} className="list-btn" style={{ ...COMPACT_BTN_STYLE, maxWidth: 140 }}>
+            ← Назад
+          </button>
+        </div>
+      )}
+
+      {/* Этап 1: категории */}
       {phase === 'root' && (
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           {ROOT_TOPICS.map((t) => (
-            <button
-              key={t.key}
-              className="list-btn"
-              onClick={() => startSub(t.key)}
-              style={{ ...COMPACT_BTN_STYLE }}
-            >
+            <button key={t.key} className="list-btn" onClick={() => startSub(t.key)} style={{ ...COMPACT_BTN_STYLE }}>
               <span className="list-btn__left"><b>{t.label}</b></span>
               <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
             </button>
@@ -262,16 +381,11 @@ useEffect(() => {
         </div>
       )}
 
-      {/* === Этап 2: подкатегории === */}
+      {/* Этап 2: подкатегории */}
       {phase === 'sub' && selectedRoot && (
         <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
           {SUB_TOPICS[selectedRoot].map((s) => (
-            <button
-              key={s.key}
-              className="list-btn"
-              onClick={() => chooseSub(s.key)}
-              style={{ ...COMPACT_BTN_STYLE }}
-            >
+            <button key={s.key} className="list-btn" onClick={() => chooseSub(s.key)} style={{ ...COMPACT_BTN_STYLE }}>
               <span className="list-btn__left"><b>{s.label}</b></span>
               <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
             </button>
@@ -279,66 +393,8 @@ useEffect(() => {
         </div>
       )}
 
-      {/* === Этап 3: уточняющие вопросы (как кнопки-переход к вводу) === */}
-      {phase === 'followups' && (
-        <div style={{ display: 'grid', gap: 10, marginTop: 12 }}>
-          {(FOLLOWUPS[selectedRoot] &&
-            FOLLOWUPS[selectedRoot][contextTags.find((t) => t.startsWith('sub:'))?.split(':')[1] || 'other'])?.map(
-            (q, idx) => (
-              <button
-                key={idx}
-                className="list-btn"
-                onClick={() => {
-                  // Подталкиваем пользователя к свободному вводу (кнопка задаёт тон)
-                  setMessages((m) => [...m, { role: 'assistant', content: q }]);
-                  setPhase('freeinput');
-                }}
-                style={{ ...COMPACT_BTN_STYLE }}
-              >
-                <span className="list-btn__left">{q}</span>
-                <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-              </button>
-            )
-          )}
-          <button
-            className="list-btn"
-            onClick={() => setPhase('freeinput')}
-            style={{ ...COMPACT_BTN_STYLE }}
-          >
-            <span className="list-btn__left"><b>Другое</b></span>
-            <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-          </button>
-        </div>
-      )}
-
-      {/* === Этап 4: свободный ввод до старта чата === */}
-      {phase === 'freeinput' && (
-        <div style={{ marginTop: 12 }}>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => (e.key === 'Enter' ? handleFreeSubmit() : null)}
-              placeholder="Коротко опишите проблему…"
-              style={{
-                flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)',
-                background: 'transparent', color: 'inherit', outline: 'none', fontSize: 14
-              }}
-            />
-            <button
-              onClick={handleFreeSubmit}
-              disabled={!input.trim()}
-              className="list-btn"
-              style={{ padding: '0 16px' }}
-            >
-              Далее
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* === Этап 5: чат === */}
-      {(phase === 'chat' || messages.length > 0) && (
+      {/* Этап 3: чат (в т.ч. последовательные уточняющие) */}
+      {phase === 'chat' && (
         <div
           style={{
             marginTop: 12,
@@ -361,12 +417,13 @@ useEffect(() => {
             ))}
             {loading && <div style={{ opacity: .6, fontSize: 14 }}>Думаю…</div>}
           </div>
+
           <div style={{ padding: 10, borderTop: '1px solid var(--border)' }}>
             <div style={{ display: 'flex', gap: 8 }}>
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => (e.key === 'Enter' ? sendToAI(input) : null)}
+                onKeyDown={(e) => (e.key === 'Enter' ? onSend() : null)}
                 placeholder="Сообщение…"
                 style={{
                   flex: 1, padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)',
@@ -374,7 +431,7 @@ useEffect(() => {
                 }}
               />
               <button
-                onClick={() => { const v = input.trim(); if (v) { setInput(''); sendToAI(v); } }}
+                onClick={onSend}
                 disabled={loading || !input.trim()}
                 className="list-btn"
                 style={{ padding: '0 16px' }}
@@ -385,6 +442,7 @@ useEffect(() => {
           </div>
         </div>
       )}
+
       <div style={{ height: 12 }} />
     </main>
   );
