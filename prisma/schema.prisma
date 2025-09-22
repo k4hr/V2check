@@ -9,7 +9,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- Users ---
+/* ============ Users ============ */
 model User {
   id                String     @id @default(cuid())
   telegramId        String     @unique
@@ -19,10 +19,14 @@ model User {
   subscriptionUntil DateTime?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @default(now())
+
   favorites         Favorite[]
+
+  // личные дела (новое)
+  cases             Case[]
 }
 
-// --- Favorites ---
+/* ============ Favorites ============ */
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
@@ -31,12 +35,13 @@ model Favorite {
   note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now())
+
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
 
-// --- Library docs (new) ---
+/* ============ Library docs (new) ============ */
 model Doc {
   id        String        @id @default(cuid())
   slug      String        @unique
@@ -45,6 +50,7 @@ model Doc {
   sourceUrl String?
   updatedAt DateTime      @default(now())
   createdAt DateTime      @default(now())
+
   versions  DocVersion[]
 }
 
@@ -53,7 +59,49 @@ model DocVersion {
   docId       String
   contentHtml String
   createdAt   DateTime @default(now())
+
   doc         Doc      @relation(fields: [docId], references: [id], onDelete: Cascade)
 
   @@index([docId])
+}
+
+/* ============ Cases (новое) ============ */
+model Case {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  status    String    @default("active") // active | closed | archived
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  nextDueAt DateTime? @map("next_due_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CaseItem[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([nextDueAt])
+
+  @@map("cases") // имя таблицы в БД
+}
+
+/* Элементы таймлайна дела */
+model CaseItem {
+  id        String   @id @default(cuid())
+  caseId    String
+  kind      String   // note | step | deadline | doc
+  title     String
+  body      String?
+  dueAt     DateTime?
+  done      Boolean  @default(false)
+  priority  Int?
+  createdAt DateTime @default(now())
+
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([kind])
+  @@index([dueAt])
+
+  @@map("case_items")
 }
