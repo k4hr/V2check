@@ -526,6 +526,31 @@ function norm(items?: (string | QItem)[]): QItem[] {
   );
 }
 
+/** Утилиты: метки и заголовок дела */
+function rootLabel(key: string): string {
+  return ROOT_TOPICS.find(t => t.key === key)?.label ?? key;
+}
+function subLabel(rootKey: string, subKey: string): string {
+  return SUB_TOPICS[rootKey]?.find(s => s.key === subKey)?.label ?? subKey;
+}
+function defaultCaseTitle(rootKey: string, subKey: string): string {
+  const r = rootLabel(rootKey);
+  const s = subLabel(rootKey, subKey);
+  if (!r && !s) return 'Личное дело';
+  if (r && s) return `${r} — ${s}`;
+  return r || s || 'Личное дело';
+}
+
+/** Заголовки запроса: x-init-data (или debug ?id=) */
+function buildInitHeadersAndQuery(debugId: string) {
+  const w: any = typeof window !== 'undefined' ? (window as any) : undefined;
+  const initData: string | undefined = w?.Telegram?.WebApp?.initData;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['x-init-data'] = initData;
+  const qs = debugId ? `?id=${encodeURIComponent(debugId)}` : '';
+  return { headers, qs };
+}
+
 export default function AssistantPage() {
   const [phase, setPhase] = useState<Phase>('root');
   const [selectedRoot, setSelectedRoot] = useState<string>('');
@@ -538,6 +563,10 @@ export default function AssistantPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isPro, setIsPro] = useState<boolean>(false);
+
+  /** СВЯЗКА С «Делами» */
+  const [caseId, setCaseId] = useState<string | null>(null);
+  const creatingCaseRef = useRef<boolean>(false);
 
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -560,7 +589,6 @@ export default function AssistantPage() {
       try {
         const w: any = window;
         const initData: string | undefined = w?.Telegram?.WebApp?.initData;
-
         const res = await fetch(`/api/me${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...(initData ? { 'x-init-data': initData } : {}) },
@@ -590,6 +618,7 @@ export default function AssistantPage() {
     setFollowupIdx(0);
     setFollowupAnswers([]);
     setMessages([]);
+    setCaseId(null); // новая ветка → новое дело после первого ответа
     setPhase('sub');
   }
 
@@ -602,8 +631,9 @@ export default function AssistantPage() {
     setFollowupIdx(0);
     setFollowupAnswers([]);
     setMessages([]);
+    setCaseId(null); // сбросить привязку дела при смене подтемы
 
-    const q = followupQuestionsFor(selectedRoot, subKey); // фикс: НИКАКИХ rootKey = selectedRoot
+    const q = followupQuestionsFor(selectedRoot, subKey);
     if (q.length > 0) {
       setMessages([{ role: 'assistant', content: q[0].text }]);
       setPhase('chat');
@@ -624,6 +654,60 @@ export default function AssistantPage() {
           'оформите подписку Juristum Pro.',
       },
     ]);
+  }
+
+  /** ==== Работа с делами (создать/добавить item) ==== */
+  async function ensureCaseCreated(): Promise<string | null> {
+    if (caseId) return caseId;
+    if (creatingCaseRef.current) return null; // предотвратить гонку
+    creatingCaseRef.current = true;
+    try {
+      const title = defaultCaseTitle(selectedRoot, selectedSub) || 'Личное дело';
+      const { headers, qs } = buildInitHeadersAndQuery(tgId);
+      const resp = await fetch(`/api/cases${qs}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ title }),
+      });
+      const data: any = await resp.json();
+      if (!resp.ok || !data?.ok || !data?.case?.id) {
+        // мягкий фейл — не ломаем UX
+        return null;
+      }
+      setCaseId(data.case.id as string);
+      return data.case.id as string;
+    } catch {
+      return null;
+    } finally {
+      creatingCaseRef.current = false;
+    }
+  }
+
+  async function appendCaseItem(textAnswer: string, qaPairs: string) {
+    try {
+      let cid = caseId;
+      if (!cid) {
+        cid = await ensureCaseCreated();
+        if (!cid) return; // если не удалось создать — просто пропустим сохранение
+      }
+      const { headers } = buildInitHeadersAndQuery(tgId);
+      const body = [
+        qaPairs ? `Уточняющие ответы:\n${qaPairs}\n` : '',
+        '---',
+        textAnswer,
+      ].filter(Boolean).join('\n');
+      await fetch(`/api/cases/${cid}/items`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          kind: 'note',
+          title: 'Разбор и план действий',
+          body,
+        }),
+      });
+    } catch {
+      // не шумим пользователю
+    }
   }
 
   // Отправка (уточняющие → затем ИИ; без Pro — пейволл)
@@ -688,7 +772,13 @@ export default function AssistantPage() {
         const err = data?.error || `HTTP_${res.status}`;
         setMessages((m) => [...m, { role: 'assistant', content: `Ошибка: ${err}. Попробуйте ещё раз.` }]);
       } else {
-        setMessages((m) => [...m, { role: 'assistant', content: data.answer }]);
+        const answer: string = data.answer || '';
+        setMessages((m) => [...m, { role: 'assistant', content: answer }]);
+
+        // === ВАЖНО: создаём дело (если ещё нет) и сохраняем ответ ИИ как item ===
+        if (isPro && selectedRoot && selectedSub && answer.trim()) {
+          await appendCaseItem(answer, qaPairs);
+        }
       }
     } catch {
       setMessages((m) => [...m, { role: 'assistant', content: 'Сбой сети. Попробуйте ещё раз.' }]);
@@ -719,13 +809,13 @@ export default function AssistantPage() {
       setFollowupIdx(0);
       setFollowupAnswers([]);
       setMessages([]);
+      setCaseId(null);
       return;
     }
     if (phase === 'chat') {
       if (followupIdx > 0 && followupIdx <= followupQuestions.length) {
         setMessages((m) => {
           const mm = [...m];
-          // чаще всего последний ассистент — текущий вопрос → уберём
           if (mm.length && mm[mm.length - 1]?.role === 'assistant') mm.pop();
           return mm;
         });
@@ -736,6 +826,7 @@ export default function AssistantPage() {
       setMessages([]);
       setFollowupIdx(0);
       setFollowupAnswers([]);
+      setCaseId(null);
       return;
     }
   }
