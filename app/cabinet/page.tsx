@@ -98,6 +98,15 @@ export default function CabinetPage() {
               <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
             </Link>
 
+            {/* НОВОЕ: переход к «Личному делу» (таймлайн/дедлайны) */}
+            <Link href="/cabinet/cases" className="list-btn" style={{ textDecoration:'none' }}>
+              <span className="list-btn__left">
+                <span className="list-btn__emoji">📁</span>
+                <b>Моё дело (таймлайн и дедлайны)</b>
+              </span>
+              <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+            </Link>
+
             <Link href="/cabinet/favorites" className="list-btn" style={{ textDecoration:'none' }}>
               <span className="list-btn__left">
                 <span className="list-btn__emoji">🌟</span>
