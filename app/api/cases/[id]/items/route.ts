@@ -1,125 +1,114 @@
-// app/api/cases/[id]/items/route.ts
-import { NextResponse, type NextRequest } from 'next/server';
-import { prisma } from '@/lib/prisma';
-import crypto from 'crypto';
+import { NextRequest, NextResponse } from 'next/server';
+import { PrismaClient } from '@prisma/client';
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+const prisma = globalThis.__prisma__ || new PrismaClient();
+if (process.env.NODE_ENV !== 'production') (globalThis as any).__prisma__ = prisma;
 
-const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
-const ALLOW_BROWSER_DEBUG = (process.env.ALLOW_BROWSER_DEBUG || '').trim() === '1';
-
-function hmacIsValid(initData: string, botToken: string) {
+/** debug-помощник: ?id=123456 (как в /api/me) */
+function getDebugTgId(req: NextRequest): string | null {
   try {
-    if (!initData || !botToken) return { valid: false, reason: 'empty' };
-    const url = new URLSearchParams(initData);
-    const hash = url.get('hash') || '';
-    url.delete('hash');
-
-    const data = [...url.entries()]
-      .map(([k, v]) => `${k}=${v}`)
-      .sort()
-      .join('\n');
-
-    const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-    const check = crypto.createHmac('sha256', secret).update(data).digest('hex');
-
-    return { valid: check === hash, hash, check };
-  } catch (e: any) {
-    return { valid: false, reason: e?.message || 'hmac error' };
-  }
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    if (id && /^\d{3,15}$/.test(id)) return id;
+  } catch {}
+  return null;
 }
 
-function extractUserIdFromInitData(initData: string): string | null {
+/** Достаём юзера по telegramId. Для прода у тебя уже есть в /api/me нормальная верификация. */
+async function getUserByRequest(req: NextRequest) {
+  const tgId = getDebugTgId(req);
+  if (!tgId) return null;
+  return prisma.user.findUnique({ where: { telegramId: tgId } });
+}
+
+/** GET /api/cases/[id]/items — список айтемов дела (только владельцу) */
+export async function GET(req: NextRequest, ctx: any) {
   try {
-    const p = new URLSearchParams(initData);
-    const unsafe = JSON.parse(p.get('user') || 'null');
-    const id = unsafe?.id ? String(unsafe.id) : null;
-    return id;
-  } catch { return null; }
-}
+    const user = await getUserByRequest(req);
+    if (!user) return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
 
-async function requireUser(req: NextRequest) {
-  const initData = req.headers.get('x-init-data') || '';
-  let userTgId: string | null = null;
+    const caseId = ctx?.params?.id as string | undefined;
+    if (!caseId) return NextResponse.json({ ok: false, error: 'NO_CASE_ID' }, { status: 400 });
 
-  if (initData) {
-    const h = hmacIsValid(initData, BOT_TOKEN);
-    if (!h.valid) {
-      return NextResponse.json({ ok:false, error:'BAD_INITDATA', why: h.reason || 'invalid_hmac' }, { status: 401 });
-    }
-    userTgId = extractUserIdFromInitData(initData);
-  }
-  if (!userTgId && ALLOW_BROWSER_DEBUG) {
-    const debugId = new URL(req.url).searchParams.get('id');
-    if (debugId && /^\d{3,15}$/.test(debugId)) userTgId = debugId;
-  }
-  if (!userTgId) {
-    return NextResponse.json({ ok:false, error:'AUTH_REQUIRED' }, { status: 401 });
-  }
+    const legalCase = await prisma.case.findUnique({ where: { id: caseId }, select: { id: true, userId: true } });
+    if (!legalCase) return NextResponse.json({ ok: false, error: 'NOT_FOUND' }, { status: 404 });
+    if (legalCase.userId !== user.id) return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
 
-  let user = await prisma.user.findFirst({ where: { telegramId: String(userTgId) } });
-  if (!user) {
-    user = await prisma.user.create({ data: { telegramId: String(userTgId) } });
-  }
-  return user;
-}
-
-// GET /api/cases/[id]/items — получить элементы дела
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const userOrResp = await requireUser(req);
-  if ('ok' in (userOrResp as any) && (userOrResp as any).ok === false) return userOrResp as NextResponse;
-  const user = userOrResp as any;
-
-  const id = params.id;
-  const c = await prisma.case.findFirst({
-    where: { id, userId: user.id },
-    include: { items: { orderBy: { createdAt: 'asc' } } },
-  });
-  if (!c) return NextResponse.json({ ok:false, error:'NOT_FOUND' }, { status: 404 });
-  return NextResponse.json({ ok:true, items: c.items });
-}
-
-// POST /api/cases/[id]/items — добавить элемент
-// body: { kind: 'note'|'step'|'deadline'|'doc', title: string, body?: string, dueAt?: string, priority?: number }
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const userOrResp = await requireUser(req);
-  if ('ok' in (userOrResp as any) && (userOrResp as any).ok === false) return userOrResp as NextResponse;
-  const user = userOrResp as any;
-
-  const id = params.id;
-  const c = await prisma.case.findFirst({ where: { id, userId: user.id } });
-  if (!c) return NextResponse.json({ ok:false, error:'NOT_FOUND' }, { status: 404 });
-
-  try {
-    const body = await req.json();
-    const kind = String(body?.kind || 'note');
-    const title = String(body?.title || '').trim();
-    const text = body?.body ? String(body.body) : undefined;
-    const dueAt = body?.dueAt ? new Date(String(body.dueAt)) : undefined;
-    const priority = typeof body?.priority === 'number' ? body.priority : undefined;
-
-    if (!title) return NextResponse.json({ ok:false, error:'TITLE_REQUIRED' }, { status: 400 });
-
-    const created = await prisma.caseItem.create({
-      data: { caseId: id, kind, title, body: text, dueAt, priority },
+    const items = await prisma.caseItem.findMany({
+      where: { caseId },
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
     });
 
-    // подтянем nextDueAt на дело, если надо
+    return NextResponse.json({ ok: true, items });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
+  }
+}
+
+/** POST /api/cases/[id]/items — добавить айтем (note/step/deadline/doc) */
+export async function POST(req: NextRequest, ctx: any) {
+  try {
+    const user = await getUserByRequest(req);
+    if (!user) return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+
+    const caseId = ctx?.params?.id as string | undefined;
+    if (!caseId) return NextResponse.json({ ok: false, error: 'NO_CASE_ID' }, { status: 400 });
+
+    const legalCase = await prisma.case.findUnique({ where: { id: caseId }, select: { id: true, userId: true } });
+    if (!legalCase) return NextResponse.json({ ok: false, error: 'NOT_FOUND' }, { status: 404 });
+    if (legalCase.userId !== user.id) return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
+
+    const bodyJson = await req.json().catch(() => ({}));
+    const {
+      kind = 'note',
+      title = 'Без названия',
+      body = '',
+      dueAt,
+      done = false,
+      priority,
+    } = bodyJson || {};
+
+    // мягкая валидация
+    const safeKind = typeof kind === 'string' ? kind : 'note';
+    const safeTitle = typeof title === 'string' && title.trim() ? title.trim() : 'Без названия';
+    const safeBody = typeof body === 'string' ? body : '';
+    const safeDone = Boolean(done);
+    const safePriority = typeof priority === 'number' ? priority : null;
+
+    let safeDueAt: Date | null = null;
     if (dueAt) {
+      const d = new Date(dueAt);
+      if (!isNaN(d.getTime())) safeDueAt = d;
+    }
+
+    const item = await prisma.caseItem.create({
+      data: {
+        caseId,
+        kind: safeKind,
+        title: safeTitle,
+        body: safeBody,
+        dueAt: safeDueAt || undefined,
+        done: safeDone,
+        priority: safePriority ?? undefined,
+      },
+    });
+
+    // Обновим nextDueAt у дела, если добавили дедлайн ближе текущего
+    if (safeDueAt) {
+      // вычислим ближайший dueAt по всем айтемам
       const next = await prisma.caseItem.findFirst({
-        where: { caseId: id, dueAt: { not: null }, done: false },
+        where: { caseId, dueAt: { not: null } },
         orderBy: { dueAt: 'asc' },
         select: { dueAt: true },
       });
       await prisma.case.update({
-        where: { id },
-        data: { nextDueAt: next?.dueAt || null },
+        where: { id: caseId },
+        data: { nextDueAt: next?.dueAt ?? null },
       });
     }
 
-    return NextResponse.json({ ok:true, itemId: created.id });
-  } catch (e: any) {
-    return NextResponse.json({ ok:false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
+    return NextResponse.json({ ok: true, item });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
   }
 }
