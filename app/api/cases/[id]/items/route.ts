@@ -1,9 +1,20 @@
-// app/api/cases/[id]/route.ts
+// app/api/cases/[id]/items/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+function getCaseIdFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split('/').filter(Boolean); // ["api","cases","<id>","items"]
+    const idx = parts.findIndex((p) => p === 'cases');
+    return idx >= 0 && parts[idx + 1] ? parts[idx + 1] : null;
+  } catch {
+    return null;
+  }
+}
 
 function safeDate(input: any): Date | null {
   if (!input) return null;
@@ -15,77 +26,55 @@ function safeStr(input: any, max = 200): string | null {
   const s = input.trim();
   return s ? s.slice(0, max) : null;
 }
-const ALLOWED_STATUS = new Set(['active', 'closed', 'archived']);
 
-/** Получить дело + его элементы (сортировка по сроку/созданию) */
-export async function GET(_req: Request, ctx: any) {
+const ALLOWED_KIND = new Set(['note', 'step', 'deadline', 'doc']);
+
+export async function GET(req: Request) {
   try {
-    const id = ctx?.params?.id as string | undefined;
-    if (!id) return NextResponse.json({ ok: false, error: 'MISSING_ID' }, { status: 400 });
+    const caseId = getCaseIdFromUrl(req.url);
+    if (!caseId) return NextResponse.json({ ok: false, error: 'MISSING_ID' }, { status: 400 });
 
-    const theCase = await prisma.case.findUnique({
-      where: { id },
-      include: {
-        items: {
-          orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
-        },
+    const items = await prisma.caseItem.findMany({
+      where: { caseId },
+      orderBy: [{ dueAt: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return NextResponse.json({ ok: true, items });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const caseId = getCaseIdFromUrl(req.url);
+    if (!caseId) return NextResponse.json({ ok: false, error: 'MISSING_ID' }, { status: 400 });
+
+    // убедимся, что дело существует
+    const exists = await prisma.case.findUnique({ where: { id: caseId }, select: { id: true } });
+    if (!exists) return NextResponse.json({ ok: false, error: 'CASE_NOT_FOUND' }, { status: 404 });
+
+    const body = await req.json().catch(() => ({} as any));
+    const kindIn = safeStr(body?.kind, 20) || 'note';
+    const kind = ALLOWED_KIND.has(kindIn) ? kindIn : 'note';
+
+    const title = safeStr(body?.title, 200);
+    if (!title) return NextResponse.json({ ok: false, error: 'TITLE_REQUIRED' }, { status: 400 });
+
+    const item = await prisma.caseItem.create({
+      data: {
+        caseId,
+        kind,
+        title,
+        body: typeof body?.body === 'string' ? body.body.trim() : undefined,
+        dueAt: body?.dueAt ? safeDate(body.dueAt) : undefined,
+        priority: Number.isFinite(body?.priority) ? Number(body.priority) : undefined,
+        // done по схеме = false
       },
     });
 
-    if (!theCase) return NextResponse.json({ ok: false, error: 'NOT_FOUND' }, { status: 404 });
-    return NextResponse.json({ ok: true, case: theCase });
+    return NextResponse.json({ ok: true, item });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
-  }
-}
-
-/** Обновить заголовок/статус/следующий дедлайн */
-export async function PATCH(req: Request, ctx: any) {
-  try {
-    const id = ctx?.params?.id as string | undefined;
-    if (!id) return NextResponse.json({ ok: false, error: 'MISSING_ID' }, { status: 400 });
-
-    const body = await req.json().catch(() => ({}));
-
-    const title = safeStr(body?.title, 200);
-    const statusIn = safeStr(body?.status, 20);
-    const status = statusIn && ALLOWED_STATUS.has(statusIn) ? statusIn : undefined;
-    const nextDueAt = body?.nextDueAt === null ? null : safeDate(body?.nextDueAt);
-
-    // формируем объект обновления только с переданными полями
-    const data: any = {};
-    if (title !== null && title !== undefined) data.title = title;
-    if (status) data.status = status;
-    if (body?.nextDueAt !== undefined) data.nextDueAt = nextDueAt;
-
-    if (Object.keys(data).length === 0) {
-      return NextResponse.json({ ok: false, error: 'NO_FIELDS_TO_UPDATE' }, { status: 400 });
-    }
-
-    const updated = await prisma.case.update({
-      where: { id },
-      data,
-      include: { items: true },
-    });
-
-    return NextResponse.json({ ok: true, case: updated });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
-  }
-}
-
-/** Удалить дело (элементы удалятся каскадом по схеме) */
-export async function DELETE(_req: Request, ctx: any) {
-  try {
-    const id = ctx?.params?.id as string | undefined;
-    if (!id) return NextResponse.json({ ok: false, error: 'MISSING_ID' }, { status: 400 });
-
-    await prisma.case.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    if (e?.code === 'P2025') {
-      return NextResponse.json({ ok: false, error: 'NOT_FOUND' }, { status: 404 });
-    }
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
 }
