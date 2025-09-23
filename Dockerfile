@@ -39,10 +39,33 @@ RUN set -eux; \
 RUN npm run build
 
 # ---------- runner ----------
-FROM base AS runner
+FROM node:20-slim AS runner
 ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
+
+RUN useradd -m -u 1001 nodeuser
+
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/prisma ./prisma
+
+USER nodeuser
+EXPOSE 3000
+ENTRYPOINT ["/usr/bin/tini","--"]
+
+# 1) Пробуем прогнать миграции (если они есть), иначе db push
+# 2) Запускаем приложение ТОЛЬКО через npm (чтобы нашёлся next)
+CMD ["sh","-c","\
+  if [ -d prisma/migrations ] && [ \"$(ls -A prisma/migrations 2>/dev/null)\" ]; then \
+    npx prisma migrate deploy; \
+  else \
+    npx prisma db push; \
+  fi; \
+  npm run start -s \
+"]
 
 # Некорневой пользователь
 RUN useradd -m -u 1001 nodeuser
