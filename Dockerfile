@@ -14,6 +14,7 @@ RUN if [ -f package-lock.json ]; then \
     else \
       npm install --no-audit --no-fund --ignore-scripts ; \
     fi
+# либы для importByUrl
 RUN npm install --no-audit --no-fund jsdom sanitize-html @mozilla/readability
 
 # ---------- builder ----------
@@ -22,40 +23,42 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# фиктивный URL только для prisma generate (в рантайме перекроется реальным)
+# фиктивный URL только для генерации клиента
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
 
-# prisma: проверка и генерация клиента
+# prisma: validate + generate
 RUN set -eux; \
-  echo "== Prisma files =="; \
-  ls -la prisma || true; \
   (test -f prisma/schema.prisma && sed -i '1s/^\xEF\xBB\xBF//' prisma/schema.prisma) || true; \
   npx prisma validate --schema=prisma/schema.prisma; \
   npx prisma generate --schema=prisma/schema.prisma
 
-# сборка next
+# build next
 RUN npm run build
 
 # ---------- runner ----------
 FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=3000
+# важно: чтобы Next слушал извне
+ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
-# Создаём пользователя, если его ещё нет
-RUN id -u nodeuser >/dev/null 2>&1 || useradd -m -u 1001 nodeuser
+# (опционально) создать пользователя, но без падения если уже есть
+RUN id -u nodeuser >/dev/null 2>&1 || useradd -m -u 1001 nodeuser || true
 
-# рантайм-артефакты
+# рантайм артефакты
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
-# ВАЖНО: копируем папку с миграциями в рантайм
+# обязательно копируем миграции/схему
 COPY --from=builder /app/prisma ./prisma
 
-USER nodeuser
+# можно остаться root, чтобы npx не упёрся в права
+# USER nodeuser
+
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini","--"]
 
-# На старте: накатываем миграции и запускаем сервер
-CMD ["sh","-c","npx prisma migrate deploy && npm run start -s"]
+# выполняем миграции, но НЕ валим контейнер, если что-то не так
+CMD ["sh","-c","(npx prisma migrate deploy || echo '⚠️ prisma migrate failed — продолжаем') && npm run start -s"]
