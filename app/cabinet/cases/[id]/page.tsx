@@ -32,10 +32,8 @@ function getDebugIdFromUrl(): string | null {
     const u = new URL(window.location.href);
     const id = u.searchParams.get('id');
     if (id && /^\d{3,15}$/.test(id)) return id;
-    return null;
-  } catch {
-    return null;
-  }
+  } catch {}
+  return null;
 }
 
 export default function CasePage() {
@@ -51,15 +49,22 @@ export default function CasePage() {
   const [data, setData] = useState<CaseData | null>(null);
   const [items, setItems] = useState<CaseItem[]>([]);
 
-  // поля формы добавления элемента
   const [newKind, setNewKind] = useState<'note' | 'step' | 'deadline' | 'doc'>('note');
   const [newTitle, setNewTitle] = useState<string>('');
   const [newBody, setNewBody] = useState<string>('');
   const [newDue, setNewDue] = useState<string>(''); // 'YYYY-MM-DD'
 
-  // query-суксфиксы + заголовки для API
+  // initData из TWA (если есть)
+  useEffect(() => {
+    const WebApp: any = (window as any)?.Telegram?.WebApp;
+    try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
+    const initData = WebApp?.initData || '';
+    if (initData) setUserInitData(initData);
+  }, []);
+
+  // если нет initData — используем ?id=... (дебаг)
   const apiSuffix = useMemo(() => {
-    if (userInitData) return ''; // есть Telegram initData — хедер пойдёт, суффикс не нужен
+    if (userInitData) return '';
     if (DEBUG) {
       const dbg = getDebugIdFromUrl();
       if (dbg) return `?id=${encodeURIComponent(dbg)}`;
@@ -73,27 +78,16 @@ export default function CasePage() {
     return h;
   }, [userInitData]);
 
-  // Telegram WebApp initData (если открыто из TWA)
-  useEffect(() => {
-    const WebApp: any = (window as any)?.Telegram?.WebApp;
-    try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
-    const initData = WebApp?.initData || '';
-    if (initData) setUserInitData(initData);
-  }, []);
-
-  // загрузка дела + элементов
   async function loadAll() {
     if (!caseId) return;
     setLoading(true);
     setError(null);
     try {
-      // дело
       const r1 = await fetch(`/api/cases/${caseId}${apiSuffix}`, { method: 'GET', headers: apiHeaders });
       const d1 = await r1.json();
       if (!r1.ok || !d1?.ok) throw new Error(d1?.error || `HTTP_${r1.status}`);
       setData(d1.case as CaseData);
 
-      // элементы
       const r2 = await fetch(`/api/cases/${caseId}/items${apiSuffix}`, { method: 'GET', headers: apiHeaders });
       const d2 = await r2.json();
       if (!r2.ok || !d2?.ok) throw new Error(d2?.error || `HTTP_${r2.status}`);
@@ -106,12 +100,10 @@ export default function CasePage() {
   }
 
   useEffect(() => {
-    // как только есть caseId и мы знаем initData/debug — грузим
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId, apiSuffix, apiHeaders]);
 
-  // добавить элемент
   async function addItem() {
     if (!newTitle.trim()) return;
     setSaving(true);
@@ -120,7 +112,6 @@ export default function CasePage() {
       const body: any = { kind: newKind, title: newTitle.trim() };
       if (newBody.trim()) body.body = newBody.trim();
       if (newKind === 'deadline' && newDue) {
-        // дата в ISO (полночь по локали)
         body.dueAt = new Date(`${newDue}T00:00:00`).toISOString();
       }
       const r = await fetch(`/api/cases/${caseId}/items${apiSuffix}`, {
@@ -131,13 +122,8 @@ export default function CasePage() {
       const d = await r.json();
       if (!r.ok || !d?.ok) throw new Error(d?.error || `HTTP_${r.status}`);
 
-      // оптимистично обновим список
       setItems((prev) => [d.item as CaseItem, ...prev]);
-      // очистим форму
-      setNewTitle('');
-      setNewBody('');
-      setNewDue('');
-      setNewKind('note');
+      setNewTitle(''); setNewBody(''); setNewDue(''); setNewKind('note');
     } catch (e: any) {
       setError(e?.message || 'Не удалось добавить элемент');
     } finally {
@@ -145,7 +131,6 @@ export default function CasePage() {
     }
   }
 
-  // Помощник форматирования дат
   function fmt(d?: string | null): string {
     if (!d) return '';
     const x = new Date(d);
@@ -155,6 +140,8 @@ export default function CasePage() {
     return `${dd}.${mm}.${yyyy}`;
   }
 
+  const linkSuffix = apiSuffix;
+
   return (
     <div style={{ padding: 20 }}>
       <h1 style={{ textAlign: 'center' }}>Дело</h1>
@@ -163,7 +150,7 @@ export default function CasePage() {
         <button onClick={() => router.back()} className="list-btn" style={{ textDecoration: 'none', padding: '8px 12px', borderRadius: 10 }}>
           ← Назад
         </button>
-        <Link href="/cabinet" className="list-btn" style={{ textDecoration: 'none', marginLeft: 8, padding: '8px 12px', borderRadius: 10 }}>
+        <Link href={`/cabinet/cases${linkSuffix}`} className="list-btn" style={{ textDecoration: 'none', marginLeft: 8, padding: '8px 12px', borderRadius: 10 }}>
           В кабинет
         </Link>
       </div>
