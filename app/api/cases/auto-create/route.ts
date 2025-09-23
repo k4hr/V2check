@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 const prisma = (globalThis as any).__prisma__ || new PrismaClient();
 if (process.env.NODE_ENV !== 'production') (globalThis as any).__prisma__ = prisma;
 
-// --- helpers -------------------------------------------------------
+/* ---------------- helpers ---------------- */
 function getDebugTgId(req: NextRequest): string | null {
   try {
     const url = new URL(req.url);
@@ -49,7 +49,7 @@ async function createOrReuseCase(opts: {
 }) {
   const { userId, title, answer = '', qa = [], nextDueAt = null } = opts;
 
-  // защита от дублей за последние 2ч
+  // защита от дублей за последние 2 часа
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
   const existing = await prisma.case.findFirst({
     where: { userId, title, createdAt: { gte: twoHoursAgo }, status: 'active' },
@@ -75,18 +75,18 @@ async function createOrReuseCase(opts: {
 
     if (qa.length) {
       const items = qa
-        .filter((x) => x?.q)
+        .filter((x) => x && typeof x.q === 'string')
         .map((x) => ({
           caseId,
           kind: 'note' as const,
           title: `Уточнение: ${x.q}`.slice(0, 150),
-          body: x.a || '',
+          body: typeof x.a === 'string' ? x.a : '',
         }));
       if (items.length) await prisma.caseItem.createMany({ data: items });
     }
   }
 
-  // nearest due
+  // ближайший дедлайн
   const nearest = await prisma.caseItem.findFirst({
     where: { caseId, dueAt: { not: null } },
     orderBy: { dueAt: 'asc' },
@@ -100,7 +100,24 @@ async function createOrReuseCase(opts: {
   return caseId;
 }
 
-// --- GET (debug из адресной строки) -------------------------------
+/* -------------- unified error helper -------------- */
+function errorJson(req: NextRequest, e: any, status = 500) {
+  const url = new URL(req.url);
+  const debug = url.searchParams.get('debug') === '1';
+  console.error('auto-create error', e);
+  return NextResponse.json(
+    {
+      ok: false,
+      error: 'INTERNAL',
+      code: debug ? e?.code : undefined,
+      message: debug ? (e?.message || String(e)) : undefined,
+      stack: debug ? e?.stack : undefined,
+    },
+    { status }
+  );
+}
+
+/* ---------------- GET (debug ручкой из браузера) ---------------- */
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
@@ -121,11 +138,11 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ ok: true, caseId, via: 'GET' });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
+    return errorJson(req, e, 500);
   }
 }
 
-// --- POST (боевой; из ассистента) --------------------------------
+/* ---------------- POST (боевой; из ассистента) ------------------ */
 export async function POST(req: NextRequest) {
   try {
     const user = await resolveUser(req);
@@ -150,7 +167,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, caseId, via: 'POST' });
-  } catch {
-    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
+  } catch (e) {
+    return errorJson(req, e, 500);
   }
 }
