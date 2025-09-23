@@ -15,7 +15,7 @@ RUN if [ -f package-lock.json ]; then \
     else \
       npm install --no-audit --no-fund --ignore-scripts ; \
     fi
-# ДОСТАВЛЯЕМ либы для importByUrl (в образ; репо править не нужно)
+# Библиотеки для парсинга (как у тебя)
 RUN npm install --no-audit --no-fund jsdom sanitize-html @mozilla/readability
 
 # ---------- builder ----------
@@ -24,14 +24,13 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Фиктивный DATABASE_URL только для prisma validate/generate (в рантайме перекроется настоящим)
+# Фиктивный DATABASE_URL только для prisma validate/generate (в рантайме будет свой)
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
 
-# Диагностика Prisma
+# Prisma: валидация и генерация клиента
 RUN set -eux; \
   echo "== Prisma files =="; \
   ls -la prisma || true; \
-  (test -f prisma/schema.prisma && nl -ba prisma/schema.prisma | sed -n '1,200p') || true; \
   (test -f prisma/schema.prisma && sed -i '1s/^\xEF\xBB\xBF//' prisma/schema.prisma) || true; \
   npx prisma validate --schema=prisma/schema.prisma; \
   npx prisma generate --schema=prisma/schema.prisma
@@ -53,8 +52,12 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+# ВАЖНО: копируем prisma (для migrate deploy/db push)
+COPY --from=builder /app/prisma ./prisma
 
 USER nodeuser
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini","--"]
-CMD ["npm","run","start","-s"]
+
+# Если есть миграции -> prisma migrate deploy, иначе fallback на db push
+CMD ["sh","-c","if [ -d prisma/migrations ] && [ \"$(ls -A prisma/migrations 2>/dev/null)\" ]; then npx prisma migrate deploy; else npx prisma db push; fi; next start -p ${PORT:-3000}"]
