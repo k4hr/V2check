@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type CaseItem = {
   id: string;
@@ -18,11 +16,10 @@ type CaseItem = {
 type CaseData = {
   id: string;
   title: string;
-  status: string;
+  status: string;           // active | closed | archived
   createdAt: string;
   updatedAt: string;
   nextDueAt?: string | null;
-  items?: CaseItem[];
 };
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
@@ -36,10 +33,22 @@ function getDebugIdFromUrl(): string | null {
   return null;
 }
 
+function fmt(d?: string | null): string {
+  if (!d) return '';
+  const x = new Date(d);
+  const dd = String(x.getDate()).padStart(2, '0');
+  const mm = String(x.getMonth() + 1).padStart(2, '0');
+  const yyyy = x.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+
 export default function CasePage() {
-  const params = useParams();
-  const router = useRouter();
-  const caseId = String(params?.id || '');
+  // Получаем id из URL вручную (надёжно и без typedRoutes)
+  const caseId = useMemo(() => {
+    if (typeof window === 'undefined') return '';
+    const u = new URL(window.location.href);
+    return String(u.pathname.split('/').pop() || '');
+  }, []);
 
   const [userInitData, setUserInitData] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -49,12 +58,13 @@ export default function CasePage() {
   const [data, setData] = useState<CaseData | null>(null);
   const [items, setItems] = useState<CaseItem[]>([]);
 
+  // форма добавления
   const [newKind, setNewKind] = useState<'note' | 'step' | 'deadline' | 'doc'>('note');
   const [newTitle, setNewTitle] = useState<string>('');
   const [newBody, setNewBody] = useState<string>('');
-  const [newDue, setNewDue] = useState<string>(''); // 'YYYY-MM-DD'
+  const [newDue, setNewDue] = useState<string>(''); // YYYY-MM-DD
 
-  // Инициализация Telegram WebApp
+  // Telegram initData
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
     try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
@@ -62,72 +72,63 @@ export default function CasePage() {
     if (initData) setUserInitData(initData);
   }, []);
 
-  // Суффикс для API (в браузерном дебаге без initData)
-  const apiSuffix = useMemo(() => {
-    if (userInitData) return '';
-    if (DEBUG) {
-      const dbg = getDebugIdFromUrl();
-      if (dbg) return `?id=${encodeURIComponent(dbg)}`;
-    }
-    return '';
-  }, [userInitData]);
+  const debugId = useMemo(() => (DEBUG ? getDebugIdFromUrl() : null), []);
+  const ready = Boolean(userInitData) || Boolean(debugId);
 
-  // Заголовки API
-  const apiHeaders = useMemo<Record<string, string>>(() => {
-    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  const linkSuffix = useMemo(() => {
+    if (!userInitData && debugId) return `?id=${encodeURIComponent(debugId)}`;
+    return '';
+  }, [userInitData, debugId]);
+
+  const apiHeaders = useMemo<Record<string,string>>(() => {
+    const h: Record<string,string> = { 'Content-Type': 'application/json' };
     if (userInitData) h['x-init-data'] = userInitData;
     return h;
   }, [userInitData]);
 
-  // query-объект для Link (чтобы не падал typedRoutes)
-  const linkQuery = useMemo(() => {
-    if (!apiSuffix) return undefined;
-    try {
-      const qs = new URLSearchParams(apiSuffix.startsWith('?') ? apiSuffix.slice(1) : apiSuffix);
-      const obj: Record<string, string> = {};
-      for (const [k, v] of qs.entries()) obj[k] = v;
-      return obj;
-    } catch {
-      return undefined;
-    }
-  }, [apiSuffix]);
+  const apiSuffix = linkSuffix;
+
+  const loadSeq = useRef(0);
 
   async function loadAll() {
-    if (!caseId) return;
+    if (!caseId || !ready) return;
+    const seq = ++loadSeq.current;
+
     setLoading(true);
     setError(null);
     try {
+      // дело
       const r1 = await fetch(`/api/cases/${caseId}${apiSuffix}`, { method: 'GET', headers: apiHeaders });
       const d1 = await r1.json();
+      if (loadSeq.current !== seq) return;
       if (!r1.ok || !d1?.ok) throw new Error(d1?.error || `HTTP_${r1.status}`);
       setData(d1.case as CaseData);
 
+      // элементы
       const r2 = await fetch(`/api/cases/${caseId}/items${apiSuffix}`, { method: 'GET', headers: apiHeaders });
       const d2 = await r2.json();
+      if (loadSeq.current !== seq) return;
       if (!r2.ok || !d2?.ok) throw new Error(d2?.error || `HTTP_${r2.status}`);
       setItems((d2.items || []) as CaseItem[]);
     } catch (e: any) {
+      if (loadSeq.current !== seq) return;
       setError(e?.message || 'Ошибка загрузки');
     } finally {
-      setLoading(false);
+      if (loadSeq.current === seq) setLoading(false);
     }
   }
 
-  useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [caseId, apiSuffix, apiHeaders]);
+  useEffect(() => { void loadAll(); }, [caseId, ready, apiSuffix, apiHeaders]);
 
   async function addItem() {
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || !ready) return;
     setSaving(true);
     setError(null);
     try {
       const body: any = { kind: newKind, title: newTitle.trim() };
       if (newBody.trim()) body.body = newBody.trim();
-      if (newKind === 'deadline' && newDue) {
-        body.dueAt = new Date(`${newDue}T00:00:00`).toISOString();
-      }
+      if (newKind === 'deadline' && newDue) body.dueAt = new Date(`${newDue}T00:00:00`).toISOString();
+
       const r = await fetch(`/api/cases/${caseId}/items${apiSuffix}`, {
         method: 'POST',
         headers: apiHeaders,
@@ -138,20 +139,9 @@ export default function CasePage() {
 
       setItems((prev) => [d.item as CaseItem, ...prev]);
       setNewTitle(''); setNewBody(''); setNewDue(''); setNewKind('note');
-    } catch (e: any) {
+    } catch (e:any) {
       setError(e?.message || 'Не удалось добавить элемент');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function fmt(d?: string | null): string {
-    if (!d) return '';
-    const x = new Date(d);
-    const dd = String(x.getDate()).padStart(2, '0');
-    const mm = String(x.getMonth() + 1).padStart(2, '0');
-    const yyyy = x.getFullYear();
-    return `${dd}.${mm}.${yyyy}`;
+    } finally { setSaving(false); }
   }
 
   return (
@@ -159,18 +149,12 @@ export default function CasePage() {
       <h1 style={{ textAlign: 'center' }}>Дело</h1>
 
       <div style={{ marginTop: 8 }}>
-        <button onClick={() => router.back()} className="list-btn" style={{ textDecoration: 'none', padding: '8px 12px', borderRadius: 10 }}>
+        <a href={`/cabinet/cases${linkSuffix}`} className="list-btn" style={{ textDecoration: 'none', padding: '8px 12px', borderRadius: 10 }}>
           ← Назад
-        </button>
-
-        {/* ВАЖНО: UrlObject вместо строки */}
-        <Link
-          href={{ pathname: '/cabinet/cases', query: linkQuery }}
-          className="list-btn"
-          style={{ textDecoration: 'none', marginLeft: 8, padding: '8px 12px', borderRadius: 10 }}
-        >
+        </a>
+        <a href={`/cabinet${linkSuffix}`} className="list-btn" style={{ textDecoration: 'none', marginLeft: 8, padding: '8px 12px', borderRadius: 10 }}>
           В кабинет
-        </Link>
+        </a>
       </div>
 
       <div style={{ marginTop: 12, border: '1px solid #333', borderRadius: 12, padding: 12, maxWidth: 820, marginInline: 'auto' }}>
@@ -191,7 +175,7 @@ export default function CasePage() {
         )}
       </div>
 
-      {/* Добавить элемент таймлайна */}
+      {/* Добавить элемент */}
       <div style={{ marginTop: 12, border: '1px solid #333', borderRadius: 12, padding: 12, maxWidth: 820, marginInline: 'auto' }}>
         <h3 style={{ marginTop: 0 }}>Добавить этап/заметку</h3>
 
@@ -232,7 +216,7 @@ export default function CasePage() {
 
           <div>
             <button
-              disabled={saving || !newTitle.trim()}
+              disabled={saving || !newTitle.trim() || !ready}
               onClick={addItem}
               className="list-btn"
               style={{ padding: '8px 12px', borderRadius: 10 }}
@@ -247,7 +231,7 @@ export default function CasePage() {
       <div style={{ marginTop: 12, border: '1px solid #333', borderRadius: 12, padding: 12, maxWidth: 820, marginInline: 'auto' }}>
         <h3 style={{ marginTop: 0 }}>Таймлайн</h3>
 
-        {!items.length && <p style={{ opacity: .7 }}>Пока нет записей.</p>}
+        {!items.length && ready && !loading && <p style={{ opacity: .7 }}>Пока нет записей.</p>}
 
         <div style={{ display: 'grid', gap: 8 }}>
           {items.map((it) => (
