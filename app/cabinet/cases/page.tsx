@@ -11,52 +11,87 @@ type CaseListItem = {
   _count?: { items: number };
 };
 
+const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
+
+function getDebugIdFromUrl(): string | null {
+  try {
+    const u = new URL(window.location.href);
+    const id = u.searchParams.get('id');
+    if (id && /^\d{3,15}$/.test(id)) return id;
+  } catch {}
+  return null;
+}
+
 export default function CasesPage() {
   const [items, setItems] = useState<CaseListItem[]>([]);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(false);
+  const [userInitData, setUserInitData] = useState<string>('');
 
-  const tgId = useMemo(() => {
-    if (typeof window === 'undefined') return '';
-    const u = new URL(window.location.href);
-    return u.searchParams.get('id') || '';
+  // загружаем initData из Telegram WebApp (если открыто в TWA)
+  useEffect(() => {
+    const WebApp: any = (window as any)?.Telegram?.WebApp;
+    try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
+    const initData = WebApp?.initData || '';
+    if (initData) setUserInitData(initData);
   }, []);
+
+  // если нет initData (браузерный дебаг) — добавим ?id=...
+  const apiSuffix = useMemo(() => {
+    if (userInitData) return '';
+    if (DEBUG) {
+      const dbg = getDebugIdFromUrl();
+      if (dbg) return `?id=${encodeURIComponent(dbg)}`;
+    }
+    return '';
+  }, [userInitData]);
+
+  // общие заголовки для API
+  const apiHeaders = useMemo<Record<string, string>>(() => {
+    const h: Record<string, string> = {};
+    if (userInitData) h['x-init-data'] = userInitData;
+    return h;
+  }, [userInitData]);
 
   async function load() {
     setLoading(true);
     try {
-      const w: any = window;
-      const initData: string | undefined = w?.Telegram?.WebApp?.initData;
-      const res = await fetch(`/api/cases${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
-        headers: { ...(initData ? { 'x-init-data': initData } : {}) },
+      const res = await fetch(`/api/cases${apiSuffix}`, {
+        method: 'GET',
+        headers: apiHeaders,
         cache: 'no-store',
       });
-      const data = await res.json();
-      if (data?.ok) setItems(data.items || []);
-    } finally { setLoading(false); }
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.ok) setItems(Array.isArray(data.items) ? data.items : []);
+      else setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [apiSuffix, apiHeaders]); // перезагружаем, когда появился initData/id
 
   async function createCase() {
     const name = title.trim();
     if (!name) return;
     setLoading(true);
     try {
-      const w: any = window;
-      const initData: string | undefined = w?.Telegram?.WebApp?.initData;
-      const res = await fetch(`/api/cases${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
+      const res = await fetch(`/api/cases${apiSuffix}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(initData ? { 'x-init-data': initData } : {}) },
+        headers: { 'Content-Type': 'application/json', ...apiHeaders },
         body: JSON.stringify({ title: name }),
       });
-      const data = await res.json();
-      if (data?.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.ok) {
         setTitle('');
         await load();
       }
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const linkSuffix = apiSuffix; // чтобы пробрасывать ?id=... в ссылки на кейсы
 
   return (
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
@@ -78,9 +113,16 @@ export default function CasesPage() {
         </button>
       </div>
 
+      {loading && <div style={{ opacity: .7, marginTop: 10 }}>Загружаем…</div>}
+
       <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
         {items.map(it => (
-          <a key={it.id} href={`/cabinet/cases/${it.id}${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`} className="list-btn" style={{ textDecoration: 'none' }}>
+          <a
+            key={it.id}
+            href={`/cabinet/cases/${it.id}${linkSuffix}`}
+            className="list-btn"
+            style={{ textDecoration: 'none' }}
+          >
             <span className="list-btn__left">
               <b>{it.title}</b>
               <div style={{ opacity: .7, fontSize: 12, marginTop: 4 }}>
