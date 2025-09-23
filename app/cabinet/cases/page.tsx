@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 
 type CaseListItem = {
   id: string;
@@ -27,8 +28,9 @@ export default function CasesPage() {
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(false);
   const [userInitData, setUserInitData] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
 
-  // загружаем initData из Telegram WebApp (если открыто в TWA)
+  // init Telegram WebApp и получение initData
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
     try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
@@ -36,7 +38,7 @@ export default function CasesPage() {
     if (initData) setUserInitData(initData);
   }, []);
 
-  // если нет initData (браузерный дебаг) — добавим ?id=...
+  // Суксфикс для API, если работаем в браузерном дебаге без initData
   const apiSuffix = useMemo(() => {
     if (userInitData) return '';
     if (DEBUG) {
@@ -46,52 +48,76 @@ export default function CasesPage() {
     return '';
   }, [userInitData]);
 
-  // общие заголовки для API
+  // Заголовки для API
   const apiHeaders = useMemo<Record<string, string>>(() => {
     const h: Record<string, string> = {};
     if (userInitData) h['x-init-data'] = userInitData;
     return h;
   }, [userInitData]);
 
+  // query-объект для Link (typedRoutes не любит строки с ?id=...)
+  const linkQuery = useMemo(() => {
+    if (!apiSuffix) return undefined;
+    try {
+      const qs = new URLSearchParams(apiSuffix.startsWith('?') ? apiSuffix.slice(1) : apiSuffix);
+      const obj: Record<string, string> = {};
+      for (const [k, v] of qs.entries()) obj[k] = v;
+      return obj;
+    } catch { return undefined; }
+  }, [apiSuffix]);
+
   async function load() {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/cases${apiSuffix}`, {
-        method: 'GET',
-        headers: apiHeaders,
+        headers: { ...apiHeaders },
         cache: 'no-store',
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.ok) setItems(Array.isArray(data.items) ? data.items : []);
-      else setItems([]);
+      const data = await res.json();
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP_${res.status}`);
+      setItems(data.items || []);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось загрузить список дел');
+      setItems([]);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, [apiSuffix, apiHeaders]); // перезагружаем, когда появился initData/id
+  // Загружаем/перезагружаем, когда появился initData или сменился режим дебага
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiSuffix, apiHeaders]);
 
   async function createCase() {
     const name = title.trim();
     if (!name) return;
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch(`/api/cases${apiSuffix}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...apiHeaders },
         body: JSON.stringify({ title: name }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data?.ok) {
-        setTitle('');
-        await load();
-      }
+      const data = await res.json();
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP_${res.status}`);
+      setTitle('');
+      await load();
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось создать дело');
     } finally {
       setLoading(false);
     }
   }
 
-  const linkSuffix = apiSuffix; // чтобы пробрасывать ?id=... в ссылки на кейсы
+  function fmt(d?: string | null): string {
+    if (!d) return '';
+    const x = new Date(d);
+    return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`;
+  }
 
   return (
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
@@ -113,13 +139,16 @@ export default function CasesPage() {
         </button>
       </div>
 
+      {error && <div style={{ color: 'tomato', marginTop: 10 }}>{error}</div>}
       {loading && <div style={{ opacity: .7, marginTop: 10 }}>Загружаем…</div>}
 
       <div style={{ display: 'grid', gap: 10, marginTop: 16 }}>
+        {!loading && !items.length && <div style={{ opacity: .7 }}>Пока нет дел.</div>}
+
         {items.map(it => (
-          <a
+          <Link
             key={it.id}
-            href={`/cabinet/cases/${it.id}${linkSuffix}`}
+            href={{ pathname: `/cabinet/cases/${it.id}`, query: linkQuery }}
             className="list-btn"
             style={{ textDecoration: 'none' }}
           >
@@ -127,12 +156,12 @@ export default function CasesPage() {
               <b>{it.title}</b>
               <div style={{ opacity: .7, fontSize: 12, marginTop: 4 }}>
                 {it.status === 'active' ? 'Активно' : it.status === 'closed' ? 'Закрыто' : 'В архиве'}
-                {it.nextDueAt ? ` • Ближайший срок: ${new Date(it.nextDueAt).toLocaleDateString()}` : ''}
+                {it.nextDueAt ? ` • Ближайший срок: ${fmt(it.nextDueAt)}` : ''}
                 {typeof it._count?.items === 'number' ? ` • Записей: ${it._count.items}` : ''}
               </div>
             </span>
             <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-          </a>
+          </Link>
         ))}
       </div>
     </main>
