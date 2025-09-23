@@ -2,11 +2,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PrismaClient } from '@prisma/client';
 
+export const dynamic = 'force-dynamic';
+
 const prisma = (globalThis as any).__prisma__ || new PrismaClient();
 if (process.env.NODE_ENV !== 'production') (globalThis as any).__prisma__ = prisma;
 
 // --- helpers -------------------------------------------------------
-
 function getDebugTgId(req: NextRequest): string | null {
   try {
     const url = new URL(req.url);
@@ -16,7 +17,6 @@ function getDebugTgId(req: NextRequest): string | null {
   return null;
 }
 
-// Берём Telegram id из initData (без криптоподписи, как быстрый вариант, как в /api/me)
 function getTgIdFromInitData(req: NextRequest): string | null {
   const initData = req.headers.get('x-init-data') || '';
   if (!initData) return null;
@@ -33,114 +33,124 @@ function getTgIdFromInitData(req: NextRequest): string | null {
 async function resolveUser(req: NextRequest) {
   const tgId = getTgIdFromInitData(req) || getDebugTgId(req);
   if (!tgId) return null;
-
-  // upsert чтобы не падать, если юзер ещё не создан
-  const user = await prisma.user.upsert({
+  return prisma.user.upsert({
     where: { telegramId: tgId },
     create: { telegramId: tgId },
     update: {},
   });
-  return user;
 }
 
-// --- route handlers -------------------------------------------------
+async function createOrReuseCase(opts: {
+  userId: string;
+  title: string;
+  answer?: string;
+  qa?: { q: string; a: string }[];
+  nextDueAt?: Date | null;
+}) {
+  const { userId, title, answer = '', qa = [], nextDueAt = null } = opts;
 
+  // защита от дублей за последние 2ч
+  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const existing = await prisma.case.findFirst({
+    where: { userId, title, createdAt: { gte: twoHoursAgo }, status: 'active' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+
+  let caseId: string;
+  if (existing) {
+    caseId = existing.id;
+  } else {
+    const created = await prisma.case.create({
+      data: { userId, title, status: 'active', nextDueAt: nextDueAt ?? undefined },
+      select: { id: true },
+    });
+    caseId = created.id;
+
+    if (answer) {
+      await prisma.caseItem.create({
+        data: { caseId, kind: 'note', title: 'Ответ ассистента', body: answer },
+      });
+    }
+
+    if (qa.length) {
+      const items = qa
+        .filter((x) => x?.q)
+        .map((x) => ({
+          caseId,
+          kind: 'note' as const,
+          title: `Уточнение: ${x.q}`.slice(0, 150),
+          body: x.a || '',
+        }));
+      if (items.length) await prisma.caseItem.createMany({ data: items });
+    }
+  }
+
+  // nearest due
+  const nearest = await prisma.caseItem.findFirst({
+    where: { caseId, dueAt: { not: null } },
+    orderBy: { dueAt: 'asc' },
+    select: { dueAt: true },
+  });
+  await prisma.case.update({
+    where: { id: caseId },
+    data: { nextDueAt: nearest?.dueAt ?? (nextDueAt ?? null) },
+  });
+
+  return caseId;
+}
+
+// --- GET (debug из адресной строки) -------------------------------
+export async function GET(req: NextRequest) {
+  try {
+    const user = await resolveUser(req);
+    if (!user) return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+
+    const url = new URL(req.url);
+    const title = (url.searchParams.get('title') || 'Тестовое дело').trim();
+    const answer = url.searchParams.get('answer') || '';
+    const dueAtStr = url.searchParams.get('dueAt');
+    const dueAt = dueAtStr ? new Date(dueAtStr) : null;
+
+    const caseId = await createOrReuseCase({
+      userId: user.id,
+      title,
+      answer,
+      nextDueAt: dueAt && !isNaN(dueAt.getTime()) ? dueAt : null,
+    });
+
+    return NextResponse.json({ ok: true, caseId, via: 'GET' });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
+  }
+}
+
+// --- POST (боевой; из ассистента) --------------------------------
 export async function POST(req: NextRequest) {
   try {
     const user = await resolveUser(req);
     if (!user) return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
 
     const json = await req.json().catch(() => ({}));
-    const {
-      title,
-      root,     // string
-      sub,      // string
-      qa = [],  // массив { q: string, a: string }
-      answer = '', // полный текст ответа ИИ
-      nextDueAt,    // ISO-строка, опционально
-    } = json || {};
+    const { title, qa = [], answer = '', nextDueAt } = json || {};
 
     const safeTitle = (typeof title === 'string' && title.trim()) ? title.trim() : 'Моё дело';
-    const safeRoot  = typeof root === 'string' ? root : '';
-    const safeSub   = typeof sub === 'string' ? sub : '';
-    const safeAnswer = typeof answer === 'string' ? answer : '';
-
     let due: Date | null = null;
     if (nextDueAt) {
       const d = new Date(nextDueAt);
       if (!isNaN(d.getTime())) due = d;
     }
 
-    // защита от дублей: если уже есть дело с таким же title, созданное <= 2 часа назад — вернём его
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-    const existing = await prisma.case.findFirst({
-      where: {
-        userId: user.id,
-        title: safeTitle,
-        createdAt: { gte: twoHoursAgo },
-        status: 'active',
-      },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
+    const caseId = await createOrReuseCase({
+      userId: user.id,
+      title: safeTitle,
+      answer: typeof answer === 'string' ? answer : '',
+      qa: Array.isArray(qa) ? qa : [],
+      nextDueAt: due,
     });
 
-    let caseId: string;
-
-    if (existing) {
-      caseId = existing.id;
-    } else {
-      const created = await prisma.case.create({
-        data: {
-          userId: user.id,
-          title: safeTitle,
-          status: 'active',
-          nextDueAt: due ?? undefined,
-        },
-        select: { id: true },
-      });
-      caseId = created.id;
-
-      // 1) Сохраняем полный ответ ИИ как заметку
-      if (safeAnswer) {
-        await prisma.caseItem.create({
-          data: {
-            caseId,
-            kind: 'note',
-            title: 'Ответ ассистента',
-            body: safeAnswer,
-          },
-        });
-      }
-
-      // 2) Сохраняем уточняющие вопросы/ответы пользователя
-      if (Array.isArray(qa) && qa.length) {
-        const itemsData = qa
-          .filter((x: any) => x && typeof x.q === 'string')
-          .map((x: any) => ({
-            caseId,
-            kind: 'note' as const,
-            title: `Уточнение: ${x.q}`.slice(0, 150),
-            body: typeof x.a === 'string' ? x.a : '',
-          }));
-        if (itemsData.length) {
-          await prisma.caseItem.createMany({ data: itemsData });
-        }
-      }
-    }
-
-    // пересчитать ближайший дедлайн (если он был передан или появились дедлайны позже)
-    const nearest = await prisma.caseItem.findFirst({
-      where: { caseId, dueAt: { not: null } },
-      orderBy: { dueAt: 'asc' },
-      select: { dueAt: true },
-    });
-    await prisma.case.update({
-      where: { id: caseId },
-      data: { nextDueAt: nearest?.dueAt ?? (due ?? null) },
-    });
-
-    return NextResponse.json({ ok: true, caseId });
-  } catch (e) {
+    return NextResponse.json({ ok: true, caseId, via: 'POST' });
+  } catch {
     return NextResponse.json({ ok: false, error: 'INTERNAL' }, { status: 500 });
   }
 }
