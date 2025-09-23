@@ -3,10 +3,9 @@
   "version": "0.9.5",
   "private": true,
   "scripts": {
-    "prestart": "node scripts/check-db-url.mjs || echo \"[WARN] skip prestart\"",
-    "start": "next start -p $PORT -H 0.0.0.0",
-    "postinstall": "prisma generate",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "build": "next build",
+    "postinstall": "prisma generate || true",
     "migrate": "prisma db push --schema=prisma/schema.prisma"
   },
   "dependencies": {
