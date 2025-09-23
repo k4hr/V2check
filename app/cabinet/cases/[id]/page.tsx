@@ -18,7 +18,7 @@ type CaseItem = {
 type CaseData = {
   id: string;
   title: string;
-  status: string;           // active | closed | archived
+  status: string;
   createdAt: string;
   updatedAt: string;
   nextDueAt?: string | null;
@@ -54,7 +54,7 @@ export default function CasePage() {
   const [newBody, setNewBody] = useState<string>('');
   const [newDue, setNewDue] = useState<string>(''); // 'YYYY-MM-DD'
 
-  // initData из TWA (если есть)
+  // Инициализация Telegram WebApp
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
     try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
@@ -62,7 +62,7 @@ export default function CasePage() {
     if (initData) setUserInitData(initData);
   }, []);
 
-  // если нет initData — используем ?id=... (дебаг)
+  // Суффикс для API (в браузерном дебаге без initData)
   const apiSuffix = useMemo(() => {
     if (userInitData) return '';
     if (DEBUG) {
@@ -72,11 +72,25 @@ export default function CasePage() {
     return '';
   }, [userInitData]);
 
+  // Заголовки API
   const apiHeaders = useMemo<Record<string, string>>(() => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' };
     if (userInitData) h['x-init-data'] = userInitData;
     return h;
   }, [userInitData]);
+
+  // query-объект для Link (чтобы не падал typedRoutes)
+  const linkQuery = useMemo(() => {
+    if (!apiSuffix) return undefined;
+    try {
+      const qs = new URLSearchParams(apiSuffix.startsWith('?') ? apiSuffix.slice(1) : apiSuffix);
+      const obj: Record<string, string> = {};
+      for (const [k, v] of qs.entries()) obj[k] = v;
+      return obj;
+    } catch {
+      return undefined;
+    }
+  }, [apiSuffix]);
 
   async function loadAll() {
     if (!caseId) return;
@@ -140,8 +154,6 @@ export default function CasePage() {
     return `${dd}.${mm}.${yyyy}`;
   }
 
-  const linkSuffix = apiSuffix;
-
   return (
     <div style={{ padding: 20 }}>
       <h1 style={{ textAlign: 'center' }}>Дело</h1>
@@ -150,7 +162,13 @@ export default function CasePage() {
         <button onClick={() => router.back()} className="list-btn" style={{ textDecoration: 'none', padding: '8px 12px', borderRadius: 10 }}>
           ← Назад
         </button>
-        <Link href={`/cabinet/cases${linkSuffix}`} className="list-btn" style={{ textDecoration: 'none', marginLeft: 8, padding: '8px 12px', borderRadius: 10 }}>
+
+        {/* ВАЖНО: UrlObject вместо строки */}
+        <Link
+          href={{ pathname: '/cabinet/cases', query: linkQuery }}
+          className="list-btn"
+          style={{ textDecoration: 'none', marginLeft: 8, padding: '8px 12px', borderRadius: 10 }}
+        >
           В кабинет
         </Link>
       </div>
@@ -237,8 +255,7 @@ export default function CasePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
                 <div>
                   <div style={{ fontWeight: 600 }}>
-                    {it.title}
-                    {' '}
+                    {it.title}{' '}
                     <span style={{ opacity: .6, fontWeight: 400 }}>
                       · {it.kind === 'deadline' ? 'Срок' : it.kind === 'step' ? 'Шаг' : it.kind === 'doc' ? 'Документ' : 'Заметка'}
                     </span>
