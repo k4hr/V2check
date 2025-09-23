@@ -7,16 +7,13 @@ export const dynamic = 'force-dynamic';
 const prisma = (globalThis as any).__prisma__ || new PrismaClient();
 if (process.env.NODE_ENV !== 'production') (globalThis as any).__prisma__ = prisma;
 
-/* ---------------- helpers ---------------- */
 function getDebugTgId(req: NextRequest): string | null {
   try {
-    const url = new URL(req.url);
-    const id = url.searchParams.get('id');
+    const id = req.nextUrl.searchParams.get('id');
     if (id && /^\d{3,15}$/.test(id)) return id;
   } catch {}
   return null;
 }
-
 function getTgIdFromInitData(req: NextRequest): string | null {
   const initData = req.headers.get('x-init-data') || '';
   if (!initData) return null;
@@ -29,7 +26,6 @@ function getTgIdFromInitData(req: NextRequest): string | null {
   } catch {}
   return null;
 }
-
 async function resolveUser(req: NextRequest) {
   const tgId = getTgIdFromInitData(req) || getDebugTgId(req);
   if (!tgId) return null;
@@ -49,7 +45,6 @@ async function createOrReuseCase(opts: {
 }) {
   const { userId, title, answer = '', qa = [], nextDueAt = null } = opts;
 
-  // защита от дублей за последние 2 часа
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
   const existing = await prisma.case.findFirst({
     where: { userId, title, createdAt: { gte: twoHoursAgo }, status: 'active' },
@@ -72,21 +67,19 @@ async function createOrReuseCase(opts: {
         data: { caseId, kind: 'note', title: 'Ответ ассистента', body: answer },
       });
     }
-
     if (qa.length) {
       const items = qa
-        .filter((x) => x && typeof x.q === 'string')
+        .filter((x) => x?.q)
         .map((x) => ({
           caseId,
           kind: 'note' as const,
           title: `Уточнение: ${x.q}`.slice(0, 150),
-          body: typeof x.a === 'string' ? x.a : '',
+          body: x.a || '',
         }));
       if (items.length) await prisma.caseItem.createMany({ data: items });
     }
   }
 
-  // ближайший дедлайн
   const nearest = await prisma.caseItem.findFirst({
     where: { caseId, dueAt: { not: null } },
     orderBy: { dueAt: 'asc' },
@@ -100,30 +93,25 @@ async function createOrReuseCase(opts: {
   return caseId;
 }
 
-/* -------------- unified error helper -------------- */
-function errorJson(req: NextRequest, e: any, status = 500) {
-  const url = new URL(req.url);
-  const debug = url.searchParams.get('debug') === '1';
-  console.error('auto-create error', e);
-  return NextResponse.json(
-    {
-      ok: false,
-      error: 'INTERNAL',
-      code: debug ? e?.code : undefined,
-      message: debug ? (e?.message || String(e)) : undefined,
-      stack: debug ? e?.stack : undefined,
-    },
-    { status }
-  );
+function dbg(e: any, req: NextRequest) {
+  const debug = req.nextUrl.searchParams.get('debug') === '1';
+  if (!debug) return { ok: false, error: 'INTERNAL' };
+  return {
+    ok: false,
+    error: 'INTERNAL',
+    code: e?.code,
+    message: e?.message,
+    meta: e?.meta,
+  };
 }
 
-/* ---------------- GET (debug ручкой из браузера) ---------------- */
+// --- GET: отладка из браузера ---
 export async function GET(req: NextRequest) {
   try {
     const user = await resolveUser(req);
     if (!user) return NextResponse.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
 
-    const url = new URL(req.url);
+    const url = req.nextUrl;
     const title = (url.searchParams.get('title') || 'Тестовое дело').trim();
     const answer = url.searchParams.get('answer') || '';
     const dueAtStr = url.searchParams.get('dueAt');
@@ -137,12 +125,12 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, caseId, via: 'GET' });
-  } catch (e) {
-    return errorJson(req, e, 500);
+  } catch (e: any) {
+    return NextResponse.json(dbg(e, req), { status: 500 });
   }
 }
 
-/* ---------------- POST (боевой; из ассистента) ------------------ */
+// --- POST: боевой ---
 export async function POST(req: NextRequest) {
   try {
     const user = await resolveUser(req);
@@ -167,7 +155,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ ok: true, caseId, via: 'POST' });
-  } catch (e) {
-    return errorJson(req, e, 500);
+  } catch (e: any) {
+    return NextResponse.json(dbg(e, req), { status: 500 });
   }
 }
