@@ -14,7 +14,6 @@ RUN if [ -f package-lock.json ]; then \
     else \
       npm install --no-audit --no-fund --ignore-scripts ; \
     fi
-# либы для importByUrl
 RUN npm install --no-audit --no-fund jsdom sanitize-html @mozilla/readability
 
 # ---------- builder ----------
@@ -23,10 +22,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# фиктивный DATABASE_URL только для prisma validate/generate (реальный придёт на рантайме)
+# фиктивный URL только для prisma generate (в рантайме перекроется реальным)
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
 
-# Prisma: валидация/генерация клиента
+# prisma: проверка и генерация клиента
 RUN set -eux; \
   echo "== Prisma files =="; \
   ls -la prisma || true; \
@@ -34,7 +33,7 @@ RUN set -eux; \
   npx prisma validate --schema=prisma/schema.prisma; \
   npx prisma generate --schema=prisma/schema.prisma
 
-# Сборка Next.js
+# сборка next
 RUN npm run build
 
 # ---------- runner ----------
@@ -43,24 +42,20 @@ ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 
-# Копируем артефакты с правильными владельцами под уже существующего пользователя `node`
-COPY --from=builder --chown=node:node /app/.next ./.next
-COPY --from=builder --chown=node:node /app/public ./public
-COPY --from=builder --chown=node:node /app/node_modules ./node_modules
-COPY --from=builder --chown=node:node /app/package.json ./package.json
-# нужны для migrate deploy / db push
-COPY --from=builder --chown=node:node /app/prisma ./prisma
+# Создаём пользователя, если его ещё нет
+RUN id -u nodeuser >/dev/null 2>&1 || useradd -m -u 1001 nodeuser
 
-USER node
+# рантайм-артефакты
+COPY --from=builder /app/.next ./.next
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./package.json
+# ВАЖНО: копируем папку с миграциями в рантайм
+COPY --from=builder /app/prisma ./prisma
+
+USER nodeuser
 EXPOSE 3000
-
 ENTRYPOINT ["/usr/bin/tini","--"]
-# На старте: если есть миграции — deploy, иначе db push; затем запускаем Next
-CMD ["sh","-c","\
-  if [ -d prisma/migrations ] && [ \"$(ls -A prisma/migrations 2>/dev/null)\" ]; then \
-    npx prisma migrate deploy; \
-  else \
-    npx prisma db push; \
-  fi; \
-  npm run start -s \
-"]
+
+# На старте: накатываем миграции и запускаем сервер
+CMD ["sh","-c","npx prisma migrate deploy && npm run start -s"]
