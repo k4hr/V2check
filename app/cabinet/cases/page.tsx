@@ -27,69 +27,65 @@ export default function CasesPage() {
   const [items, setItems] = useState<CaseListItem[]>([]);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(false);
-  const [userInitData, setUserInitData] = useState<string>('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]   = useState<string | null>(null);
 
-  // init Telegram WebApp и получение initData
+  // Телеграм initData и небезопасный фолбэк
+  const [initData, setInitData] = useState<string>('');
+  const [unsafeUserId, setUnsafeUserId] = useState<string>('');
+
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
     try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
-    const initData = WebApp?.initData || '';
-    if (initData) setUserInitData(initData);
+    const _init = WebApp?.initData || '';
+    setInitData(_init || '');
+    const uid = WebApp?.initDataUnsafe?.user?.id;
+    if (uid) setUnsafeUserId(String(uid));
   }, []);
 
-  // Суксфикс для API, если работаем в браузерном дебаге без initData
+  // Куда подставляем ?id=... если initData пустой
   const apiSuffix = useMemo(() => {
-    if (userInitData) return '';
+    if (initData) return '';
+    if (unsafeUserId) return `?id=${encodeURIComponent(unsafeUserId)}`;
     if (DEBUG) {
       const dbg = getDebugIdFromUrl();
       if (dbg) return `?id=${encodeURIComponent(dbg)}`;
     }
     return '';
-  }, [userInitData]);
+  }, [initData, unsafeUserId]);
 
   // Заголовки для API
   const apiHeaders = useMemo<Record<string, string>>(() => {
     const h: Record<string, string> = {};
-    if (userInitData) h['x-init-data'] = userInitData;
+    if (initData) h['x-init-data'] = initData;
     return h;
-  }, [userInitData]);
+  }, [initData]);
 
-  // query-объект для Link (typedRoutes не любит строки с ?id=...)
+  // query объект для Link, чтобы typedRoutes не ругался на строки с ?id
   const linkQuery = useMemo(() => {
     if (!apiSuffix) return undefined;
-    try {
-      const qs = new URLSearchParams(apiSuffix.startsWith('?') ? apiSuffix.slice(1) : apiSuffix);
-      const obj: Record<string, string> = {};
-      for (const [k, v] of qs.entries()) obj[k] = v;
-      return obj;
-    } catch { return undefined; }
+    const qs = new URLSearchParams(apiSuffix.replace(/^\?/, ''));
+    const obj: Record<string, string> = {};
+    qs.forEach((v, k) => (obj[k] = v));
+    return obj;
   }, [apiSuffix]);
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/cases${apiSuffix}`, {
-        headers: { ...apiHeaders },
-        cache: 'no-store',
-      });
+      const res = await fetch(`/api/cases${apiSuffix}`, { headers: { ...apiHeaders }, cache: 'no-store' });
       const data = await res.json();
       if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP_${res.status}`);
       setItems(data.items || []);
     } catch (e: any) {
-      setError(e?.message || 'Не удалось загрузить список дел');
+      setError(e?.message || 'AUTH_REQUIRED');
       setItems([]);
     } finally {
       setLoading(false);
     }
   }
 
-  // Загружаем/перезагружаем, когда появился initData или сменился режим дебага
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiSuffix, apiHeaders]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [apiSuffix, apiHeaders]);
 
   async function createCase() {
     const name = title.trim();
@@ -107,7 +103,7 @@ export default function CasesPage() {
       setTitle('');
       await load();
     } catch (e: any) {
-      setError(e?.message || 'Не удалось создать дело');
+      setError(e?.message || 'AUTH_REQUIRED');
     } finally {
       setLoading(false);
     }
@@ -117,7 +113,7 @@ export default function CasesPage() {
     if (!d) return '';
     const x = new Date(d);
     return `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`;
-  }
+    }
 
   return (
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto' }}>
