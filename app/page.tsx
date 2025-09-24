@@ -3,7 +3,6 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-/** Список стран (можете расширить/переименовать как нужно) */
 const COUNTRIES = [
   { code: 'RU', name: 'Россия' },
   { code: 'KZ', name: 'Казахстан' },
@@ -19,15 +18,13 @@ const COUNTRIES = [
 
 type CountryCode = typeof COUNTRIES[number]['code'];
 
-/** Внутренний компонент, который использует useSearchParams — его мы кладём в Suspense */
 function CountryGateInner() {
   const router = useRouter();
-  const sp = useSearchParams(); // нужно Suspense
-  const debugId = sp.get('id') || ''; // пробрасываем debug id, если есть
+  const sp = useSearchParams();
+  const debugId = sp.get('id') || '';
 
   const [selected, setSelected] = useState<CountryCode | ''>('');
 
-  // Telegram WebApp готовность
   useEffect(() => {
     const w: any = window;
     try {
@@ -36,7 +33,6 @@ function CountryGateInner() {
     } catch {}
   }, []);
 
-  // Восстанавливаем сохранённую страну
   useEffect(() => {
     try {
       const saved = localStorage.getItem('juristum.country') as CountryCode | null;
@@ -54,7 +50,8 @@ function CountryGateInner() {
 
   const goNext = () => {
     const suffix = debugId ? `?id=${encodeURIComponent(debugId)}` : '';
-    router.push(`/home${suffix}`);
+    // typedRoutes не любит динамический query — приводим тип
+    router.push((`/home${suffix}`) as any);
   };
 
   const canContinue = useMemo(() => Boolean(selected), [selected]);
@@ -69,7 +66,6 @@ function CountryGateInner() {
       }}
     >
       <div style={{ width: '100%', maxWidth: 520, marginTop: 32 }}>
-        {/* ЛОГО — положите файл в /public/logo.png. Если файла нет, просто будет пустой alt-блок */}
         <div style={{ display: 'grid', placeItems: 'center', marginBottom: 20 }}>
           <img
             src="/logo.png"
@@ -84,7 +80,6 @@ function CountryGateInner() {
           Выберите вашу страну
         </h1>
 
-        {/* Выбор страны */}
         <div className="card" style={{ padding: 12, borderRadius: 16 }}>
           <div style={{ display: 'grid', gap: 8 }}>
             {COUNTRIES.map((c) => {
@@ -141,7 +136,6 @@ function CountryGateInner() {
   );
 }
 
-/** Страница — оборачиваем Inner в Suspense, чтобы удовлетворить Next 15 */
 export default function CountryGatePage() {
   return (
     <Suspense fallback={<main style={{ padding: 20 }}>Загрузка…</main>}>
