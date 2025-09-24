@@ -1,17 +1,25 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SUPER_LEGAL_PROMPT } from './prompt';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
 export default function ProPlusChatPage() {
-  const [messages, setMessages] = useState<Msg[]>([]);
+  const [messages, setMessages] = useState<Msg[]>([
+    {
+      role: 'assistant',
+      content:
+        'Это Pro+ Чат ИИ. Опишите вашу ситуацию одним сообщением: кто участники, что произошло, когда, какие суммы/документы, чего хотите добиться. ' +
+        'Я сразу сформирую полный разбор со стратегиями, планом, сроками и шаблонами. Если чего-то не будет хватать, в конце добавлю список уточнений.',
+    },
+  ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
 
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // ?id= для дебага (как в других местах)
+  // ?id= для дебага
   const tgId = useMemo(() => {
     if (typeof window === 'undefined') return '';
     const u = new URL(window.location.href);
@@ -29,18 +37,17 @@ export default function ProPlusChatPage() {
     boxRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' });
   }, [messages, loading]);
 
-  async function send(prompt?: string) {
-    const text = (prompt ?? input).trim();
+  async function send(userText?: string) {
+    const text = (userText ?? input).trim();
     if (!text || loading) return;
 
-    // локально показываем сообщение пользователя
     setMessages((m) => [...m, { role: 'user', content: text }]);
     setInput('');
     setLoading(true);
 
     try {
-      // история последних сообщений
-      const history = [...messages, { role: 'user', content: text }].slice(-10);
+      // собираем историю (не длиннее 12 сообщений)
+      const history = [...messages, { role: 'user', content: text }].slice(-12);
 
       const w: any = window;
       const initData: string | undefined = w?.Telegram?.WebApp?.initData;
@@ -51,8 +58,14 @@ export default function ProPlusChatPage() {
           'Content-Type': 'application/json',
           ...(initData ? { 'x-init-data': initData } : {}),
         },
-        // без всяких доп. контекстов — это свободный чат
-        body: JSON.stringify({ prompt: text, history }),
+        body: JSON.stringify({
+          prompt: text,
+          // «мягкий» праймер на случай, если сервер не поддерживает role:system
+          history: [{ role: 'user', content: SUPER_LEGAL_PROMPT }, ...history],
+          // «жёсткий» праймер для серверов, понимающих поле system
+          system: SUPER_LEGAL_PROMPT,
+          mode: 'legal-full-one-shot',
+        }),
       });
 
       const data = await res.json();
@@ -109,7 +122,7 @@ export default function ProPlusChatPage() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => (e.key === 'Enter' ? onSend() : null)}
-              placeholder="Сообщение…"
+              placeholder="Опишите ситуацию: кто, что, когда, суммы/документы, желаемый результат"
               style={{
                 flex: 1,
                 padding: '10px 12px',
