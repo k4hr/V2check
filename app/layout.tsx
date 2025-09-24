@@ -2,6 +2,7 @@
 import './globals.css';
 import { cookies } from 'next/headers';
 import { I18nProvider } from '../components/I18nProvider';
+import TwaBootstrap from '../components/TwaBootstrap';
 
 import ru from '../i18n/messages/ru';
 import en from '../i18n/messages/en';
@@ -15,16 +16,9 @@ import hy from '../i18n/messages/hy';
 const dicts: Record<string, any> = { ru, en, uk, kk, tr, az, ka, hy };
 
 export const viewport = { width: 'device-width', initialScale: 1 };
-export const metadata = {
-  title: 'Juristum',
-  description: 'Юридический ассистент',
-};
+export const metadata = { title: 'Juristum', description: 'Юридический ассистент' };
 
-export default async function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
   const locale = (cookieStore.get?.('locale')?.value ?? 'ru').toLowerCase();
   const messages = dicts[locale] ?? dicts['ru'];
@@ -32,9 +26,12 @@ export default async function RootLayout({
   return (
     <html lang={locale}>
       <body>
-        <I18nProvider messages={messages}>
-          {children}
-        </I18nProvider>
+        {/* Глобально инициализируем TWA + заголовок x-init-data */}
+        <TwaBootstrap>
+          <I18nProvider messages={messages}>
+            {children}
+          </I18nProvider>
+        </TwaBootstrap>
       </body>
     </html>
   );
