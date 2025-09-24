@@ -15,18 +15,25 @@ type MeResp = {
   } | null;
   subscription?: {
     active?: boolean;
-    expiresAt?: string | null;
-    till?: string | null;
+    expiresAt?: string | null; // вариант 1
+    till?: string | null;      // вариант 2
     plan?: string | null;
   } | null;
 };
 
 /* ------------ helpers ------------- */
+// Без regex, чтобы не ломать сборку
 function getCookie(name: string): string {
-  const m = document.cookie.match(
-    new RegExp('(?:^|;\\s*)' + name.replace(/[-[\\]{}()*+?.,\\\\^$|#\\s]/g, '\\$&') + '=([^;]*)')
-  );
-  return m ? decodeURIComponent(m[1]) : '';
+  try {
+    const rows = document.cookie ? document.cookie.split('; ') : [];
+    for (const row of rows) {
+      const [k, ...rest] = row.split('=');
+      if (decodeURIComponent(k) === name) {
+        return decodeURIComponent(rest.join('='));
+      }
+    }
+  } catch {}
+  return '';
 }
 
 function parseUserFromInitCookie(): MeResp['user'] {
@@ -62,7 +69,7 @@ export default function CabinetPage() {
     }
   }, []);
 
-  // удобные href (совместимы с typedRoutes)
+  // typedRoutes-совместимые href
   const hrefPro = useMemo(
     () => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'),
     [debugId]
@@ -91,12 +98,12 @@ export default function CabinetPage() {
       const resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
       const data: MeResp = await resp.json();
 
-      // подхватим user и из /api/me, если бэкенд его отдаёт
       if (data?.user) setUser((prev) => prev ?? data.user);
 
       const sub = data?.subscription;
       const isActive = Boolean(sub?.active);
       const until = sub?.expiresAt || sub?.till;
+
       if (isActive && until) {
         const d = new Date(until);
         const dd = String(d.getDate()).padStart(2, '0');
@@ -117,20 +124,14 @@ export default function CabinetPage() {
 
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
-    try {
-      WebApp?.ready?.();
-      WebApp?.expand?.();
-    } catch {}
+    try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
 
-    // 1) сначала пробуем взять прям из Telegram
+    // 1) сначала — user из Telegram
     let u = WebApp?.initDataUnsafe?.user || null;
-
-    // 2) если нет — берём из куки tg_init_data
+    // 2) если нет — из куки
     if (!u) u = parseUserFromInitCookie();
-
     setUser(u);
 
-    // initData для /api/me: из Telegram или из куки
     const initData = WebApp?.initData || getInitDataFromCookie();
     if (initData) loadMe(initData);
     else if (DEBUG) loadMe();
@@ -138,7 +139,7 @@ export default function CabinetPage() {
 
   const hello =
     (user?.first_name || '') +
-      (user?.last_name ? ` ${user.last_name}` : '') ||
+    (user?.last_name ? ` ${user.last_name}` : '') ||
     (user?.username ? `@${user.username}` : '') ||
     '';
 
