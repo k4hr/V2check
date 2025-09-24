@@ -2,8 +2,11 @@
 
 import Link from 'next/link';
 import { useEffect } from 'react';
+import { useI18n } from '@/components/I18nProvider';
 
 export default function Home() {
+  const { t } = useI18n();
+
   useEffect(() => {
     const w: any = window;
     w?.Telegram?.WebApp?.ready?.();
@@ -12,46 +15,38 @@ export default function Home() {
 
   return (
     <main style={{ padding: 20 }}>
-      <h1 style={{ textAlign: 'center' }}>Juristum</h1>
+      <h1 style={{ textAlign: 'center' }}>{t('app.title')}</h1>
 
       <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-        <Link href="/cabinet" className="list-btn" style={{ textDecoration: 'none' }}>
+        <Link href={'/cabinet' as any} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">👤</span>
-            <b>Личный кабинет</b>
+            <b>{t('menu.cabinet')}</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
 
-        <Link href="/pro" className="list-btn" style={{ textDecoration: 'none' }}>
+        <Link href={'/pro' as any} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">⭐</span>
-            <b>Купить подписку</b>
+            <b>{t('menu.pro')}</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
 
-        <Link href="/assistant" className="list-btn" style={{ textDecoration: 'none' }}>
+        <Link href={'/assistant' as any} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">📚</span>
-            <b>Юр-Помощник</b>
+            <b>{t('menu.assistant')}</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
 
-        <Link href="/solutions" className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">✅</span>
-            <b>Готовые решения</b>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
-
-        {/* ВАЖНО: правильный путь с дефисом */}
-        <Link href="/pro-plus-chat" className="list-btn" style={{ textDecoration: 'none' }}>
+        {/* Не обязателен: вставляй, если у тебя есть маршрут */}
+        <Link href={'/pro-plus-chat' as any} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">🤖</span>
-            <b>Pro+ Чат ИИ</b>
+            <b>{t('menu.proplus')}</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
