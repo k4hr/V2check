@@ -1,18 +1,28 @@
-import Script from 'next/script';
 import './globals.css';
+import {cookies} from 'next/headers';
+import {I18nProvider} from '@/components/I18nProvider';
+import ru from '@/i18n/messages/ru';
+import en from '@/i18n/messages/en';
+import uk from '@/i18n/messages/uk';
+import kk from '@/i18n/messages/kk';
+import tr from '@/i18n/messages/tr';
+import az from '@/i18n/messages/az';
+import ka from '@/i18n/messages/ka';
+import hy from '@/i18n/messages/hy';
 
-export const metadata = {
-  title: 'Juristum',
-  description: 'Личный кабинет',
-};
+const dicts: Record<string, Record<string,string>> = { ru, en, uk, kk, tr, az, ka, hy };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({children}: {children: React.ReactNode}) {
+  const cookieStore = cookies();
+  const locale = (cookieStore.get('locale')?.value || 'ru').toLowerCase();
+  const messages = dicts[locale] || dicts['ru'];
   return (
-    <html lang="ru">
-      <head>
-        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="beforeInteractive" />
-      </head>
-      <body>{children}</body>
+    <html lang={locale}>
+      <body>
+        <I18nProvider messages={messages}>
+          {children}
+        </I18nProvider>
+      </body>
     </html>
   );
 }
