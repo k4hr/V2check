@@ -1,5 +1,5 @@
 # ---------- base ----------
-FROM node:20-slim AS base
+FROM mirror.gcr.io/library/node:20-bookworm-slim AS base
 ENV NODE_ENV=production
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
