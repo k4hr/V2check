@@ -1,52 +1,68 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
-import { useI18n } from '@/components/I18nProvider';
+import type { Route } from 'next';
+import { useEffect, useMemo } from 'react';
 
 export default function Home() {
-  const { t } = useI18n();
-
   useEffect(() => {
     const w: any = window;
     w?.Telegram?.WebApp?.ready?.();
     w?.Telegram?.WebApp?.expand?.();
   }, []);
 
+  // тащим debug id из URL, если запущено без TWA
+  const linkSuffix = useMemo(() => {
+    try {
+      const u = new URL(window.location.href);
+      const id = u.searchParams.get('id');
+      return id ? `?id=${encodeURIComponent(id)}` : '';
+    } catch {
+      return '';
+    }
+  }, []);
+
   return (
     <main style={{ padding: 20 }}>
-      <h1 style={{ textAlign: 'center' }}>{t('app.title')}</h1>
+      <h1 style={{ textAlign: 'center' }}>Juristum</h1>
 
       <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-        <Link href={'/cabinet' as any} className="list-btn" style={{ textDecoration: 'none' }}>
+        <Link href={`/cabinet${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">👤</span>
-            <b>{t('menu.cabinet')}</b>
+            <b>Личный кабинет</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
 
-        <Link href={'/pro' as any} className="list-btn" style={{ textDecoration: 'none' }}>
+        <Link href={`/pro${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">⭐</span>
-            <b>{t('menu.pro')}</b>
+            <b>Купить подписку</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
 
-        <Link href={'/assistant' as any} className="list-btn" style={{ textDecoration: 'none' }}>
+        <Link href={`/assistant${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">📚</span>
-            <b>{t('menu.assistant')}</b>
+            <b>Юр-Помощник</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
 
-        {/* Не обязателен: вставляй, если у тебя есть маршрут */}
-        <Link href={'/pro-plus-chat' as any} className="list-btn" style={{ textDecoration: 'none' }}>
+        <Link href={`/templates${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">🧩</span>
+            <b>Готовые решения</b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+
+        <Link href={`/pro-plus-chat${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
           <span className="list-btn__left">
             <span className="list-btn__emoji">🤖</span>
-            <b>{t('menu.proplus')}</b>
+            <b>Pro+ Чат ИИ</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
