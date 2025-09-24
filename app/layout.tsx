@@ -1,7 +1,7 @@
 // app/layout.tsx
 import './globals.css';
 import { cookies } from 'next/headers';
-import { I18nProvider } from '../components/I18nProvider'; // <-- именованный импорт
+import { I18nProvider } from '../components/I18nProvider';
 
 import ru from '../i18n/messages/ru';
 import en from '../i18n/messages/en';
@@ -25,14 +25,14 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies(); // Next 15: типизирован как async в твоём сетапе
+  const cookieStore = await cookies();
   const locale = (cookieStore.get?.('locale')?.value ?? 'ru').toLowerCase();
   const messages = dicts[locale] ?? dicts['ru'];
 
   return (
     <html lang={locale}>
       <body>
-        <I18nProvider locale={locale} messages={messages}>
+        <I18nProvider messages={messages}>
           {children}
         </I18nProvider>
       </body>
