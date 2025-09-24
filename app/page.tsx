@@ -1,65 +1,95 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect } from 'react';
+import Image from 'next/image';
+import { useEffect, useMemo } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function Home() {
+type Country = { code: string; name: string; locale: string };
+
+const COUNTRIES: Country[] = [
+  { code: 'RU', name: 'Россия', locale: 'ru' },
+  { code: 'KZ', name: 'Қазақстан', locale: 'kk' },
+  { code: 'KZ_RU', name: 'Казахстан (рус.)', locale: 'ru' },
+  { code: 'UA', name: 'Україна', locale: 'uk' },
+  { code: 'BY', name: 'Беларусь', locale: 'ru' },
+  { code: 'UZ', name: 'Oʻzbekiston', locale: 'uz' },
+  { code: 'KG', name: 'Кыргызстан', locale: 'ky' },
+];
+
+const STORAGE_KEY = 'jur_country';
+
+export default function CountrySelectPage() {
+  const router = useRouter();
+  const qs = useSearchParams();
+
+  // Telegram WebApp init
   useEffect(() => {
     const w: any = window;
-    w?.Telegram?.WebApp?.ready?.();
-    w?.Telegram?.WebApp?.expand?.();
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
+  // dev-возможность сбросить сохраненную страну: /?reset=1
+  const shouldReset = useMemo(() => qs?.get('reset') === '1', [qs]);
+  useEffect(() => { if (shouldReset) localStorage.removeItem(STORAGE_KEY); }, [shouldReset]);
+
+  // Если страна уже выбрана — сразу ведём в /home
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && !shouldReset) router.replace('/home');
+  }, [router, shouldReset]);
+
+  function choose(c: Country) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(c));
+    router.replace('/home');
+  }
+
   return (
-    <main style={{ padding: 20 }}>
-      <h1 style={{ textAlign: 'center' }}>Juristum</h1>
+    <main style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20
+    }}>
+      <div style={{ width: '100%', maxWidth: 520 }}>
+        {/* логотип */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 18 }}>
+          {/* Помести файл логотипа в /public/logo.png (или поменяй src ниже) */}
+          <Image src="/logo.png" alt="Juristum" width={180} height={180} priority />
+        </div>
 
-      <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-        {/* Личный кабинет */}
-        <Link href="/cabinet" className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">👤</span>
-            <b>Личный кабинет</b>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
+        <h1 style={{
+          textAlign: 'center',
+          margin: '0 0 10px',
+          fontSize: 28,
+          lineHeight: 1.2
+        }}>
+          Выберите&nbsp;страну
+        </h1>
 
-        {/* Подписка */}
-        <Link href="/pro" className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">⭐</span>
-            <b>Купить подписку</b>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
+        <p style={{ textAlign: 'center', opacity: .75, marginTop: 0, marginBottom: 16 }}>
+          Это нужно, чтобы показывать актуальные законы и шаблоны документов.
+        </p>
 
-        {/* Юридический ассистент (структурированный сценарий) */}
-        <Link href="/assistant" className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">📚</span>
-            <b>Юр-Помощник</b>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
+        <div style={{ display: 'grid', gap: 10 }}>
+          {COUNTRIES.map(c => (
+            <button
+              key={c.code}
+              onClick={() => choose(c)}
+              className="list-btn"
+              style={{ padding: '14px 16px', borderRadius: 12 }}
+            >
+              <span className="list-btn__left">
+                <b>{c.name}</b>
+              </span>
+              <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+            </button>
+          ))}
+        </div>
 
-        {/* Готовые решения */}
-        <Link href="/solutions" className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">🧰</span>
-            <b>Готовые решения</b>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
-
-        {/* НОВОЕ: Pro+ Чат ИИ — простой диалог без лишнего */}
-        <Link href="/pro-plus-chat" className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">🤖</span>
-            <b>Pro+ Чат ИИ</b>
-            <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>NEW</span>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
+        <div style={{ textAlign: 'center', marginTop: 14, opacity: .65, fontSize: 12 }}>
+          Можно изменить позже: «Профиль → Сменить страну».
+        </div>
       </div>
     </main>
   );
