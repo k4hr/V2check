@@ -1,18 +1,13 @@
 # ---------- base ----------
-# На mirror.gcr.io нет node:20-slim, используем node:20 (есть на зеркале)
-FROM mirror.gcr.io/library/node:20 AS base
+FROM public.ecr.aws/docker/library/node:20-slim AS base
 ENV NODE_ENV=production
 WORKDIR /app
-
-# Минимально необходимое (tini уже есть в node:20, но оставим установку bash/openssl на всякий)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates openssl curl bash && rm -rf /var/lib/apt/lists/*
+    ca-certificates openssl curl bash tini && rm -rf /var/lib/apt/lists/*
 
 # ---------- deps ----------
 FROM base AS deps
 WORKDIR /app
-
-# Если есть lock — используем ci для воспроизводимости
 COPY package.json ./
 COPY package-lock.json* ./
 RUN if [ -f package-lock.json ]; then \
@@ -20,21 +15,19 @@ RUN if [ -f package-lock.json ]; then \
     else \
       npm install --no-audit --no-fund --ignore-scripts ; \
     fi
+# (если нужны) либы для импорта по URL/парсинга
+RUN npm install --no-audit --no-fund jsdom sanitize-html @mozilla/readability
 
 # ---------- builder ----------
 FROM base AS builder
 WORKDIR /app
-
-# Берём уже установленные зависимости
 COPY --from=deps /app/node_modules ./node_modules
-
-# Копируем исходники
 COPY . .
 
-# Фиктивный DATABASE_URL только для валидации/генерации Prisma-клиента на этапе сборки
+# Фиктивный DATABASE_URL только для prisma validate/generate на этапе сборки
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
 
-# Prisma: validate + generate (если Prisma отсутствует — просто пропустим)
+# Prisma: validate + generate (пассивно, если prisma отсутствует)
 RUN set -eux; \
   (test -f prisma/schema.prisma && sed -i '1s/^\xEF\xBB\xBF//' prisma/schema.prisma) || true; \
   (npx prisma validate --schema=prisma/schema.prisma || true); \
@@ -47,7 +40,6 @@ RUN npm run build
 FROM base AS runner
 ENV NODE_ENV=production
 ENV PORT=3000
-# Для Next.js 15 — обязательно указывать HOSTNAME, чтобы слушал снаружи
 ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
@@ -59,7 +51,7 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
+ENTRYPOINT ["/usr/bin/tini","--"]
 
-# Запускаем через sh: сначала приводим БД к схеме, затем стартуем Next
-# Если DATABASE_URL не задан / db push не удался — не валим контейнер, просто продолжаем
+# В рантайме приводим БД к схеме; если переменная не задана/падение — не валим контейнер
 CMD ["sh","-c","(npx prisma db push --accept-data-loss || echo '⚠️ prisma db push skipped/failed — продолжаем') && npm run start -s"]
