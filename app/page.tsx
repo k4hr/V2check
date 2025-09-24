@@ -1,3 +1,4 @@
+// app/page.tsx
 'use client';
 
 import Link from 'next/link';
@@ -36,6 +37,15 @@ export default function Home() {
           <span className="list-btn__left">
             <span className="list-btn__emoji">📚</span>
             <b>Юр-Помощник</b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+
+        {/* Новое: Готовые решения */}
+        <Link href="/solutions" className="list-btn" style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">🧩</span>
+            <b>Готовые решения</b>
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
