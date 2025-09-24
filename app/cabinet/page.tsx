@@ -16,7 +16,7 @@ type MeResp = {
   subscription?: {
     active?: boolean;
     expiresAt?: string | null; // вариант 1
-    till?: string | null;      // вариант 2 (на всякий)
+    till?: string | null;      // вариант 2
     plan?: string | null;
   } | null;
 };
@@ -26,14 +26,28 @@ export default function CabinetPage() {
   const [statusText, setStatusText] = useState('Подписка не активна.');
   const [loading, setLoading] = useState(false);
 
-  // тащим debug id из URL и добавляем его как суффикс ко всем ссылкам
-  const linkSuffix = useMemo(() => {
+  // вытаскиваем debug id из URL (для браузерного режима)
+  const debugId = useMemo(() => {
     try {
       const u = new URL(window.location.href);
       const id = u.searchParams.get('id');
-      return id && /^\d{3,15}$/.test(id) ? `?id=${encodeURIComponent(id)}` : '';
+      return id && /^\d{3,15}$/.test(id) ? id : '';
     } catch { return ''; }
   }, []);
+
+  // удобный helper для href, чтобы не склеивать строки
+  const hrefPro = useMemo(
+    () => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'),
+    [debugId]
+  );
+  const hrefCases = useMemo(
+    () => (debugId ? { pathname: '/cabinet/cases' as const, query: { id: debugId } } : '/cabinet/cases'),
+    [debugId]
+  );
+  const hrefFav = useMemo(
+    () => (debugId ? { pathname: '/cabinet/favorites' as const, query: { id: debugId } } : '/cabinet/favorites'),
+    [debugId]
+  );
 
   async function loadMe(initData?: string) {
     setLoading(true);
@@ -43,18 +57,15 @@ export default function CabinetPage() {
 
       if (initData) {
         headers['x-init-data'] = initData;
-      } else if (DEBUG && linkSuffix) {
-        endpoint += linkSuffix; // браузерный режим
+      } else if (DEBUG && debugId) {
+        endpoint += `?id=${encodeURIComponent(debugId)}`;
       }
 
-      // и GET, и POST обычно ок; оставим POST как у тебя
       const resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
       const data: MeResp = await resp.json();
 
-      // пользователь для приветствия
       setUser(data?.user || null);
 
-      // статус подписки (попробуем оба возможных поля даты)
       const sub = data?.subscription;
       const isActive = Boolean(sub?.active);
       const until = sub?.expiresAt || sub?.till;
@@ -71,7 +82,6 @@ export default function CabinetPage() {
         setStatusText('Подписка не активна.');
       }
     } catch {
-      // не шумим ошибкой на UI
       setStatusText('Подписка не активна.');
     } finally {
       setLoading(false);
@@ -107,7 +117,7 @@ export default function CabinetPage() {
           <p style={{ textAlign: 'center' }}>{loading ? 'Проверяем подписку…' : statusText}</p>
 
           <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
-            <Link href={`/pro${linkSuffix}`} className="list-btn" style={{ textDecoration: 'none' }}>
+            <Link href={hrefPro} className="list-btn" style={{ textDecoration: 'none' }}>
               <span className="list-btn__left">
                 <span className="list-btn__emoji">⭐</span>
                 <b>Купить/продлить подписку</b>
@@ -115,7 +125,7 @@ export default function CabinetPage() {
               <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
             </Link>
 
-            <Link href={`/cabinet/cases${linkSuffix}`} className="list-btn" style={{ textDecoration: 'none' }}>
+            <Link href={hrefCases} className="list-btn" style={{ textDecoration: 'none' }}>
               <span className="list-btn__left">
                 <span className="list-btn__emoji">📁</span>
                 <b>Моё дело (таймлайн и дедлайны)</b>
@@ -123,7 +133,7 @@ export default function CabinetPage() {
               <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
             </Link>
 
-            <Link href={`/cabinet/favorites${linkSuffix}`} className="list-btn" style={{ textDecoration: 'none' }}>
+            <Link href={hrefFav} className="list-btn" style={{ textDecoration: 'none' }}>
               <span className="list-btn__left">
                 <span className="list-btn__emoji">🌟</span>
                 <b>Избранное</b>
