@@ -15,27 +15,54 @@ type MeResp = {
   } | null;
   subscription?: {
     active?: boolean;
-    expiresAt?: string | null; // вариант 1
-    till?: string | null;      // вариант 2
+    expiresAt?: string | null;
+    till?: string | null;
     plan?: string | null;
   } | null;
 };
+
+/* ------------ helpers ------------- */
+function getCookie(name: string): string {
+  const m = document.cookie.match(
+    new RegExp('(?:^|;\\s*)' + name.replace(/[-[\\]{}()*+?.,\\\\^$|#\\s]/g, '\\$&') + '=([^;]*)')
+  );
+  return m ? decodeURIComponent(m[1]) : '';
+}
+
+function parseUserFromInitCookie(): MeResp['user'] {
+  try {
+    const raw = getCookie('tg_init_data');
+    if (!raw) return null;
+    const sp = new URLSearchParams(raw);
+    const u = sp.get('user');
+    return u ? (JSON.parse(u) as any) : null;
+  } catch {
+    return null;
+  }
+}
+
+function getInitDataFromCookie(): string {
+  return getCookie('tg_init_data');
+}
+/* ---------------------------------- */
 
 export default function CabinetPage() {
   const [user, setUser] = useState<MeResp['user']>(null);
   const [statusText, setStatusText] = useState('Подписка не активна.');
   const [loading, setLoading] = useState(false);
 
-  // вытаскиваем debug id из URL (для браузерного режима)
+  // debug id из URL (для браузерного режима)
   const debugId = useMemo(() => {
     try {
       const u = new URL(window.location.href);
       const id = u.searchParams.get('id');
       return id && /^\d{3,15}$/.test(id) ? id : '';
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }, []);
 
-  // удобный helper для href, чтобы не склеивать строки
+  // удобные href (совместимы с typedRoutes)
   const hrefPro = useMemo(
     () => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'),
     [debugId]
@@ -64,12 +91,12 @@ export default function CabinetPage() {
       const resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
       const data: MeResp = await resp.json();
 
-      setUser(data?.user || null);
+      // подхватим user и из /api/me, если бэкенд его отдаёт
+      if (data?.user) setUser((prev) => prev ?? data.user);
 
       const sub = data?.subscription;
       const isActive = Boolean(sub?.active);
       const until = sub?.expiresAt || sub?.till;
-
       if (isActive && until) {
         const d = new Date(until);
         const dd = String(d.getDate()).padStart(2, '0');
@@ -90,25 +117,37 @@ export default function CabinetPage() {
 
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
-    try { WebApp?.ready?.(); WebApp?.expand?.(); } catch {}
-    const initData: string | undefined = WebApp?.initData;
-    const tgUser = WebApp?.initDataUnsafe?.user || null;
-    setUser(tgUser);
-    loadMe(initData);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    try {
+      WebApp?.ready?.();
+      WebApp?.expand?.();
+    } catch {}
+
+    // 1) сначала пробуем взять прям из Telegram
+    let u = WebApp?.initDataUnsafe?.user || null;
+
+    // 2) если нет — берём из куки tg_init_data
+    if (!u) u = parseUserFromInitCookie();
+
+    setUser(u);
+
+    // initData для /api/me: из Telegram или из куки
+    const initData = WebApp?.initData || getInitDataFromCookie();
+    if (initData) loadMe(initData);
+    else if (DEBUG) loadMe();
+  }, [debugId]);
 
   const hello =
     (user?.first_name || '') +
-    (user?.last_name ? ` ${user.last_name}` : '') ||
-    (user?.username ? `@${user.username}` : '');
+      (user?.last_name ? ` ${user.last_name}` : '') ||
+    (user?.username ? `@${user.username}` : '') ||
+    '';
 
   return (
     <div style={{ padding: 20 }}>
       <h1 style={{ textAlign: 'center' }}>Личный кабинет</h1>
 
       <p style={{ textAlign: 'center', opacity: .85 }}>
-        {hello ? <>Здравствуйте, <b>{hello}</b></> : (DEBUG ? 'Браузерный режим (debug).' : 'Данные пользователя недоступны.')}
+        {hello ? <>Здравствуйте, <b>{hello}</b></> : 'Добро пожаловать!'}
       </p>
 
       <div style={{ marginTop: 16 }}>
