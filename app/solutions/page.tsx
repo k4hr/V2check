@@ -1,86 +1,103 @@
 // app/solutions/page.tsx
 'use client';
 
-import { useMemo, useState } from 'react';
-import { ALL_TEMPLATES, CATEGORIES, TemplateMeta } from './templates';
+export const dynamic = 'force-static';
 
-export default function SolutionsPage() {
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
+import { SOLUTIONS } from './solutions.data';
+
+export default function SolutionsHome() {
+  // TWA
+  useEffect(() => {
+    const tg: any = (window as any).Telegram?.WebApp;
+    try {
+      tg?.ready?.();
+      tg?.expand?.();
+      tg?.BackButton?.show?.();
+      tg?.BackButton?.onClick?.(() => {
+        if (document.referrer) history.back();
+        else window.location.href = '/';
+      });
+    } catch {}
+  }, []);
+
   const [q, setQ] = useState('');
 
-  const norm = (s: string) => s.toLowerCase().normalize('NFKD');
-
   const filtered = useMemo(() => {
-    const text = norm(q);
-    if (!text) return ALL_TEMPLATES;
-    return ALL_TEMPLATES.filter(t =>
-      norm(t.title).includes(text) ||
-      (t.tags || []).some(tag => norm(tag).includes(text)) ||
-      norm(t.category).includes(text)
-    );
+    const s = q.trim().toLowerCase();
+    if (!s) return SOLUTIONS;
+    return SOLUTIONS.filter((x) => {
+      const hay =
+        `${x.title} ${x.category} ${(x.keywords || []).join(' ')}`.toLowerCase();
+      return hay.includes(s);
+    });
   }, [q]);
 
-  const resultsByCat = useMemo(() => {
-    const map = new Map<string, TemplateMeta[]>();
-    for (const cat of CATEGORIES.map(c => c.title)) map.set(cat, []);
-    for (const t of filtered) {
-      map.set(t.category, [...(map.get(t.category) || []), t]);
+  // сгруппируем по категории
+  const byCat = useMemo(() => {
+    const map = new Map<string, typeof filtered>();
+    for (const it of filtered) {
+      if (!map.has(it.category)) map.set(it.category, []);
+      map.get(it.category)!.push(it);
     }
-    return map;
+    return Array.from(map.entries());
   }, [filtered]);
 
   return (
     <main style={{ padding: 20, maxWidth: 900, margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center', lineHeight: 1.1, margin: '6px 0 10px' }}>
-        ТОП-100<br/>готовых решений<br/>ваших проблем
+      <h1 style={{ textAlign: 'center', marginBottom: 6 }}>
+        ТОП-100 готовых решений ваших проблем
       </h1>
 
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 10, marginBottom: 16 }}>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Быстрый поиск: «возврат товара», «развод», «ИП»…"
+          placeholder="Быстрый поиск по горячим словам…"
           style={{
-            width:'100%', padding:'12px 14px', borderRadius:12,
-            border:'1px solid var(--border,#333)', background:'transparent',
-            color:'inherit', outline:'none', fontSize:14
+            width: '100%',
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: '1px solid var(--border, #333)',
+            background: 'transparent',
+            color: 'inherit',
+            outline: 'none',
+            fontSize: 14,
           }}
         />
-        {q && (
-          <div style={{ opacity:.7, fontSize:12, marginTop:6 }}>
-            Найдено: {filtered.length}
-          </div>
-        )}
       </div>
 
-      <div style={{ display:'grid', gap:22, marginTop:18 }}>
-        {CATEGORIES.map((cat) => {
-          const items = resultsByCat.get(cat.title) || [];
-          if (items.length === 0) return null;
-          return (
-            <section key={cat.key}>
-              <h3 style={{ margin:'6px 0 10px' }}>{cat.title}</h3>
-              <div style={{ display:'grid', gap:10 }}>
-                {items.map((t) => (
-                  <a
-                    key={t.slug}
-                    href={`/solutions/${t.slug}`}
-                    className="list-btn"
-                    style={{ textDecoration:'none' }}
-                  >
-                    <span className="list-btn__left">
-                      <b>{t.title}</b>
-                      {t.short ? <div style={{ opacity:.7, fontSize:12, marginTop:4 }}>{t.short}</div> : null}
-                    </span>
-                    <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-                  </a>
-                ))}
-              </div>
-            </section>
-          );
-        })}
+      <div style={{ display: 'grid', gap: 18 }}>
+        {byCat.map(([cat, items]) => (
+          <section key={cat}>
+            <h3 style={{ margin: '8px 0 10px', opacity: 0.9 }}>{cat}</h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              {items.map((it) => (
+                <Link
+                  key={it.slug}
+                  href={`/solutions/${it.slug}`}
+                  className="list-btn"
+                  style={{ textDecoration: 'none' }}
+                >
+                  <span className="list-btn__left">
+                    <b>{it.title}</b>
+                  </span>
+                  <span className="list-btn__right">
+                    <span className="list-btn__chev">›</span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
       </div>
 
-      <div style={{ height: 16 }} />
+      {!filtered.length && (
+        <p style={{ opacity: 0.7, marginTop: 12 }}>
+          Ничего не нашли. Попробуйте другие ключевые слова.
+        </p>
+      )}
     </main>
   );
 }
