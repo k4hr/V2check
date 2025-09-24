@@ -1,29 +1,16 @@
-export type Locale = 'ru' | 'uk' | 'kk' | 'tr' | 'az' | 'ka' | 'hy' | 'en';
+// lib/locale.ts
+export function resolveLocaleByCountry(code: string): string {
+  const c = code.toUpperCase();
+  const map: Record<string, string> = {
+    RU: 'ru', BY: 'ru', UA: 'uk',
+    KZ: 'kk', UZ: 'ru', KG: 'ru',
+    AM: 'hy', AZ: 'az', GE: 'ka', MD: 'ru',
+    TR: 'tr',
 
-export const COUNTRY_TO_LOCALE: Record<string, Locale> = {
-  RU: 'ru',
-  BY: 'ru',
-  KZ: 'kk',
-  UA: 'uk',
-  UZ: 'ru',
-  KG: 'ru',
-  AM: 'hy',
-  AZ: 'az',
-  GE: 'ka',
-  MD: 'ru',
-  TJ: 'ru',
-  TM: 'ru',
-  TR: 'tr',
-  AE: 'en',
-  IN: 'en',
-  EU: 'en',
-  US: 'en',
-};
-
-export const DEFAULT_LOCALE: Locale = 'ru';
-
-export function resolveLocaleByCountry(country: string | null | undefined): Locale {
-  if (!country) return DEFAULT_LOCALE;
-  const code = country.toUpperCase();
-  return COUNTRY_TO_LOCALE[code] ?? DEFAULT_LOCALE;
+    AE: 'en', SA: 'en', QA: 'en', KW: 'en', BH: 'en', OM: 'en', JO: 'en', IL: 'en', EG: 'en',
+    IN: 'en', ID: 'en', MY: 'en', PH: 'en', VN: 'en', TH: 'en', SG: 'en',
+    PL: 'en', CZ: 'en', SK: 'en', HU: 'en', RO: 'en', BG: 'en', RS: 'en',
+    US: 'en',
+  };
+  return map[c] || 'en'; // дефолт — английский
 }
