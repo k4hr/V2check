@@ -1,10 +1,13 @@
-export default {
-  "country.title": "Ölkənizi seçin",
-  "continue": "Davam et",
-  "search.placeholder": "Quick search...",
-  "app.title": "Juristum",
-  "menu.cabinet": "My cabinet",
-  "menu.pro": "Buy subscription",
-  "menu.assistant": "Legal Assistant",
-  "menu.proplus": "Pro+ AI Chat"
+const az = {
+  language: { title: 'Dili seçin' },
+  country:  { title: 'Ölkəni seçin' },
+  continue: 'Davam et',
+  groups: {
+    cis: 'MDB',
+    middleEast: 'Yaxın Şərq',
+    southAsia: 'Cənub və Cənub-Şərqi Asiya',
+    europe: 'Avropa',
+    northAmerica: 'Şimali Amerika',
+  },
 };
+export default az;

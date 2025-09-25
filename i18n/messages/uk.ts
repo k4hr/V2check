@@ -1,10 +1,13 @@
-export default {
-  "country.title": "Оберіть вашу країну",
-  "continue": "Продовжити",
-  "search.placeholder": "Quick search...",
-  "app.title": "Juristum",
-  "menu.cabinet": "My cabinet",
-  "menu.pro": "Buy subscription",
-  "menu.assistant": "Legal Assistant",
-  "menu.proplus": "Pro+ AI Chat"
+const uk = {
+  language: { title: 'Оберіть мову' },
+  country:  { title: 'Оберіть країну' },
+  continue: 'Продовжити',
+  groups: {
+    cis: 'СНД',
+    middleEast: 'Близький Схід',
+    southAsia: 'Південна та Південно-Східна Азія',
+    europe: 'Європа',
+    northAmerica: 'Північна Америка',
+  },
 };
+export default uk;

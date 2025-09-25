@@ -1,10 +1,13 @@
-export default {
-  "country.title": "Еліңізді таңдаңыз",
-  "continue": "Жалғастыру",
-  "search.placeholder": "Quick search...",
-  "app.title": "Juristum",
-  "menu.cabinet": "My cabinet",
-  "menu.pro": "Buy subscription",
-  "menu.assistant": "Legal Assistant",
-  "menu.proplus": "Pro+ AI Chat"
+const kk = {
+  language: { title: 'Тілді таңдаңыз' },
+  country:  { title: 'Елді таңдаңыз' },
+  continue: 'Жалғастыру',
+  groups: {
+    cis: 'ТМД',
+    middleEast: 'Таяу Шығыс',
+    southAsia: 'Оңтүстік және Оңт.-Шығыс Азия',
+    europe: 'Еуропа',
+    northAmerica: 'Солтүстік Америка',
+  },
 };
+export default kk;

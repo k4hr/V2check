@@ -1,10 +1,13 @@
-export default {
-  "country.title": "აირჩიეთ თქვენი ქვეყანა",
-  "continue": "გაგრძელება",
-  "search.placeholder": "Quick search...",
-  "app.title": "Juristum",
-  "menu.cabinet": "My cabinet",
-  "menu.pro": "Buy subscription",
-  "menu.assistant": "Legal Assistant",
-  "menu.proplus": "Pro+ AI Chat"
+const ka = {
+  language: { title: 'აირჩიეთ ენა' },
+  country:  { title: 'აირჩიეთ ქვეყანა' },
+  continue: 'გაგრძელება',
+  groups: {
+    cis: 'დსთ',
+    middleEast: 'მերձამო აღმოსავლეთი',
+    southAsia: 'სამხრეთი და სამხრეთ-აღმოსავლეთი აზია',
+    europe: 'ევროპა',
+    northAmerica: 'ჩრდილოეთ ამერიკა',
+  },
 };
+export default ka;

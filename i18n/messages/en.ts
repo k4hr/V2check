@@ -1,10 +1,13 @@
-export default {
-  "country.title": "Choose your country",
-  "continue": "Continue",
-  "search.placeholder": "Quick search...",
-  "app.title": "Juristum",
-  "menu.cabinet": "My cabinet",
-  "menu.pro": "Buy subscription",
-  "menu.assistant": "Legal Assistant",
-  "menu.proplus": "Pro+ AI Chat"
+const en = {
+  language: { title: 'Choose language' },
+  country:  { title: 'Choose country' },
+  continue: 'Continue',
+  groups: {
+    cis: 'CIS',
+    middleEast: 'Middle East',
+    southAsia: 'South & Southeast Asia',
+    europe: 'Europe',
+    northAmerica: 'North America',
+  },
 };
+export default en;

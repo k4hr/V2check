@@ -1,10 +1,13 @@
-export default {
-  "country.title": "Выберите вашу страну",
-  "continue": "Продолжить",
-  "search.placeholder": "Быстрый поиск...",
-  "app.title": "Juristum",
-  "menu.cabinet": "Личный кабинет",
-  "menu.pro": "Купить подписку",
-  "menu.assistant": "Юр‑Помощник",
-  "menu.proplus": "Pro+ Чат ИИ"
+const ru = {
+  language: { title: 'Выберите язык' },
+  country:  { title: 'Выберите страну' },
+  continue: 'Продолжить',
+  groups: {
+    cis: 'СНГ',
+    middleEast: 'Ближний Восток',
+    southAsia: 'Южная и Юго-Восточная Азия',
+    europe: 'Европа',
+    northAmerica: 'Северная Америка',
+  },
 };
+export default ru;
