@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { resolveLocaleByCountry } from '@/lib/locale';
@@ -41,8 +40,19 @@ export default function CountryPage() {
 
   return (
     <main style={{ padding: 20, maxWidth: 720, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24, marginBottom: 18 }}>
-        <Image src="/logo.png" alt="logo" width={120} height={120} priority />
+      {/* Текст вместо логотипа */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24, marginBottom: 6 }}>
+        <div
+          style={{
+            fontSize: 28,
+            fontWeight: 800,
+            letterSpacing: 0.2,
+            lineHeight: 1.2,
+            textAlign: 'center',
+          }}
+        >
+          Juristum
+        </div>
       </div>
 
       <h1 style={{ textAlign: 'center', marginBottom: 12 }}>{t('country.title')}</h1>
