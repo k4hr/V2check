@@ -2,37 +2,31 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { resolveLocaleByCountry } from '@/lib/locale';
+import { LANGUAGES, type Lang } from '@/lib/languages';
 import { useI18n } from '@/components/I18nProvider';
-import { COUNTRIES, type Country } from '@/lib/countries';
 
-type Group = { title: string; codes: string[] };
-
-/** Группы (что в какую секцию попадает) */
-const GROUPS: Group[] = [
-  { title: 'СНГ', codes: ['RU','BY','UA','KZ','UZ','KG','AM','AZ','GE','MD','TJ','TM'] },
-  { title: 'Ближний Восток', codes: ['TR','AE','SA','QA','KW','BH','OM','JO','IL','EG'] },
-  { title: 'Южная и Юго-Восточная Азия', codes: ['IN','ID','MY','PH','VN','TH','SG'] },
-  { title: 'Европа', codes: ['PL','CZ','SK','HU','RO','BG','RS'] },
-  { title: 'Северная Америка', codes: ['US'] },
-];
-
-/** Быстрый индекс по коду страны */
-const byCode: Record<string, Country> = Object.fromEntries(
-  COUNTRIES.map(c => [c.code, c])
-);
-
-export default function CountryPage() {
+export default function LangPage() {
   const { t } = useI18n();
   const router = useRouter();
   const qp = useSearchParams();
-
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string>('ru');
 
   useEffect(() => {
     const w: any = window;
     w?.Telegram?.WebApp?.ready?.();
     w?.Telegram?.WebApp?.expand?.();
+
+    // проставляем дефолт: cookie → tg.language_code → navigator
+    try {
+      const fromCookie = document.cookie.match(/(?:^|;\s*)locale=([^;]+)/)?.[1];
+      if (fromCookie && LANGUAGES.some(l => l.code === fromCookie)) {
+        setSelected(decodeURIComponent(fromCookie));
+        return;
+      }
+      const tgLc: string | undefined = w?.Telegram?.WebApp?.initDataUnsafe?.user?.language_code;
+      const guess = (tgLc || navigator.language || 'ru').slice(0, 2).toLowerCase();
+      if (LANGUAGES.some(l => l.code === guess)) setSelected(guess);
+    } catch {}
   }, []);
 
   const debugId = useMemo(() => {
@@ -41,109 +35,47 @@ export default function CountryPage() {
   }, [qp]);
 
   const goNext = () => {
-    if (!selected) return;
-    const locale = resolveLocaleByCountry(selected);
-    const oneYear = 60 * 60 * 24 * 365;
-    document.cookie = `country=${selected}; path=/; max-age=${oneYear}`;
-    document.cookie = `locale=${locale}; path=/; max-age=${oneYear}`;
-    try {
-      localStorage.setItem('country', selected);
-      localStorage.setItem('locale', locale);
-    } catch {}
+    const year = 60 * 60 * 24 * 365;
+    document.cookie = `locale=${selected}; path=/; max-age=${year}`;
+    try { localStorage.setItem('locale', selected); } catch {}
     const suffix = debugId ? `?id=${encodeURIComponent(debugId)}` : '';
-    (router as any).push('/home' + suffix);
+    (router as any).push('/country' + suffix); // шаг 2
   };
 
   return (
     <main style={{ padding: 20, maxWidth: 720, margin: '0 auto' }}>
-      <h1 style={{ textAlign: 'center', margin: '6px 0 6px', fontSize: 22, fontWeight: 700 }}>
+      <h1 style={{ textAlign: 'center', margin: '6px 0 8px', fontSize: 22, fontWeight: 700 }}>
         Juristum
       </h1>
       <p style={{ textAlign:'center', margin:'0 0 12px', opacity:.7, fontSize:14 }}>
-        {t('country.title') /* «Выберите страну» */ }
+        {t('language.title') ?? 'Выберите язык'}
       </p>
 
-      {/* Аккордеоны по регионам */}
-      <div style={{ display: 'grid', gap: 12 }}>
-        {GROUPS.map((g, i) => {
-          const items = g.codes.map(c => byCode[c]).filter(Boolean);
-          if (!items.length) return null;
-          return (
-            <details key={g.title} className="acc" {...(i === 0 ? {open:true} : {})}>
-              <summary className="acc__summary">
-                <b>{g.title}</b>
-                <span className="chev">›</span>
-              </summary>
-              <div className="acc__content">
-                {items.map((c) => (
-                  <button
-                    key={c.code}
-                    onClick={() => setSelected(c.code)}
-                    className="list-btn"
-                    style={{
-                      textAlign: 'left',
-                      border: selected === c.code
-                        ? '1px solid #5b8cff'
-                        : '1px solid var(--border, #333)',
-                    }}
-                  >
-                    <span className="list-btn__left">
-                      <span className="list-btn__emoji">{c.flag}</span>
-                      <b>{c.name}</b>
-                    </span>
-                    <span className="list-btn__right">
-                      {selected === c.code ? '✓' : '›'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </details>
-          );
-        })}
+      <div style={{ display:'grid', gap:10 }}>
+        {LANGUAGES.map((l: Lang) => (
+          <button
+            key={l.code}
+            onClick={() => setSelected(l.code)}
+            className="list-btn"
+            style={{
+              textAlign:'left',
+              border: selected === l.code ? '1px solid #5b8cff' : '1px solid var(--border,#333)',
+            }}
+          >
+            <span className="list-btn__left">
+              <span className="list-btn__emoji">{l.flag}</span>
+              <b>{l.native}</b>
+              <span style={{ opacity:.6, marginLeft:6 }}>{l.code !== 'en' ? l.name : ''}</span>
+            </span>
+            <span className="list-btn__right">{selected === l.code ? '✓' : '›'}</span>
+          </button>
+        ))}
       </div>
 
       <div style={{ height: 12 }} />
-      <button
-        onClick={goNext}
-        disabled={!selected}
-        className="list-btn"
-        style={{ opacity: selected ? 1 : .5 }}
-      >
+      <button onClick={goNext} className="list-btn">
         {t('continue')}
       </button>
-
-      {/* Локальные стили аккордеона */}
-      <style jsx>{`
-        .acc {
-          border: 1px solid var(--border, #333);
-          border-radius: 12px;
-          overflow: hidden;
-          background: rgba(255,255,255,0.02);
-        }
-        .acc + .acc { margin-top: 0; }
-        .acc__summary {
-          list-style: none;
-          cursor: pointer;
-          padding: 14px 16px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          font-weight: 700;
-          user-select: none;
-        }
-        summary::-webkit-details-marker { display: none; }
-        .chev {
-          transition: transform .18s ease;
-          display: inline-block;
-        }
-        .acc[open] .chev { transform: rotate(90deg); }
-        .acc__content {
-          padding: 10px;
-          display: grid;
-          gap: 10px;
-          border-top: 1px solid var(--border, #333);
-        }
-      `}</style>
     </main>
   );
 }
