@@ -66,6 +66,23 @@ export default function Home() {
           </span>
           <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
         </Link>
+
+        {/* Новые инструменты Pro+ */}
+        <Link href={`/pro-plus/plan${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">🚀</span>
+            <b>Бизнес-план <span style={{ color:'#5b8cff' }}>Pro+</span></b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+
+        <Link href={`/pro-plus/resume${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left">
+            <span className="list-btn__emoji">🧾</span>
+            <b>Резюме <span style={{ color:'#5b8cff' }}>Pro+</span></b>
+          </span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
       </div>
     </main>
   );
