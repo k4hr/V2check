@@ -51,7 +51,7 @@ export default function Home() {
         <Link href={`/pro/tools${linkSuffix}` as Route} className="card card--pro" style={{ textDecoration: 'none' }}>
           <span className="card__left">
             <span className="card__icon">🧰</span>
-            <span className="card__title">Функции Pro <span className="badge">Pro</span></span>
+            <span className="card__title">Ежедневные задачи <span className="badge">Pro</span></span>
           </span>
           <span className="card__chev">›</span>
         </Link>
@@ -60,7 +60,7 @@ export default function Home() {
         <Link href={`/pro-plus/tools${linkSuffix}` as Route} className="card card--proplus" style={{ textDecoration: 'none' }}>
           <span className="card__left">
             <span className="card__icon">🚀</span>
-            <span className="card__title">Функции Pro+ <span className="badge badge--gold">Pro+</span></span>
+            <span className="card__title">Эксперт центр <span className="badge badge--gold">Pro+</span></span>
           </span>
           <span className="card__chev">›</span>
         </Link>
