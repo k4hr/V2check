@@ -7,11 +7,10 @@ import { useEffect, useMemo } from 'react';
 export default function Home() {
   useEffect(() => {
     const w: any = window;
-    w?.Telegram?.WebApp?.ready?.();
-    w?.Telegram?.WebApp?.expand?.();
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // тащим debug id из URL, если запущено без TWA
+  // ?id= для дебага, если открыто без TWA
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -23,65 +22,69 @@ export default function Home() {
   }, []);
 
   return (
-    <main style={{ padding: 20 }}>
-      <h1 style={{ textAlign: 'center' }}>Juristum</h1>
+    <main>
+      {/* Шапка */}
+      <h1 style={{ textAlign: 'center' }}>LiveManager</h1>
+      <p className="lm-subtitle" style={{ textAlign: 'center' }}>
+        Умные инструменты на каждый день
+      </p>
 
-      <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-        <Link href={`/cabinet${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">👤</span>
-            <b>Личный кабинет</b>
+      {/* Карточки-линки */}
+      <div className="lm-grid" style={{ marginTop: 16 }}>
+        <Link href={`/cabinet${linkSuffix}` as Route} className="card" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">👤</span>
+            <span className="card__title">Личный кабинет</span>
           </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          <span className="card__chev">›</span>
         </Link>
 
-        <Link href={`/pro${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">⭐</span>
-            <b>Купить подписку</b>
+        <Link href={`/pro${linkSuffix}` as Route} className="card card--pro" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">⭐</span>
+            <span className="card__title">Купить подписку <span className="badge">Pro / Pro+</span></span>
           </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          <span className="card__chev">›</span>
         </Link>
 
-        <Link href={`/assistant${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">📚</span>
-            <b>Юр-Помощник</b>
+        <Link href={`/assistant${linkSuffix}` as Route} className="card" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">📚</span>
+            <span className="card__title">Юр-Помощник</span>
           </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          <span className="card__chev">›</span>
         </Link>
 
-        <Link href={`/templates${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">🧩</span>
-            <b>Готовые решения</b>
+        <Link href={`/templates${linkSuffix}` as Route} className="card" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">🧩</span>
+            <span className="card__title">Готовые решения</span>
           </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          <span className="card__chev">›</span>
         </Link>
 
-        <Link href={`/pro-plus-chat${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">🤖</span>
-            <b>Pro+ Чат ИИ</b>
+        <Link href={`/pro-plus-chat${linkSuffix}` as Route} className="card card--proplus" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">🤖</span>
+            <span className="card__title">Pro+ Чат ИИ <span className="badge badge--gold">Pro+</span></span>
           </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          <span className="card__chev">›</span>
         </Link>
 
-        {/* Новые инструменты Pro+ */}
-        <Link href={`/pro-plus/plan${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">🚀</span>
-            <b>Бизнес-план <span style={{ color:'#5b8cff' }}>Pro+</span></b>
+        <Link href={`/pro-plus/plan${linkSuffix}` as Route} className="card card--proplus" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">🚀</span>
+            <span className="card__title">Бизнес-план <span className="badge badge--gold">Pro+</span></span>
           </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          <span className="card__chev">›</span>
         </Link>
 
-        <Link href={`/pro-plus/resume${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">🧾</span>
-            <b>Резюме <span style={{ color:'#5b8cff' }}>Pro+</span></b>
+        <Link href={`/pro-plus/resume${linkSuffix}` as Route} className="card card--proplus" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">🧾</span>
+            <span className="card__title">Резюме <span className="badge badge--gold">Pro+</span></span>
           </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          <span className="card__chev">›</span>
         </Link>
       </div>
     </main>
