@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PROMPT_LAUNCH } from '@/lib/prompts/plan';
+import * as PR from './prompt'; // локальный prompt.ts (любой формат экспорта)
 
 type Msg = { role: 'user' | 'assistant'; content: string };
+
+// достаём текст промпта из локального файла вне зависимости от типа экспорта
+const PROMPT_LAUNCH: string =
+  (PR as any).PROMPT_LAUNCH ?? (PR as any).default ?? '';
 
 function getCookie(name: string): string {
   try {
@@ -27,7 +31,7 @@ export default function LaunchChatPage() {
   const [loading, setLoading] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // ?id= для дебага в браузере
+  // ?id= для дебага
   const tgId = useMemo(() => {
     try { const u = new URL(window.location.href); return u.searchParams.get('id') || ''; }
     catch { return ''; }
@@ -35,7 +39,7 @@ export default function LaunchChatPage() {
 
   // Telegram WebApp init
   useEffect(() => {
-    const w:any = window;
+    const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
@@ -54,7 +58,7 @@ export default function LaunchChatPage() {
 
     try {
       const history = [...messages, { role:'user', content:text }].slice(-12);
-      const w:any = window;
+      const w: any = window;
       const initData: string | undefined = w?.Telegram?.WebApp?.initData;
       const locale = (getCookie('locale') || 'ru').toLowerCase();
 
@@ -87,7 +91,7 @@ export default function LaunchChatPage() {
     }
   }
 
-  function onSend() { if (input.trim()) void send(); }
+  function onSend(){ if (input.trim()) void send(); }
 
   return (
     <main style={{ padding:20, maxWidth:900, margin:'0 auto' }}>
@@ -119,7 +123,7 @@ export default function LaunchChatPage() {
             <input
               value={input}
               onChange={(e)=>setInput(e.target.value)}
-              onKeyDown={(e)=> e.key==='Enter' ? onSend() : null}
+              onKeyDown={(e)=> e.key==='Enter' ? onSend() : null)}
               placeholder="Опишите задачу для запуска (что/для кого/цель/ограничения)"
               style={{
                 flex:1, padding:'10px 12px', borderRadius:10, border:'1px solid var(--border)',
