@@ -26,12 +26,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale}>
       <body>
-        {/* Глобально инициализируем TWA + заголовок x-init-data */}
-        <TwaBootstrap>
-          <I18nProvider messages={messages}>
-            {children}
-          </I18nProvider>
-        </TwaBootstrap>
+        <div className="lm-bg" />
+        <div className="lm-page">
+          {/* Глобальная инициализация TWA + i18n */}
+          <TwaBootstrap>
+            <I18nProvider messages={messages}>
+              {children}
+            </I18nProvider>
+          </TwaBootstrap>
+        </div>
       </body>
     </html>
   );
