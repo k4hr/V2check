@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import * as PR from './prompt'; // локальный prompt.ts (любой формат экспорта)
+import * as PR from './prompt'; // локальный prompt.ts
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
-// достаём текст промпта из локального файла вне зависимости от типа экспорта
 const PROMPT_LAUNCH: string =
   (PR as any).PROMPT_LAUNCH ?? (PR as any).default ?? '';
 
@@ -31,19 +30,16 @@ export default function LaunchChatPage() {
   const [loading, setLoading] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // ?id= для дебага
   const tgId = useMemo(() => {
     try { const u = new URL(window.location.href); return u.searchParams.get('id') || ''; }
     catch { return ''; }
   }, []);
 
-  // Telegram WebApp init
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // автоскролл
   useEffect(() => {
     boxRef.current?.scrollTo({ top: 1e9, behavior: 'smooth' });
   }, [messages, loading]);
@@ -72,8 +68,8 @@ export default function LaunchChatPage() {
         },
         body: JSON.stringify({
           prompt: text,
-          history: [{ role: 'user', content: system }, ...history], // мягкий праймер
-          system,                                                   // жёсткий праймер
+          history: [{ role: 'user', content: system }, ...history],
+          system,
           mode: 'proplus-launch',
         }),
       });
@@ -106,7 +102,6 @@ export default function LaunchChatPage() {
           background:'var(--panel)', display:'flex', flexDirection:'column', height:'70vh'
         }}
       >
-        {/* История */}
         <div ref={boxRef} style={{ padding:12, overflowY:'auto', flex:1 }}>
           {messages.map((m,i)=>(
             <div key={i} style={{ marginBottom:12 }}>
@@ -117,13 +112,12 @@ export default function LaunchChatPage() {
           {loading && <div style={{ opacity:.6, fontSize:14 }}>ИИ печатает…</div>}
         </div>
 
-        {/* Ввод */}
         <div style={{ padding:10, borderTop:'1px solid var(--border)' }}>
           <div style={{ display:'flex', gap:8 }}>
             <input
               value={input}
               onChange={(e)=>setInput(e.target.value)}
-              onKeyDown={(e)=> e.key==='Enter' ? onSend() : null)}
+              onKeyDown={(e)=> (e.key==='Enter' ? onSend() : null)}
               placeholder="Опишите задачу для запуска (что/для кого/цель/ограничения)"
               style={{
                 flex:1, padding:'10px 12px', borderRadius:10, border:'1px solid var(--border)',
