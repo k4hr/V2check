@@ -1,7 +1,106 @@
-:root { --border: #333; }
-body { color: #e9eaee; background: #0f1115; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial; }
-.list-btn { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-radius:12px; background:#171a21; border:1px solid var(--border); color:inherit; }
+/* ===== Палитра и базовая тема ===== */
+:root {
+  --border: rgba(15,23,42,.14);
+  --text: #0f172a;
+  --subtle: #475569;
+
+  --bg1: #f7f9ff;
+  --bg2: #eaf1ff;
+
+  --card-bg: #ffffff;
+  --card-border: rgba(15, 23, 42, 0.08);
+  --card-hover: rgba(99, 102, 241, 0.08);
+  --radius: 16px;
+  --shadow: 0 8px 28px rgba(2, 6, 23, 0.08);
+
+  --pro: #6366f1;
+  --proplus: #f59e0b;
+}
+
+/* Авто-инверсия под тёмную схему (Telegram/OS) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e5e7eb;
+    --subtle: #9aa3b2;
+    --bg1: #0b1220;
+    --bg2: #0f172a;
+
+    --card-bg: #111827;
+    --card-border: rgba(148,163,184,.12);
+    --card-hover: rgba(99,102,241,.10);
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+
+/* ===== Базовые стили ===== */
+html, body { height: 100%; }
+body {
+  color: var(--text);
+  background: var(--bg1);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
+  margin: 0;
+}
+
+/* Градиентная «живая» подложка */
+.lm-bg {
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(1200px 500px at 70% -10%, var(--bg2), transparent 60%),
+    linear-gradient(180deg, var(--bg1) 0%, var(--bg2) 100%);
+}
+
+/* Контейнер страницы */
+.lm-page { padding: 20px; max-width: 900px; margin: 0 auto; }
+
+/* Заголовки */
+h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
+.lm-subtitle { color: var(--subtle); margin: 0 0 12px; }
+
+/* ===== Сетка главного меню (если понадобится) ===== */
+.lm-grid { display: grid; gap: 14px; }
+@media (min-width: 560px) { .lm-grid--2col { grid-template-columns: 1fr 1fr; } }
+
+/* ===== Карточки (совместимы с Link и button) ===== */
+.card {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 16px;
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  border:1px solid var(--card-border);
+  color:inherit; text-decoration:none;
+  box-shadow: var(--shadow);
+  transition: transform .08s ease, border-color .15s ease, background .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.card:hover { transform: translateY(-1px); border-color: var(--pro); background: color-mix(in srgb, var(--card-bg) 90%, var(--card-hover)); }
+.card:active { transform: translateY(0); }
+.card__left { display:flex; align-items:center; gap:12px; }
+.card__icon {
+  font-size:22px; line-height:1; width:36px; height:36px;
+  display:grid; place-items:center; border-radius:10px;
+  background: linear-gradient(135deg, rgba(99,102,241,.15), rgba(79,70,229,.12));
+}
+.card__title { font-weight:700; }
+.card__chev { opacity:.5; }
+
+/* Акценты */
+.card--pro .card__icon { background: linear-gradient(135deg, rgba(99,102,241,.18), rgba(59,130,246,.14)); }
+.card--proplus .card__icon { background: linear-gradient(135deg, rgba(245,158,11,.22), rgba(251,191,36,.18)); }
+.badge { margin-left:6px; font-weight:700; color: var(--pro); }
+.badge--gold { color: var(--proplus); }
+
+/* ===== Чип «Назад» (общий) ===== */
+.back-chip {
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid var(--card-border);
+  background: var(--card-bg);
+  padding:8px 12px; border-radius:999px;
+  box-shadow: var(--shadow);
+}
+.back-chip:hover { border-color: var(--pro); }
+
+/* ===== Совместимость с твоими текущими кнопками ===== */
+.list-btn { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-radius:12px; background: var(--card-bg); border:1px solid var(--card-border); color:inherit; box-shadow: var(--shadow); }
 .list-btn__left { display:flex; align-items:center; gap:10px; }
 .list-btn__right { opacity:.7; }
 .list-btn__emoji { width:26px; display:inline-flex; justify-content:center; }
-h1 { font-weight:800; }
