@@ -27,7 +27,6 @@ export default function ProMinPage() {
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
-
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
@@ -50,7 +49,6 @@ export default function ProMinPage() {
       const res = await fetch(`/api/createInvoice?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, link, error } = await res.json();
       if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
-
       const tg: any = (window as any).Telegram?.WebApp;
       if (tg?.openInvoice) tg.openInvoice(link, () => {});
       else if (tg?.openTelegramLink) tg.openTelegramLink(link);
@@ -66,32 +64,13 @@ export default function ProMinPage() {
 
   return (
     <main>
-      <div
-        className="safe"
-        style={{
-          maxWidth: 600,
-          margin: '0 auto',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 14,
-          padding: 20,
-        }}
-      >
+      <div className="safe" style={{ maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14, padding: 20 }}>
         {/* Назад */}
         <button
           type="button"
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
           className="list-btn"
-          style={{
-            width: 120,
-            padding: '10px 14px',
-            borderRadius: 12,
-            background: '#171a21',
-            border: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
+          style={{ width: 120, padding: '10px 14px', borderRadius: 12, background: '#171a21', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}
         >
           <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
           <span style={{ fontWeight: 600 }}>Назад</span>
@@ -104,7 +83,7 @@ export default function ProMinPage() {
         <div style={{ display: 'grid', gap: 12 }}>
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
-            const badge = planBadges(tier, key)[0]?.text ?? ''; // максимум 1
+            const badgeText = planBadges(tier, key)[0]?.text ?? ''; // макс. один бейдж
 
             return (
               <button
@@ -119,49 +98,34 @@ export default function ProMinPage() {
                   padding: '14px 18px',
                   opacity: can ? 1 : .6,
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(0,1fr) 86px 120px', // ← фикс для бейджа и правой части
+                  /* 4 колонки: лево | спейсер | бейдж | правая часть */
+                  gridTemplateColumns: 'minmax(0,1fr) 8px max-content 120px',
                   alignItems: 'center',
-                  gap: 10,
+                  gap: 0,
                 }}
               >
-                {/* левая колонка: иконка + название */}
+                {/* 1: иконка + название */}
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span className="list-btn__emoji" aria-hidden>🟣</span>
                   <b style={{ whiteSpace: 'nowrap' }}>{TITLES[key]}</b>
                 </span>
 
-                {/* средняя колонка: бейдж или прозрачный placeholder */}
+                {/* 2: тонкий спейсер — ничего не рендерим */}
+                <span aria-hidden />
+
+                {/* 3: бейдж (или скрытый placeholder) */}
                 <span style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                  {badge ? (
-                    <span
-                      style={{
-                        fontSize: 10.5,
-                        lineHeight: 1,
-                        padding: '4px 6px',
-                        borderRadius: 999,
-                        background: '#2b2f43',
-                        color: '#8aa0ff',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {badge}
+                  {badgeText ? (
+                    <span style={{ fontSize: 10.5, lineHeight: 1, padding: '4px 6px', borderRadius: 999, background: '#2b2f43', color: '#8aa0ff', whiteSpace: 'nowrap' }}>
+                      {badgeText}
                     </span>
                   ) : (
                     <span style={{ visibility: 'hidden', padding: '4px 6px' }}>.</span>
                   )}
                 </span>
 
-                {/* правая колонка: цена + ⭐ + стрелка */}
-                <span
-                  className="list-btn__right"
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    alignItems: 'center',
-                    gap: 8,
-                    fontVariantNumeric: 'tabular-nums',
-                  }}
-                >
+                {/* 4: цена + ⭐ + стрелка */}
+                <span className="list-btn__right" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontVariantNumeric: 'tabular-nums' }}>
                   <span>{cfg.amount}</span>
                   <span aria-hidden>⭐</span>
                   <span className="list-btn__chev">›</span>
