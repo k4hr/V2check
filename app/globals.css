@@ -104,3 +104,14 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
 .list-btn__left { display:flex; align-items:center; gap:10px; }
 .list-btn__right { opacity:.7; }
 .list-btn__emoji { width:26px; display:inline-flex; justify-content:center; }
+
+/* тонкая кнопка-ссылка внизу */
+.ghost-link {
+  display:inline-flex; align-items:center; gap:8px;
+  padding:10px 14px; border-radius:10px;
+  border:1px dashed rgba(115,130,255,.35);
+  background: rgba(115,130,255,.06);
+  color:#aab3ff; font-weight:600;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease;
+}
+.ghost-link:hover { transform: translateY(-1px); background: rgba(115,130,255,.1); border-color: rgba(115,130,255,.55); }
