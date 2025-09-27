@@ -1,11 +1,10 @@
-// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // A) API: унификация заголовков initData
+  // A) API: унифициируем заголовок initData
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
     const tgHeader = requestHeaders.get('x-telegram-init-data');
@@ -16,16 +15,26 @@ export function middleware(req: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  // B) Больше НЕТ обязательного онбординга по стране. Оставляем только locale.
-  const hasLocale = !!req.cookies.get('locale')?.value || !!req.cookies.get('NEXT_LOCALE')?.value;
+  // B) Онбординг один раз: /language -> /country -> /home
+  const welcomed = req.cookies.get('welcomed')?.value === '1';
+  const isOnboarding = pathname === '/language' || pathname === '/country';
 
-  // Если вдруг ещё остались старые страницы — позволим их открывать вручную,
-  // но не будем навязывать редиректы.
-  const isLegacyOnboarding =
-    pathname === '/language' || pathname === '/country';
+  // Пока не прошли онбординг — ведём на /language
+  if (!welcomed && !isOnboarding) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/language';
+    url.search = search;
+    return NextResponse.redirect(url);
+  }
 
-  // Если у пользователя нет locale — просто пропускаем (UI сам покажет аккордеон).
-  // Никаких редиректов больше не делаем.
+  // Онбординг уже пройден — не застреваем на /language|/country
+  if (welcomed && isOnboarding) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/home';
+    url.search = search;
+    return NextResponse.redirect(url);
+  }
+
   return NextResponse.next();
 }
 
