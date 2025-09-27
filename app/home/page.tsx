@@ -23,11 +23,13 @@ export default function Home() {
 
   return (
     <main>
+      {/* Шапка */}
       <h1 style={{ textAlign: 'center' }}>LiveManager</h1>
       <p className="lm-subtitle" style={{ textAlign: 'center' }}>
         Умные инструменты на каждый день
       </p>
 
+      {/* Карточки */}
       <div className="lm-grid" style={{ marginTop: 16 }}>
         {/* 1. ЛК */}
         <Link href={`/cabinet${linkSuffix}` as Route} className="card" style={{ textDecoration: 'none' }}>
@@ -63,6 +65,13 @@ export default function Home() {
             <span className="card__title">Эксперт центр <span className="badge badge--gold">Pro+</span></span>
           </span>
           <span className="card__chev">›</span>
+        </Link>
+      </div>
+
+      {/* Нижняя «призрачная» кнопка */}
+      <div style={{ marginTop: 18, display: 'flex', justifyContent: 'center' }}>
+        <Link href={`/language${linkSuffix}` as Route} className="ghost-link" style={{ textDecoration: 'none' }}>
+          🌐 Сменить язык/страну
         </Link>
       </div>
     </main>
