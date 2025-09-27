@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server';
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
 
-  // A) API: унифициируем заголовок initData
+  // A) Для API: прокидываем единый заголовок initData
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
     const tgHeader = requestHeaders.get('x-telegram-init-data');
@@ -15,19 +15,19 @@ export function middleware(req: NextRequest) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
-  // B) Онбординг один раз: /language -> /country -> /home
+  // B) Онбординг один раз: '/' -> '/country' -> '/home'
   const welcomed = req.cookies.get('welcomed')?.value === '1';
-  const isOnboarding = pathname === '/language' || pathname === '/country';
+  const isOnboarding = pathname === '/' || pathname === '/country';
 
-  // Пока не прошли онбординг — ведём на /language
+  // Если онбординг ещё не пройден — принудительно ведём на первый шаг '/'
   if (!welcomed && !isOnboarding) {
     const url = req.nextUrl.clone();
-    url.pathname = '/language';
-    url.search = search;
+    url.pathname = '/';
+    url.search = search; // сохраняем query (?id= и т.п.)
     return NextResponse.redirect(url);
   }
 
-  // Онбординг уже пройден — не застреваем на /language|/country
+  // Если онбординг уже пройден — не даём застрять на шагах
   if (welcomed && isOnboarding) {
     const url = req.nextUrl.clone();
     url.pathname = '/home';
