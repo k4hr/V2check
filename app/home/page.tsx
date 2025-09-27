@@ -17,16 +17,17 @@ const LOCALES: { code: Locale; label: string; flag: string }[] = [
   { code: 'hy', label: 'Հայերեն',      flag: '🇦🇲' },
 ];
 
-const COUNTRIES = [
-  { code: 'RU', name: 'Россия',        flag: '🇷🇺' },
-  { code: 'UA', name: 'Украина',       flag: '🇺🇦' },
-  { code: 'KZ', name: 'Казахстан',     flag: '🇰🇿' },
-  { code: 'TR', name: 'Türkiye',       flag: '🇹🇷' },
-  { code: 'AZ', name: 'Azərbaycan',    flag: '🇦🇿' },
-  { code: 'GE', name: 'საქართველო',     flag: '🇬🇪' },
-  { code: 'AM', name: 'Հայաստան',      flag: '🇦🇲' },
-  { code: 'US', name: 'United States', flag: '🇺🇸' },
-];
+/** страна по умолчанию для каждого языка (для локальных настроек) */
+const DEFAULT_COUNTRY: Record<Locale, string> = {
+  ru: 'RU',
+  en: 'US',
+  uk: 'UA',
+  kk: 'KZ',
+  tr: 'TR',
+  az: 'AZ',
+  ka: 'GE',
+  hy: 'AM',
+};
 
 function getCookie(name: string): string {
   try {
@@ -48,14 +49,14 @@ export default function Home() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // начальные значения из cookies
-  const [locale, setLocale]   = useState<Locale>(() => (getCookie('locale') as Locale) || 'ru');
-  const [country, setCountry] = useState<string>(() => getCookie('country') || 'RU');
-
-  // для кнопки "Сохранить" — есть ли изменения?
+  // начальные cookie (если нет — ru/RU)
   const initialLocale  = useMemo(() => ((getCookie('locale') as Locale) || 'ru'), []);
-  const initialCountry = useMemo(() => (getCookie('country') || 'RU'), []);
-  const hasChanges = locale !== initialLocale || country !== initialCountry;
+  const initialCountry = useMemo(() => (getCookie('country') || DEFAULT_COUNTRY[(getCookie('locale') as Locale) || 'ru']), []);
+  const [locale, setLocale] = useState<Locale>(initialLocale);
+
+  // страна будет рассчитана на сохранении
+  const derivedCountry = DEFAULT_COUNTRY[locale];
+  const hasChanges = locale !== initialLocale || derivedCountry !== initialCountry;
 
   useEffect(() => {
     const w: any = window;
@@ -75,9 +76,8 @@ export default function Home() {
     if (saving || !hasChanges) return;
     setSaving(true);
     setCookie('locale', locale);
-    setCookie('country', country);
+    setCookie('country', derivedCountry);
     haptic('medium');
-    // маленькая пауза, чтобы куки гарантированно записались
     setTimeout(() => { window.location.reload(); }, 150);
   }
 
@@ -137,7 +137,7 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Панель аккордеона: единый выбор + подтверждение */}
+      {/* Панель аккордеона: только выбор языка */}
       {open && (
         <div
           style={{
@@ -151,7 +151,6 @@ export default function Home() {
             marginRight: 'auto'
           }}
         >
-          {/* Языки */}
           <div style={{ marginBottom: 10, opacity: .8, fontSize: 12, letterSpacing: .2 }}>Выберите язык интерфейса</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
             {LOCALES.map((l) => {
@@ -175,34 +174,11 @@ export default function Home() {
             })}
           </div>
 
-          {/* Страны */}
-          <div style={{ marginTop: 14, opacity: .8, fontSize: 12, letterSpacing: .2 }}>Страна (для локальных настроек)</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-            {COUNTRIES.map(c => {
-              const active = country === c.code;
-              return (
-                <button
-                  key={c.code}
-                  onClick={() => setCountry(c.code)}
-                  style={{
-                    borderRadius: 999, padding: '6px 10px',
-                    background: active ? '#243055' : '#1a2030',
-                    border: `1px solid ${active ? '#5b6cae' : '#2a2f45'}`,
-                    fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6
-                  }}
-                >
-                  <span>{c.flag}</span>
-                  <span>{c.name}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Кнопки управления */}
+          {/* Кнопки */}
           <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
             <button
               type="button"
-              onClick={() => { setOpen(false); setLocale(initialLocale as Locale); setCountry(initialCountry); }}
+              onClick={() => { setOpen(false); setLocale(initialLocale as Locale); }}
               className="list-btn"
               style={{ padding: '8px 12px', borderRadius: 10, background: '#171a21', border: '1px solid var(--border)' }}
             >
