@@ -1,120 +1,80 @@
-// app/pro/page.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import type { Plan } from '@/lib/pricing';
-import { PRICES } from '@/lib/pricing';
+import Link from 'next/link';
+import type { Route } from 'next';
+import { useEffect, useMemo } from 'react';
 
-export default function ProPage() {
-  const [busy, setBusy] = useState<Plan | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-
+export default function ProPlansPage() {
   useEffect(() => {
-    try {
-      const w: any = window;
-      const tg = w?.Telegram?.WebApp;
-      tg?.ready?.(); tg?.expand?.();
-      tg?.BackButton?.show?.();
-      const back = () => { if (document.referrer) history.back(); else window.location.href = '/'; };
-      tg?.BackButton?.onClick?.(back);
-
-      const onClosed = (d: any) => {
-        if (d?.status === 'paid') {
-          try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
-          setInfo('Оплата подтверждена. Обновляем статус…');
-          setTimeout(() => { window.location.href = '/cabinet'; }, 400);
-        } else {
-          setInfo('Окно оплаты закрыто. Если оплата прошла — проверьте статус в кабинете.');
-        }
-        setBusy(null);
-      };
-      tg?.onEvent?.('invoiceClosed', onClosed);
-      return () => { tg?.BackButton?.hide?.(); tg?.offEvent?.('invoiceClosed', onClosed); };
-    } catch {}
+    const w: any = window;
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  async function buy(plan: Plan) {
-    if (busy) return;
-    setBusy(plan); setMsg(null); setInfo(null);
+  // Пробрасываем ?id= если мини-апп открыто без TWA
+  const withId = useMemo(() => {
     try {
-      const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}`, { method: 'POST' });
-      const { ok, link, error } = await res.json();
-      if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
-
-      const tg: any = (window as any).Telegram?.WebApp;
-      if (tg?.openInvoice) tg.openInvoice(link, () => {});
-      else if (tg?.openTelegramLink) tg.openTelegramLink(link);
-      else window.location.href = link;
-    } catch (e: any) {
-      setMsg(e?.message || 'Неизвестная ошибка');
-    } finally {
-      setTimeout(() => setBusy(null), 1200);
+      const u = new URL(window.location.href);
+      const id = u.searchParams.get('id') || '';
+      return (path: string) => (id ? (`${path}?id=${encodeURIComponent(id)}` as Route) : (path as Route));
+    } catch {
+      return (path: string) => path as Route;
     }
-  }
-
-  // --- УНИКАЛИЗАЦИЯ ПЛАНОВ (убираем дубликаты) ---
-  const uniquePlans = React.useMemo(() => {
-    // Преобразуем объект PRICES -> массив с ключом и конфигом
-    const entries = Object.entries(PRICES).map(([key, cfg]) => ({ key: key as Plan, cfg }));
-    // Уберём дубли по (title + days)
-    const map = new Map<string, { key: Plan; cfg: typeof PRICES[Plan] }>();
-    for (const it of entries) {
-      const sig = `${it.cfg.title}::${it.cfg.days}`;
-      if (!map.has(sig)) map.set(sig, it);
-    }
-    // Сортируем по длительности (дни)
-    return Array.from(map.values()).sort((a, b) => a.cfg.days - b.cfg.days);
   }, []);
 
   return (
     <main>
-      <div className="safe" style={{
-        maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column',
-        gap: 12, padding: 20
-      }}>
-        <h1 style={{ textAlign: 'center' }}>Подписка Juristum Pro</h1>
-        {msg && <p style={{ color: 'crimson', textAlign: 'center' }}>{msg}</p>}
-        {info && <p style={{ opacity: .7, textAlign: 'center' }}>{info}</p>}
+      {/* Назад */}
+      <button
+        type="button"
+        onClick={() => history.length > 1 ? history.back() : (location.href = '/home')}
+        className="card"
+        style={{ maxWidth: 140, marginBottom: 12 }}
+      >
+        ← Назад
+      </button>
 
-        <div style={{ display: 'grid', gap: 12 }}>
-          {uniquePlans.map(({ key, cfg }) => {
-            const plan = key as Plan;
-            const can = !busy || busy === plan;
-            return (
-              <button
-                key={`${cfg.title}-${cfg.days}`}
-                disabled={!can}
-                className="list-btn"
-                style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  border: '1px solid #333', borderRadius: 12, padding: '12px 16px',
-                  opacity: can ? 1 : .6
-                }}
-                onClick={() => buy(plan)}
-              >
-                <span className="list-btn__left">
-                  <span className="list-btn__emoji">⭐</span>
-                  <b>{cfg.title}</b>
-                </span>
-                <span className="list-btn__right">
-                  <span>{cfg.amount} ⭐</span>
-                  <span className="list-btn__chev">›</span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
+      <h1 style={{ textAlign: 'center' }}>Выберите подписку</h1>
+      <p className="lm-subtitle" style={{ textAlign: 'center' }}>
+        Сравните возможности и перейдите к оплате
+      </p>
 
-        <div style={{ marginTop: 'auto' }}>
-          <p className="text-xs opacity-60" style={{ fontSize: 12, opacity: .55, textAlign: 'center', marginTop: 24 }}>
-            Подтверждая, вы соглашаетесь с <a href="/terms" style={{ textDecoration: 'underline' }}>условиями подписки</a>.
-          </p>
-          <p className="text-xs opacity-60" style={{ fontSize: 12, opacity: .55, textAlign: 'center' }}>
-            Также ознакомьтесь с <a href="/legal" style={{ textDecoration: 'underline' }}>правовой информацией</a>.
-          </p>
-        </div>
+      <div className="lm-grid" style={{ marginTop: 16 }}>
+        {/* PRO (min) */}
+        <Link href={withId('/pro/min')} className="card card--pro" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">🟪</span>
+            <span className="card__title">
+              LiveManager Pro <span className="badge">быстрый старт</span>
+            </span>
+          </span>
+          <span className="card__chev">›</span>
+          <div className="card__desc">
+            • Модель: GPT-4o mini<br/>
+            • Быстрые ежедневные инструменты<br/>
+            • Базовые лимиты
+          </div>
+        </Link>
+
+        {/* PRO+ (max) */}
+        <Link href={withId('/pro/max')} className="card card--proplus" style={{ textDecoration: 'none' }}>
+          <span className="card__left">
+            <span className="card__icon">✨</span>
+            <span className="card__title">
+              LiveManager Pro+ <span className="badge badge--gold">максимум</span>
+            </span>
+          </span>
+          <span className="card__chev">›</span>
+          <div className="card__desc">
+            • Модель: GPT-4o / GPT-4 (усиленная)<br/>
+            • Глубокие сценарии и документы<br/>
+            • Повышенные лимиты
+          </div>
+        </Link>
       </div>
+
+      <style jsx>{`
+        .card__desc { margin-top: 8px; font-size: 13px; opacity: .8; line-height: 1.35; }
+      `}</style>
     </main>
   );
 }
