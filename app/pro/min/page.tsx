@@ -21,13 +21,13 @@ export default function ProMinPage() {
   const prices = useMemo(() => getPrices(tier), []);
 
   useEffect(() => {
-    const w: any = window;
-    const tg = w?.Telegram?.WebApp;
+    const tg: any = (window as any)?.Telegram?.WebApp;
     try { tg?.ready?.(); tg?.expand?.(); } catch {}
     try {
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
+
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
@@ -104,8 +104,7 @@ export default function ProMinPage() {
         <div style={{ display: 'grid', gap: 12 }}>
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
-            const badges = planBadges(tier, key); // 0 или 1 бейдж
-            const badgeText = badges[0]?.text ?? '';
+            const badge = planBadges(tier, key)[0]?.text ?? ''; // максимум 1
 
             return (
               <button
@@ -120,20 +119,20 @@ export default function ProMinPage() {
                   padding: '14px 18px',
                   opacity: can ? 1 : .6,
                   display: 'grid',
-                  gridTemplateColumns: '1fr 80px 120px', // ← фикс для бейджа и прайса
+                  gridTemplateColumns: 'minmax(0,1fr) 86px 120px', // ← фикс для бейджа и правой части
                   alignItems: 'center',
                   gap: 10,
                 }}
               >
-                {/* Левая колонка */}
+                {/* левая колонка: иконка + название */}
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span className="list-btn__emoji" aria-hidden>🟣</span>
                   <b style={{ whiteSpace: 'nowrap' }}>{TITLES[key]}</b>
                 </span>
 
-                {/* Средняя колонка — всегда одинаковой ширины */}
+                {/* средняя колонка: бейдж или прозрачный placeholder */}
                 <span style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                  {badgeText ? (
+                  {badge ? (
                     <span
                       style={{
                         fontSize: 10.5,
@@ -143,17 +142,16 @@ export default function ProMinPage() {
                         background: '#2b2f43',
                         color: '#8aa0ff',
                         whiteSpace: 'nowrap',
-                        transform: 'translateY(-1px)',
                       }}
                     >
-                      {badgeText}
+                      {badge}
                     </span>
                   ) : (
                     <span style={{ visibility: 'hidden', padding: '4px 6px' }}>.</span>
                   )}
                 </span>
 
-                {/* Правая колонка — табличные цифры */}
+                {/* правая колонка: цена + ⭐ + стрелка */}
                 <span
                   className="list-btn__right"
                   style={{
