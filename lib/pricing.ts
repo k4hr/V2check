@@ -1,135 +1,98 @@
 // lib/pricing.ts
-export type Tier = 'PRO' | 'PRO_PLUS';
 
+export type Tier = 'PRO' | 'PROPLUS';
 export type Plan = 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR';
 
 export type PricingItem = {
-  label: string;       // «Неделя», «Месяц», …
-  title: string;       // Заголовок инвойса
-  description: string; // Описание инвойса
+  label: string;       // “Неделя”
+  title: string;       // “LiveManager Pro — Неделя”
+  description: string; // “Доступ на 7 дней”
   amount: number;      // Stars
-  stars: number;       // alias для совместимости с Telegram API
-  days: number;        // длительность
+  stars: number;       // alias
+  days: number;        // 7 / 30 / 180 / 365
 };
 
-/** ---------- PRO (базовый) ---------- */
-export const PRICES_PRO: Record<Plan, PricingItem> = {
-  WEEK: {
-    label: 'Неделя',
-    title: 'LiveManager Pro — Неделя',
-    description: 'Доступ на 7 дней',
-    amount: 59,
-    stars: 59,
-    days: 7,
+const DAYS = { WEEK: 7, MONTH: 30, HALF_YEAR: 180, YEAR: 365 } as const;
+
+// --- Тарифы и цены ---
+export const PRICES: Record<Tier, Record<Plan, PricingItem>> = {
+  PRO: {
+    WEEK: {
+      label: 'Неделя',
+      title: 'LiveManager Pro — Неделя',
+      description: 'Доступ на 7 дней',
+      amount: 59, stars: 59, days: DAYS.WEEK,
+    },
+    MONTH: {
+      label: 'Месяц',
+      title: 'LiveManager Pro — Месяц',
+      description: 'Доступ на 30 дней',
+      amount: 199, stars: 199, days: DAYS.MONTH,
+    },
+    HALF_YEAR: {
+      label: 'Полгода',
+      title: 'LiveManager Pro — Полгода',
+      description: 'Доступ на 180 дней',
+      amount: 999, stars: 999, days: DAYS.HALF_YEAR,
+    },
+    YEAR: {
+      label: 'Год',
+      title: 'LiveManager Pro — Год',
+      description: 'Доступ на 365 дней',
+      amount: 1799, stars: 1799, days: DAYS.YEAR,
+    },
   },
-  MONTH: {
-    label: 'Месяц',
-    title: 'LiveManager Pro — Месяц',
-    description: 'Доступ на 30 дней',
-    amount: 199,
-    stars: 199,
-    days: 30,
-  },
-  HALF_YEAR: {
-    label: 'Полгода',
-    title: 'LiveManager Pro — Полгода',
-    description: 'Доступ на 180 дней',
-    amount: 999,
-    stars: 999,
-    days: 180,
-  },
-  YEAR: {
-    label: 'Год',
-    title: 'LiveManager Pro — Год',
-    description: 'Доступ на 365 дней',
-    amount: 1799,
-    stars: 1799,
-    days: 365,
+
+  PROPLUS: {
+    WEEK: {
+      label: 'Неделя',
+      title: 'LiveManager Pro+ — Неделя',
+      description: 'Доступ на 7 дней',
+      amount: 129, stars: 129, days: DAYS.WEEK,
+    },
+    MONTH: {
+      label: 'Месяц',
+      title: 'LiveManager Pro+ — Месяц',
+      description: 'Доступ на 30 дней',
+      amount: 399, stars: 399, days: DAYS.MONTH,
+    },
+    HALF_YEAR: {
+      label: 'Полгода',
+      title: 'LiveManager Pro+ — Полгода',
+      description: 'Доступ на 180 дней',
+      amount: 1999, stars: 1999, days: DAYS.HALF_YEAR,
+    },
+    YEAR: {
+      label: 'Год',
+      title: 'LiveManager Pro+ — Год',
+      description: 'Доступ на 365 дней',
+      amount: 3499, stars: 3499, days: DAYS.YEAR,
+    },
   },
 } as const;
 
-/** ---------- PRO+ (усиленный) ---------- */
-export const PRICES_PRO_PLUS: Record<Plan, PricingItem> = {
-  WEEK: {
-    label: 'Неделя',
-    title: 'LiveManager Pro+ — Неделя',
-    description: 'Доступ на 7 дней',
-    amount: 129,
-    stars: 129,
-    days: 7,
-  },
-  MONTH: {
-    label: 'Месяц',
-    title: 'LiveManager Pro+ — Месяц',
-    description: 'Доступ на 30 дней',
-    amount: 399,
-    stars: 399,
-    days: 30,
-  },
-  HALF_YEAR: {
-    label: 'Полгода',
-    title: 'LiveManager Pro+ — Полгода',
-    description: 'Доступ на 180 дней',
-    amount: 1999,
-    stars: 1999,
-    days: 180,
-  },
-  YEAR: {
-    label: 'Год',
-    title: 'LiveManager Pro+ — Год',
-    description: 'Доступ на 365 дней',
-    amount: 3499,
-    stars: 3499,
-    days: 365,
-  },
-} as const;
+// --- Утилиты ---
 
-/** Легаси: оставить PRICES = PRO, чтобы старые импорты не падали */
-export const PRICES = PRICES_PRO;
+export function resolveTier(t: string | null | undefined): Tier {
+  const s = String(t || '').toUpperCase();
+  return s === 'PROPLUS' || s === 'MAX' || s === 'PLUS' ? 'PROPLUS' : 'PRO';
+}
 
-/** Нормализация плана из строки (учтены старые алиасы типа HALF) */
-const PLAN_ALIASES: Record<string, Plan> = { HALF: 'HALF_YEAR' };
-
-export function resolvePlan(plan: string | null | undefined): Plan {
-  const raw = String(plan || '').toUpperCase();
-  if ((PRICES_PRO as any)[raw]) return raw as Plan;
-  if (PLAN_ALIASES[raw]) return PLAN_ALIASES[raw];
+export function resolvePlan(p: string | null | undefined): Plan {
+  const s = String(p || '').toUpperCase();
+  if (s in DAYS) return s as Plan;
   return 'MONTH';
 }
 
-/** Нормализация тира. Понимает: min/pro -> PRO, max/pro+ -> PRO_PLUS */
-export function resolveTier(input: string | null | undefined): Tier {
-  const s = String(input || '').toLowerCase();
-  if (['pro', 'min', 'basic', 'lite'].includes(s)) return 'PRO';
-  if (['pro+', 'proplus', 'plus', 'max'].includes(s)) return 'PRO_PLUS';
-  return 'PRO'; // по умолчанию
-}
-
-/** Вернуть набор цен по тирy */
+// Вернуть прайс-лист нужного тарифа
 export function getPrices(tier: Tier): Record<Plan, PricingItem> {
-  return tier === 'PRO_PLUS' ? PRICES_PRO_PLUS : PRICES_PRO;
+  return PRICES[tier];
 }
 
-/** Бэйджи для кнопок планов (UI helper) */
-export function planBadges(
-  tier: Tier,
-  plan: Plan
-): { text: string; className: string }[] {
-  const badges: { text: string; className: string }[] = [];
-
-  // Бэйдж тира
-  badges.push({
-    text: tier === 'PRO_PLUS' ? 'Pro+' : 'Pro',
-    className: tier === 'PRO_PLUS' ? 'badge badge--gold' : 'badge',
-  });
-
-  // Пример бэйджа выгоды (можно расширить логику)
-  if (plan === 'YEAR') {
-    badges.push({
-      text: 'лучшая цена',
-      className: 'badge badge--deal',
-    });
-  }
-
-  return badges;
+// “Шильдики” (бейджи) для кнопок
+export function planBadges(tier: Tier, plan: Plan): { text: string; className: string }[] {
+  const items: { text: string; className: string }[] = [];
+  if (plan === 'MONTH') items.push({ text: 'популярно', className: tier === 'PROPLUS' ? 'badge badge--gold' : 'badge' });
+  if (plan === 'YEAR')  items.push({ text: 'выгодно',   className: tier === 'PROPLUS' ? 'badge badge--gold' : 'badge' });
+  return items;
 }
