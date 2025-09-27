@@ -1,10 +1,14 @@
+// app/pro-plus/plan/launch/page.tsx
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PROMPT_LAUNCH } from './prompt';
+import * as PR from './prompt'; // локальный prompt.ts
 
 type Msg = { role: 'user' | 'assistant'; content: string };
+
+const PROMPT_LAUNCH: string =
+  (PR as any).PROMPT_LAUNCH ?? (PR as any).default ?? '';
 
 function getCookie(name: string): string {
   try {
@@ -51,7 +55,7 @@ export default function LaunchChatPage() {
 
     try {
       const history = [...messages, { role:'user', content:text }].slice(-12);
-      const w:any = window;
+      const w: any = window;
       const initData: string | undefined = w?.Telegram?.WebApp?.initData;
       const locale = (getCookie('locale') || 'ru').toLowerCase();
 
@@ -59,10 +63,13 @@ export default function LaunchChatPage() {
 
       const res = await fetch(`/api/assistant/ask${tgId ? `?id=${encodeURIComponent(tgId)}` : ''}`, {
         method: 'POST',
-        headers: { 'Content-Type':'application/json', ...(initData ? { 'x-init-data': initData } : {}) },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(initData ? { 'x-init-data': initData } : {}),
+        },
         body: JSON.stringify({
           prompt: text,
-          history: [{ role:'user', content: system }, ...history],
+          history: [{ role: 'user', content: system }, ...history],
           system,
           mode: 'proplus-launch',
         }),
@@ -90,11 +97,16 @@ export default function LaunchChatPage() {
       </button>
       <h1 style={{ textAlign:'center' }}>Запуск — Pro+</h1>
 
-      <div style={{ marginTop:12, borderRadius:12, border:'1px solid var(--border)', background:'var(--panel)', display:'flex', flexDirection:'column', height:'70vh' }}>
+      <div
+        style={{
+          marginTop:12, borderRadius:12, border:'1px solid var(--border)',
+          background:'var(--panel)', display:'flex', flexDirection:'column', height:'70vh'
+        }}
+      >
         <div ref={boxRef} style={{ padding:12, overflowY:'auto', flex:1 }}>
           {messages.map((m,i)=>(
             <div key={i} style={{ marginBottom:12 }}>
-              <div style={{ opacity:.6, fontSize:12, marginBottom:4 }}>{m.role==='user'?'Вы':'ИИ'}</div>
+              <div style={{ opacity:.6, fontSize:12, marginBottom:4 }}>{m.role==='user' ? 'Вы' : 'ИИ'}</div>
               <div style={{ whiteSpace:'pre-wrap', lineHeight:1.5, fontSize:14 }}>{m.content}</div>
             </div>
           ))}
@@ -106,9 +118,12 @@ export default function LaunchChatPage() {
             <input
               value={input}
               onChange={(e)=>setInput(e.target.value)}
-              onKeyDown={(e)=> e.key==='Enter' ? onSend() : null}
+              onKeyDown={(e)=> (e.key==='Enter' ? onSend() : null)}
               placeholder="Опишите задачу для запуска (что/для кого/цель/ограничения)"
-              style={{ flex:1, padding:'10px 12px', borderRadius:10, border:'1px solid var(--border)', background:'transparent', color:'inherit', outline:'none', fontSize:14 }}
+              style={{
+                flex:1, padding:'10px 12px', borderRadius:10, border:'1px solid var(--border)',
+                background:'transparent', color:'inherit', outline:'none', fontSize:14
+              }}
             />
             <button onClick={onSend} disabled={loading || !input.trim()} className="list-btn" style={{ padding:'0 16px' }}>
               Отправить
