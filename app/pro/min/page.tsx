@@ -2,15 +2,15 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Plan, Tier } from '@/lib/pricing';
-import { getPrices, planBadges } from '@/lib/pricing';
+import { getPrices } from '@/lib/pricing';
 
 const tier: Tier = 'PRO';
 
 const TITLES: Record<Plan, string> = {
-  WEEK: 'Pro — неделя',
-  MONTH: 'Pro — месяц',
-  HALF_YEAR: 'Pro — полгода',
-  YEAR: 'Pro — год',
+  WEEK: 'Pro — Неделя',
+  MONTH: 'Pro — Месяц',
+  HALF_YEAR: 'Pro — Полгода',
+  YEAR: 'Pro — Год',
 };
 
 export default function ProMinPage() {
@@ -27,6 +27,7 @@ export default function ProMinPage() {
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
+
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
@@ -49,6 +50,7 @@ export default function ProMinPage() {
       const res = await fetch(`/api/createInvoice?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, link, error } = await res.json();
       if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
+
       const tg: any = (window as any).Telegram?.WebApp;
       if (tg?.openInvoice) tg.openInvoice(link, () => {});
       else if (tg?.openTelegramLink) tg.openTelegramLink(link);
@@ -83,8 +85,6 @@ export default function ProMinPage() {
         <div style={{ display: 'grid', gap: 12 }}>
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
-            const badgeText = planBadges(tier, key)[0]?.text ?? ''; // макс. один бейдж
-
             return (
               <button
                 key={key}
@@ -98,33 +98,18 @@ export default function ProMinPage() {
                   padding: '14px 18px',
                   opacity: can ? 1 : .6,
                   display: 'grid',
-                  /* 4 колонки: лево | спейсер | бейдж | правая часть */
-                  gridTemplateColumns: 'minmax(0,1fr) 8px max-content 120px',
+                  gridTemplateColumns: '1fr 120px', // лево | правая фикс-колонка
                   alignItems: 'center',
-                  gap: 0,
+                  columnGap: 12,
                 }}
               >
-                {/* 1: иконка + название */}
+                {/* Лево: иконка + название */}
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span className="list-btn__emoji" aria-hidden>🟣</span>
                   <b style={{ whiteSpace: 'nowrap' }}>{TITLES[key]}</b>
                 </span>
 
-                {/* 2: тонкий спейсер — ничего не рендерим */}
-                <span aria-hidden />
-
-                {/* 3: бейдж (или скрытый placeholder) */}
-                <span style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                  {badgeText ? (
-                    <span style={{ fontSize: 10.5, lineHeight: 1, padding: '4px 6px', borderRadius: 999, background: '#2b2f43', color: '#8aa0ff', whiteSpace: 'nowrap' }}>
-                      {badgeText}
-                    </span>
-                  ) : (
-                    <span style={{ visibility: 'hidden', padding: '4px 6px' }}>.</span>
-                  )}
-                </span>
-
-                {/* 4: цена + ⭐ + стрелка */}
+                {/* Право: цена + ⭐ + стрелка */}
                 <span className="list-btn__right" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontVariantNumeric: 'tabular-nums' }}>
                   <span>{cfg.amount}</span>
                   <span aria-hidden>⭐</span>
