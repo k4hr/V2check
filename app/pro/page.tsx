@@ -10,7 +10,6 @@ export default function ProSelectPage() {
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // тащим ?id= для дебага (если открыто без TWA)
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -21,7 +20,6 @@ export default function ProSelectPage() {
 
   return (
     <main className="lm-wrap">
-      {/* Назад */}
       <button
         type="button"
         onClick={() => history.length > 1 ? history.back() : (location.href = '/home')}
@@ -37,14 +35,14 @@ export default function ProSelectPage() {
       </p>
 
       <div className="lm-grid" style={{ marginTop: 16 }}>
-        {/* Pro */}
+        {/* Pro (фиолетовая подсветка) */}
         <Link
           href={`/pro/min${linkSuffix}` as Route}
           className="card card--pro"
           style={{ textDecoration: 'none' }}
         >
           <span className="card__left">
-            <span className="card__icon">📦</span>
+            <span className="card__icon card__icon--pro">📦</span>
             <span>
               <div className="card__title">LiveManager Pro</div>
               <div className="card__subtitle">Попробуй — быстрые ежедневные инструменты</div>
@@ -53,14 +51,14 @@ export default function ProSelectPage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Pro+ */}
+        {/* Pro+ (золотая подсветка) */}
         <Link
           href={`/pro/max${linkSuffix}` as Route}
           className="card card--proplus"
           style={{ textDecoration: 'none' }}
         >
           <span className="card__left">
-            <span className="card__icon">✨</span>
+            <span className="card__icon card__icon--proplus">✨</span>
             <span>
               <div className="card__title">LiveManager Pro+</div>
               <div className="card__subtitle">Углубись — продвинутые сценарии и повышенные лимиты</div>
@@ -80,21 +78,38 @@ export default function ProSelectPage() {
           padding: 16px; border-radius: 14px;
           background: #161b25; border: 1px solid rgba(255,255,255,.08);
           color: inherit; box-shadow: 0 6px 24px rgba(0,0,0,.25);
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
         }
+        .card:hover { transform: translateY(-1px); }
         .card__left { display: flex; gap: 12px; align-items: center; }
-        .card__icon { width: 36px; height: 36px; display: grid; place-items: center; font-size: 20px;
-          background: rgba(255,255,255,.06); border-radius: 10px; }
+        .card__icon {
+          width: 36px; height: 36px; display: grid; place-items: center; font-size: 20px;
+          background: rgba(255,255,255,.06); border-radius: 10px;
+        }
         .card__title { font-weight: 800; font-size: 16px; line-height: 1.1; }
-        .card__subtitle { opacity: .75; font-size: 13px; margin-top: 2px; }
+        .card__subtitle { opacity: .78; font-size: 13px; margin-top: 2px; }
         .card__chev { opacity: .6; font-size: 22px; }
 
+        /* Фиолетовая подсветка (Pro) */
         .card--pro {
-          border-color: rgba(91,140,255,.35);
-          box-shadow: 0 10px 30px rgba(91,140,255,.12);
+          border-color: rgba(91, 140, 255, .45);
+          box-shadow:
+            0 10px 30px rgba(91, 140, 255, .16),
+            inset 0 0 0 1px rgba(91, 140, 255, .10);
         }
+        .card__icon--pro {
+          background: radial-gradient(120% 120% at 20% 20%, rgba(120,150,255,.45), rgba(120,150,255,.08) 60%, rgba(255,255,255,.05));
+        }
+
+        /* Золотая подсветка (Pro+) */
         .card--proplus {
-          border-color: rgba(255,191,73,.35);
-          box-shadow: 0 10px 30px rgba(255,191,73,.12);
+          border-color: rgba(255, 191, 73, .45);
+          box-shadow:
+            0 10px 30px rgba(255,191,73,.18),
+            inset 0 0 0 1px rgba(255,191,73,.10);
+        }
+        .card__icon--proplus {
+          background: radial-gradient(120% 120% at 20% 20%, rgba(255,210,120,.55), rgba(255,210,120,.10) 60%, rgba(255,255,255,.05));
         }
       `}</style>
     </main>
