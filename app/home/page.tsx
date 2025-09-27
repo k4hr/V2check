@@ -7,37 +7,25 @@ import { useEffect, useMemo, useState } from 'react';
 type Locale = 'ru' | 'en' | 'uk' | 'kk' | 'tr' | 'az' | 'ka' | 'hy';
 
 const LOCALES: { code: Locale; label: string; flag: string }[] = [
-  { code: 'ru', label: 'Русский',      flag: '🇷🇺' },
-  { code: 'en', label: 'English',      flag: '🇬🇧' },
-  { code: 'uk', label: 'Українська',   flag: '🇺🇦' },
-  { code: 'kk', label: 'Қазақша',      flag: '🇰🇿' },
-  { code: 'tr', label: 'Türkçe',       flag: '🇹🇷' },
-  { code: 'az', label: 'Azərbaycanca', flag: '🇦🇿' },
-  { code: 'ka', label: 'ქართული',      flag: '🇬🇪' },
-  { code: 'hy', label: 'Հայերեն',      flag: '🇦🇲' },
+  { code: 'ru', label: 'Русский',       flag: '🇷🇺' },
+  { code: 'en', label: 'English',       flag: '🇬🇧' },
+  { code: 'uk', label: 'Українська',    flag: '🇺🇦' },
+  { code: 'kk', label: 'Қазақша',       flag: '🇰🇿' },
+  { code: 'tr', label: 'Türkçe',        flag: '🇹🇷' },
+  { code: 'az', label: 'Azərbaycanca',  flag: '🇦🇿' },
+  { code: 'ka', label: 'ქართული',       flag: '🇬🇪' },
+  { code: 'hy', label: 'Հայերեն',       flag: '🇦🇲' },
 ];
-
-/** страна по умолчанию для каждого языка (для локальных настроек) */
-const DEFAULT_COUNTRY: Record<Locale, string> = {
-  ru: 'RU',
-  en: 'US',
-  uk: 'UA',
-  kk: 'KZ',
-  tr: 'TR',
-  az: 'AZ',
-  ka: 'GE',
-  hy: 'AM',
-};
 
 function getCookie(name: string): string {
   try {
-    const raw = (document.cookie || '').split('; ').find(p => p.startsWith(name + '='));
-    return raw ? decodeURIComponent(raw.split('=').slice(1).join('=')) : '';
+    const p = (document.cookie || '').split('; ').find(r => r.startsWith(name + '='));
+    return p ? decodeURIComponent(p.split('=').slice(1).join('=')) : '';
   } catch { return ''; }
 }
 function setCookie(k: string, v: string) {
   try {
-    const maxAge = 60 * 60 * 24 * 365;
+    const maxAge = 60 * 60 * 24 * 365; // 1 год
     document.cookie = `${k}=${encodeURIComponent(v)}; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
   } catch {}
 }
@@ -47,16 +35,9 @@ function haptic(type: 'light' | 'medium' = 'light') {
 
 export default function Home() {
   const [open, setOpen] = useState(false);
+  const currentLocale = useMemo<Locale>(() => (getCookie('locale') as Locale) || 'ru', []);
+  const [pendingLocale, setPendingLocale] = useState<Locale>(currentLocale);
   const [saving, setSaving] = useState(false);
-
-  // начальные cookie (если нет — ru/RU)
-  const initialLocale  = useMemo(() => ((getCookie('locale') as Locale) || 'ru'), []);
-  const initialCountry = useMemo(() => (getCookie('country') || DEFAULT_COUNTRY[(getCookie('locale') as Locale) || 'ru']), []);
-  const [locale, setLocale] = useState<Locale>(initialLocale);
-
-  // страна будет рассчитана на сохранении
-  const derivedCountry = DEFAULT_COUNTRY[locale];
-  const hasChanges = locale !== initialLocale || derivedCountry !== initialCountry;
 
   useEffect(() => {
     const w: any = window;
@@ -72,13 +53,22 @@ export default function Home() {
     } catch { return ''; }
   }, []);
 
-  async function save() {
-    if (saving || !hasChanges) return;
+  async function onSave() {
+    if (saving) return;
     setSaving(true);
-    setCookie('locale', locale);
-    setCookie('country', derivedCountry);
+    setCookie('locale', pendingLocale);
     haptic('medium');
-    setTimeout(() => { window.location.reload(); }, 150);
+
+    // Жёсткая перезагрузка с cache-busting (iOS WebView любит кэшировать)
+    const url = new URL(window.location.href);
+    url.searchParams.set('_lng', String(Date.now()));
+    window.location.replace(url.toString());
+  }
+
+  function onCancel() {
+    setPendingLocale(currentLocale);
+    setOpen(false);
+    haptic('light');
   }
 
   return (
@@ -92,34 +82,22 @@ export default function Home() {
       {/* Карточки */}
       <div className="lm-grid" style={{ marginTop: 16 }}>
         <Link href={`/cabinet${linkSuffix}` as Route} className="card" style={{ textDecoration: 'none' }}>
-          <span className="card__left">
-            <span className="card__icon">👤</span>
-            <span className="card__title">Личный кабинет</span>
-          </span>
+          <span className="card__left"><span className="card__icon">👤</span><span className="card__title">Личный кабинет</span></span>
           <span className="card__chev">›</span>
         </Link>
 
         <Link href={`/pro${linkSuffix}` as Route} className="card card--pro" style={{ textDecoration: 'none' }}>
-          <span className="card__left">
-            <span className="card__icon">⭐</span>
-            <span className="card__title">Купить подписку <span className="badge">Pro / Pro+</span></span>
-          </span>
+          <span className="card__left"><span className="card__icon">⭐</span><span className="card__title">Купить подписку <span className="badge">Pro / Pro+</span></span></span>
           <span className="card__chev">›</span>
         </Link>
 
         <Link href={`/pro/tools${linkSuffix}` as Route} className="card card--pro" style={{ textDecoration: 'none' }}>
-          <span className="card__left">
-            <span className="card__icon">🧰</span>
-            <span className="card__title">Ежедневные задачи <span className="badge">Pro</span></span>
-          </span>
+          <span className="card__left"><span className="card__icon">🧰</span><span className="card__title">Ежедневные задачи <span className="badge">Pro</span></span></span>
           <span className="card__chev">›</span>
         </Link>
 
         <Link href={`/pro-plus/tools${linkSuffix}` as Route} className="card card--proplus" style={{ textDecoration: 'none' }}>
-          <span className="card__left">
-            <span className="card__icon">🚀</span>
-            <span className="card__title">Эксперт центр <span className="badge badge--gold">Pro+</span></span>
-          </span>
+          <span className="card__left"><span className="card__icon">🚀</span><span className="card__title">Эксперт центр <span className="badge badge--gold">Pro+</span></span></span>
           <span className="card__chev">›</span>
         </Link>
       </div>
@@ -137,34 +115,32 @@ export default function Home() {
         </button>
       </div>
 
-      {/* Панель аккордеона: только выбор языка */}
+      {/* Аккордеон: только выбор языка + кнопки */}
       {open && (
         <div
           style={{
-            marginTop: 12,
-            border: '1px dashed #4a4e6a',
-            background: '#141823',
-            borderRadius: 14,
-            padding: 14,
-            maxWidth: 560,
-            marginLeft: 'auto',
-            marginRight: 'auto'
+            marginTop: 12, border: '1px dashed #4a4e6a', background: '#141823',
+            borderRadius: 14, padding: 14, maxWidth: 560, marginLeft: 'auto', marginRight: 'auto'
           }}
         >
-          <div style={{ marginBottom: 10, opacity: .8, fontSize: 12, letterSpacing: .2 }}>Выберите язык интерфейса</div>
+          <div style={{ marginBottom: 10, opacity: .8, fontSize: 12, letterSpacing: .2 }}>
+            Выберите язык интерфейса
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 8 }}>
             {LOCALES.map((l) => {
-              const active = locale === l.code;
+              const active = pendingLocale === l.code;
               return (
                 <button
                   key={l.code}
-                  onClick={() => setLocale(l.code)}
+                  onClick={() => setPendingLocale(l.code)}
                   className="list-btn"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     borderRadius: 12, padding: '10px 12px',
-                    background: active ? '#1f2637' : '#171a21',
-                    border: `1px solid ${active ? '#5b6cae' : 'var(--border)'}`
+                    background: active ? '#1e2434' : '#171a21',
+                    border: active ? '1px solid #6573ff' : '1px solid var(--border)',
+                    boxShadow: active ? '0 0 0 3px rgba(101,115,255,.15) inset' : 'none'
                   }}
                 >
                   <span style={{ width: 22, textAlign: 'center' }}>{l.flag}</span>
@@ -174,29 +150,29 @@ export default function Home() {
             })}
           </div>
 
-          {/* Кнопки */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end' }}>
+          {/* Кнопки действий */}
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
             <button
               type="button"
-              onClick={() => { setOpen(false); setLocale(initialLocale as Locale); }}
+              onClick={onCancel}
               className="list-btn"
-              style={{ padding: '8px 12px', borderRadius: 10, background: '#171a21', border: '1px solid var(--border)' }}
+              style={{ padding: '10px 14px', borderRadius: 12, background: '#1a1f2b', border: '1px solid var(--border)' }}
             >
               Отмена
             </button>
             <button
               type="button"
-              onClick={save}
-              disabled={!hasChanges || saving}
+              onClick={onSave}
+              disabled={saving || pendingLocale === currentLocale}
               className="list-btn"
               style={{
-                padding: '8px 14px', borderRadius: 10,
-                background: hasChanges ? '#2b3560' : '#202436',
-                border: `1px solid ${hasChanges ? '#5b6cae' : '#303652'}`,
+                padding: '10px 14px', borderRadius: 12,
+                background: saving ? '#2a3150' : '#2e3560',
+                border: '1px solid #4b57b3',
                 opacity: saving ? .7 : 1
               }}
             >
-              {saving ? 'Сохраняем…' : 'Сохранить'}
+              Сохранить
             </button>
           </div>
         </div>
