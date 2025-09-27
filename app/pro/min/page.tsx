@@ -6,7 +6,6 @@ import { getPrices, planBadges } from '@/lib/pricing';
 
 const tier: Tier = 'PRO';
 
-// короткие подписи вместо длинных «LiveManager…»
 const TITLES: Record<Plan, string> = {
   WEEK: 'Pro — неделя',
   MONTH: 'Pro — месяц',
@@ -25,7 +24,6 @@ export default function ProMinPage() {
     const w: any = window;
     const tg = w?.Telegram?.WebApp;
     try { tg?.ready?.(); tg?.expand?.(); } catch {}
-
     try {
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
@@ -71,7 +69,7 @@ export default function ProMinPage() {
       <div
         className="safe"
         style={{
-          maxWidth: 600,  // шире контейнер
+          maxWidth: 600,
           margin: '0 auto',
           display: 'flex',
           flexDirection: 'column',
@@ -79,7 +77,7 @@ export default function ProMinPage() {
           padding: 20,
         }}
       >
-        {/* Кнопка «Назад» того же стиля */}
+        {/* Назад */}
         <button
           type="button"
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
@@ -106,7 +104,8 @@ export default function ProMinPage() {
         <div style={{ display: 'grid', gap: 12 }}>
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
-            const badges = planBadges(tier, key); // «популярно/выгодно»
+            const badges = planBadges(tier, key); // 0 или 1 бейдж
+            const badgeText = badges[0]?.text ?? '';
 
             return (
               <button
@@ -115,44 +114,46 @@ export default function ProMinPage() {
                 onClick={() => buy(key)}
                 className="list-btn"
                 style={{
-                  // одинаковая ширина и строгая сетка
                   width: '100%',
                   border: '1px solid #333',
                   borderRadius: 14,
-                  padding: '16px 18px',
+                  padding: '14px 18px',
                   opacity: can ? 1 : .6,
                   display: 'grid',
-                  gridTemplateColumns: '1fr 120px', // правая колонка фикс
+                  gridTemplateColumns: '1fr 80px 120px', // ← фикс для бейджа и прайса
                   alignItems: 'center',
-                  gap: 12,
+                  gap: 10,
                 }}
               >
                 {/* Левая колонка */}
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span className="list-btn__emoji" aria-hidden>🟣</span>
                   <b style={{ whiteSpace: 'nowrap' }}>{TITLES[key]}</b>
-                  {/* компактные шильдики */}
-                  {badges.map((b, i) => (
+                </span>
+
+                {/* Средняя колонка — всегда одинаковой ширины */}
+                <span style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  {badgeText ? (
                     <span
-                      key={i}
-                      className={b.className}
                       style={{
-                        marginLeft: 6,
-                        fontSize: 11,
+                        fontSize: 10.5,
                         lineHeight: 1,
-                        padding: '3px 6px',
+                        padding: '4px 6px',
                         borderRadius: 999,
                         background: '#2b2f43',
                         color: '#8aa0ff',
                         whiteSpace: 'nowrap',
+                        transform: 'translateY(-1px)',
                       }}
                     >
-                      {b.text}
+                      {badgeText}
                     </span>
-                  ))}
+                  ) : (
+                    <span style={{ visibility: 'hidden', padding: '4px 6px' }}>.</span>
+                  )}
                 </span>
 
-                {/* Правая колонка — табличные цифры, не «гуляют» */}
+                {/* Правая колонка — табличные цифры */}
                 <span
                   className="list-btn__right"
                   style={{
