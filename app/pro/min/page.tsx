@@ -1,19 +1,19 @@
-// app/pro/page.tsx
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { Plan } from '@/lib/pricing';
-import { PRICES } from '@/lib/pricing';
+import { getPrices, planBadges } from '@/lib/pricing';
 
-export default function ProPage() {
+export default function ProMinPage() {
+  const tier = 'pro' as const;
+  const PRICES = useMemo(() => getPrices(tier), []);
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
     try {
-      const w: any = window;
-      const tg = w?.Telegram?.WebApp;
+      const tg: any = (window as any).Telegram?.WebApp;
       tg?.ready?.(); tg?.expand?.();
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/'; };
@@ -38,7 +38,7 @@ export default function ProPage() {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}`, { method: 'POST' });
+      const res = await fetch(`/api/createInvoice?plan=${encodeURIComponent(plan)}&tier=${tier}`, { method: 'POST' });
       const { ok, link, error } = await res.json();
       if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
 
@@ -53,49 +53,57 @@ export default function ProPage() {
     }
   }
 
-  // --- УНИКАЛИЗАЦИЯ ПЛАНОВ (убираем дубликаты) ---
-  const uniquePlans = React.useMemo(() => {
-    // Преобразуем объект PRICES -> массив с ключом и конфигом
-    const entries = Object.entries(PRICES).map(([key, cfg]) => ({ key: key as Plan, cfg }));
-    // Уберём дубли по (title + days)
-    const map = new Map<string, { key: Plan; cfg: typeof PRICES[Plan] }>();
-    for (const it of entries) {
-      const sig = `${it.cfg.title}::${it.cfg.days}`;
-      if (!map.has(sig)) map.set(sig, it);
-    }
-    // Сортируем по длительности (дни)
-    return Array.from(map.values()).sort((a, b) => a.cfg.days - b.cfg.days);
-  }, []);
+  const plans = useMemo(
+    () =>
+      (['WEEK','MONTH','HALF_YEAR','YEAR'] as Plan[])
+        .map((p) => ({ key: p, cfg: PRICES[p] }))
+        .sort((a, b) => a.cfg.days - b.cfg.days),
+    [PRICES]
+  );
 
   return (
     <main>
-      <div className="safe" style={{
-        maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column',
-        gap: 12, padding: 20
-      }}>
-        <h1 style={{ textAlign: 'center' }}>Подписка Juristum Pro</h1>
-        {msg && <p style={{ color: 'crimson', textAlign: 'center' }}>{msg}</p>}
-        {info && <p style={{ opacity: .7, textAlign: 'center' }}>{info}</p>}
+      <div className="safe" style={{ maxWidth: 560, margin: '0 auto', display:'flex', flexDirection:'column', gap:12, padding:20 }}>
+        <h1 style={{ textAlign:'center' }}>LiveManager Pro</h1>
+        {msg &&  <p style={{ color:'crimson', textAlign:'center' }}>{msg}</p>}
+        {info && <p style={{ opacity:.7, textAlign:'center' }}>{info}</p>}
 
-        <div style={{ display: 'grid', gap: 12 }}>
-          {uniquePlans.map(({ key, cfg }) => {
-            const plan = key as Plan;
-            const can = !busy || busy === plan;
+        <div style={{ display:'grid', gap:12 }}>
+          {plans.map(({ key, cfg }) => {
+            const can = !busy || busy === key;
+            const badges = planBadges(tier, key);
             return (
               <button
-                key={`${cfg.title}-${cfg.days}`}
+                key={key}
                 disabled={!can}
                 className="list-btn"
                 style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  border: '1px solid #333', borderRadius: 12, padding: '12px 16px',
+                  display:'flex', justifyContent:'space-between', alignItems:'center',
+                  border:'1px solid #333', borderRadius:12, padding:'12px 16px',
                   opacity: can ? 1 : .6
                 }}
-                onClick={() => buy(plan)}
+                onClick={() => buy(key)}
               >
-                <span className="list-btn__left">
+                <span className="list-btn__left" style={{ gap:12 }}>
                   <span className="list-btn__emoji">⭐</span>
-                  <b>{cfg.title}</b>
+                  <span style={{ display:'grid' }}>
+                    <b>{cfg.title}</b>
+                    <span style={{ display:'flex', gap:6, marginTop:2 }}>
+                      {badges.map((b, i) => (
+                        <span
+                          key={i}
+                          style={{
+                            fontSize:12, padding:'2px 6px', borderRadius:6,
+                            background: b.includes('%') ? 'rgba(91,140,255,.12)' : 'rgba(255,255,255,.08)',
+                            border: `1px solid ${b.includes('%') ? '#5b8cff' : '#555'}`,
+                            color: b.includes('%') ? '#9bb7ff' : '#ddd'
+                          }}
+                        >
+                          {b}
+                        </span>
+                      ))}
+                    </span>
+                  </span>
                 </span>
                 <span className="list-btn__right">
                   <span>{cfg.amount} ⭐</span>
@@ -106,12 +114,12 @@ export default function ProPage() {
           })}
         </div>
 
-        <div style={{ marginTop: 'auto' }}>
-          <p className="text-xs opacity-60" style={{ fontSize: 12, opacity: .55, textAlign: 'center', marginTop: 24 }}>
-            Подтверждая, вы соглашаетесь с <a href="/terms" style={{ textDecoration: 'underline' }}>условиями подписки</a>.
+        <div style={{ marginTop:'auto' }}>
+          <p style={{ fontSize:12, opacity:.55, textAlign:'center', marginTop:24 }}>
+            Подтверждая, вы соглашаетесь с <a href="/terms" style={{ textDecoration:'underline' }}>условиями подписки</a>.
           </p>
-          <p className="text-xs opacity-60" style={{ fontSize: 12, opacity: .55, textAlign: 'center' }}>
-            Также ознакомьтесь с <a href="/legal" style={{ textDecoration: 'underline' }}>правовой информацией</a>.
+          <p style={{ fontSize:12, opacity:.55, textAlign:'center' }}>
+            Также ознакомьтесь с <a href="/legal" style={{ textDecoration:'underline' }}>правовой информацией</a>.
           </p>
         </div>
       </div>
