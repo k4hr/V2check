@@ -1,67 +1,78 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
-import { useEffect, useMemo } from 'react';
+import BackBtn from '@/app/components/BackBtn';
+
+type Row = { emoji: string; title: string; href: Route };
 
 export default function ProPlusHub() {
+  const [q, setQ] = useState('');
+
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // пробрасываем ?id= если есть (как у тебя в других страницах)
   const id = useMemo(() => {
     try { const u = new URL(window.location.href); return u.searchParams.get('id') || ''; }
     catch { return ''; }
   }, []);
 
-  // Хелпер под typedRoutes: возвращаем UrlObject с Route pathname
+  // typedRoutes-friendly
   const to = (pathname: Route) =>
-    ({ pathname, ...(id ? { query: { id } } : {}) });
+    (id ? { pathname, query: { id } } : pathname);
+
+  const rows: Row[] = [
+    { emoji: '🤖', title: 'Pro+ чат ИИ (юрид.)',         href: '/home/pro-plus/urchatgpt' as Route },
+    { emoji: '💼', title: 'Бизнес-чат: запуск/анализ',   href: '/home/pro-plus/businesschat' as Route },
+  ];
+
+  const filtered = rows.filter(r =>
+    r.title.toLowerCase().includes(q.trim().toLowerCase())
+  );
 
   return (
     <main style={{ padding: 20, maxWidth: 720, margin: '0 auto' }}>
-      <button
-        type="button"
-        onClick={() => (history.length > 1 ? history.back() : location.assign('/home'))}
-        className="list-btn"
-        style={{ maxWidth: 120, marginBottom: 12 }}
-      >
-        ← Назад
-      </button>
+      <BackBtn fallback="/home" />
 
       <h1 style={{ textAlign: 'center' }}>Эксперт центр Pro+</h1>
-      <p style={{ textAlign: 'center', opacity: .7, marginTop: 6 }}>
-        Выберите инструмент
-      </p>
+      <p style={{ textAlign: 'center', opacity: .7, marginTop: 6 }}>Выберите инструмент</p>
 
-      <div style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-        {/* Pro+ чат ИИ (юрид.) */}
-        <Link
-          href={to('/home/pro-plus/urchatgpt' as Route)}
-          className="list-btn"
-          style={{ textDecoration: 'none' }}
-        >
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">🤖</span>
-            <b>Pro+ чат ИИ (юрид.)</b>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
+      {/* Быстрый поиск */}
+      <div style={{ marginTop: 12 }}>
+        <input
+          type="search"
+          inputMode="search"
+          placeholder="Поиск по инструментам…"
+          value={q}
+          onChange={(e) => setQ(e.currentTarget.value)}
+          style={{
+            width: '100%',
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: '#141823',
+            border: '1px solid var(--border)',
+            color: 'var(--fg, #fff)',
+            outline: 'none'
+          }}
+        />
+      </div>
 
-        {/* Бизнес-чат (хаб) */}
-        <Link
-          href={to('/home/pro-plus/businesschat' as Route)}
-          className="list-btn"
-          style={{ textDecoration: 'none' }}
-        >
-          <span className="list-btn__left">
-            <span className="list-btn__emoji">💼</span>
-            <b>Бизнес-чат: запуск/анализ</b>
-          </span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
+      <div style={{ display: 'grid', gap: 12, marginTop: 14 }}>
+        {filtered.length === 0 && (
+          <div className="list-btn" style={{ opacity: .7, justifyContent: 'center' }}>
+            Ничего не найдено
+          </div>
+        )}
+
+        {filtered.map((r, i) => (
+          <Link key={i} href={to(r.href)} className="list-btn" style={{ textDecoration: 'none' }}>
+            <span className="list-btn__left"><span className="list-btn__emoji">{r.emoji}</span><b>{r.title}</b></span>
+            <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+          </Link>
+        ))}
       </div>
     </main>
   );
