@@ -2,22 +2,29 @@
 
 import { useEffect } from 'react';
 
+type Props = {
+  fallback?: string;
+  label?: string;
+  maxWidth?: number;
+};
+
 export default function BackBtn({
   fallback = '/home',
-  label = 'Назад',
-}: { fallback?: string; label?: string }) {
+  label = '← Назад',
+  maxWidth = 120,
+}: Props) {
   useEffect(() => {
-    const tg: any = (window as any)?.Telegram?.WebApp;
     try {
-      tg?.BackButton?.show?.();
-      const onClick = () => {
-        if (document.referrer || history.length > 1) history.back();
+      const tg: any = (window as any).Telegram?.WebApp;
+      const goBack = () => {
+        if (history.length > 1) history.back();
         else location.assign(fallback);
       };
-      tg?.BackButton?.onClick?.(onClick);
+      tg?.BackButton?.show?.();
+      tg?.BackButton?.onClick?.(goBack);
       return () => {
+        tg?.BackButton?.offClick?.(goBack);
         tg?.BackButton?.hide?.();
-        tg?.BackButton?.offClick?.(onClick);
       };
     } catch {}
   }, [fallback]);
@@ -27,9 +34,9 @@ export default function BackBtn({
       type="button"
       onClick={() => (history.length > 1 ? history.back() : location.assign(fallback))}
       className="list-btn"
-      style={{ maxWidth: 120, marginBottom: 12 }}
+      style={{ maxWidth, marginBottom: 12 }}
     >
-      ← {label}
+      {label}
     </button>
   );
 }
