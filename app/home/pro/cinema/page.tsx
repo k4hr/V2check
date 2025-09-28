@@ -19,11 +19,9 @@ export default function CinemaConcierge() {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
+  useEffect(() => { listRef.current?.scrollTo({ top: 9e9, behavior: 'smooth' }); }, [messages, loading]);
 
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: 999999, behavior: 'smooth' });
-  }, [messages, loading]);
-
+  // пробрасываем ?id= для определения Pro на бэке
   const idSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -40,18 +38,33 @@ export default function CinemaConcierge() {
     const next = [...messages, { role: 'user', content: text } as Msg];
     setMessages(next);
     setLoading(true);
+
     try {
-      // универсальный /api/ai (для Pro — gpt-4o-mini)
-      const r = await fetch('/api/ai' + idSuffix, {
+      // Готовим историю без system-сообщения (его бэк добавляет сам)
+      const history = next.filter(m => m.role !== 'system').slice(-20);
+
+      const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: 'gpt-4o-mini', messages: next }),
+        // mode можно не передавать: у тебя pickModelByMode вернёт MODEL_DEFAULT (gpt-4o-mini)
+        body: JSON.stringify({ prompt: text, history }),
       });
+
       const data = await r.json();
-      const reply = (data?.text || data?.message || '').toString().trim();
-      setMessages((m) => [...m, { role: 'assistant', content: reply || 'Готово. Продолжим?' }]);
+
+      if (data?.ok) {
+        const reply = String(data.answer || '').trim();
+        setMessages(m => [...m, { role: 'assistant', content: reply || 'Готово. Продолжим?' }]);
+      } else if (data?.error === 'FREE_LIMIT_REACHED') {
+        const msg =
+          `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). ` +
+          `Оформите Pro или попробуйте завтра.`;
+        setMessages(m => [...m, { role: 'assistant', content: msg }]);
+      } else {
+        setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
+      }
     } catch {
-      setMessages((m) => [...m, { role: 'assistant', content: 'Не получилось получить ответ. Попробуем ещё раз?' }]);
+      setMessages(m => [...m, { role: 'assistant', content: 'Не получилось получить ответ. Попробуем ещё раз?' }]);
     } finally {
       setLoading(false);
     }
@@ -61,7 +74,7 @@ export default function CinemaConcierge() {
     <main style={{ padding: 20, maxWidth: 800, margin: '0 auto', display: 'grid', gap: 12 }}>
       <BackBtn fallback="/home/pro" />
       <h1 style={{ textAlign: 'center' }}>🎬 Подбор фильма/сериала</h1>
-      <p style={{ textAlign: 'center', opacity: 0.75, marginTop: -4 }}>
+      <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>
         Киноконсерж задаст несколько вопросов и подберёт идеальные варианты.
       </p>
 
@@ -76,41 +89,31 @@ export default function CinemaConcierge() {
           overflow: 'auto',
         }}
       >
-        {messages
-          .filter((m) => m.role !== 'system')
-          .map((m, i) => (
+        {messages.filter(m => m.role !== 'system').map((m, i) => (
+          <div key={i} style={{ margin: '10px 0', display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
             <div
-              key={i}
-              style={{ margin: '10px 0', display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}
+              style={{
+                maxWidth: '82%',
+                padding: '10px 12px',
+                borderRadius: 12,
+                lineHeight: 1.5,
+                background: m.role === 'user' ? '#24304a' : '#1a2132',
+                border: '1px solid #2b3552',
+                whiteSpace: 'pre-wrap',
+              }}
             >
-              <div
-                style={{
-                  maxWidth: '82%',
-                  padding: '10px 12px',
-                  borderRadius: 12,
-                  lineHeight: 1.5,
-                  background: m.role === 'user' ? '#24304a' : '#1a2132',
-                  border: '1px solid #2b3552',
-                  whiteSpace: 'pre-wrap',
-                }}
-              >
-                {m.content}
-              </div>
+              {m.content}
             </div>
-          ))}
-        {loading && <div style={{ opacity: 0.6, fontSize: 12, padding: '6px 2px' }}>ИИ печатает…</div>}
+          </div>
+        ))}
+        {loading && <div style={{ opacity: .6, fontSize: 12, padding: '6px 2px' }}>ИИ печатает…</div>}
       </div>
 
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder="Опишите настроение, жанры, платформу…"
           style={{
             flex: 1,
