@@ -16,13 +16,11 @@ export default function ProPlusHub() {
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // прокидываем ?id= если открыт без TWA
   const id = useMemo(() => {
     try { const u = new URL(window.location.href); return u.searchParams.get('id') || ''; }
     catch { return ''; }
   }, []);
 
-  // typedRoutes-friendly helper
   const to = (pathname: Route) => (id ? { pathname, query: { id } } : pathname);
 
   const rows: Row[] = [
@@ -53,7 +51,7 @@ export default function ProPlusHub() {
         />
       </div>
 
-      {/* Плитки 2 в ряд (на больших — 3) */}
+      {/* Плитки */}
       <div className="grid">
         {filtered.length === 0 && (
           <div className="empty">Ничего не найдено</div>
@@ -80,58 +78,74 @@ export default function ProPlusHub() {
         .grid {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-          margin-top: 14px;
+          gap: 14px;
+          margin-top: 16px;
         }
         @media (min-width: 640px) {
           .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
+
+        /* Плитка-инструмент */
+        .tool-card,
+        .tool-card:visited,
+        .tool-card:hover,
+        .tool-card:active,
+        .tool-card:focus {
+          color: inherit;               /* убираем синий цвет ссылок */
+          text-decoration: none;        /* убираем подчёркивание */
+        }
         .tool-card {
           position: relative;
-          text-decoration: none;
           border-radius: 16px;
-          min-height: 120px;
-          padding: 16px;
+          min-height: 128px;
+          padding: 18px 16px;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: center;
-          gap: 10px;
+          gap: 12px;
           background:
-            radial-gradient(120% 120% at 100% 0%, rgba(101,115,255,0.12), transparent 60%),
+            radial-gradient(120% 120% at 100% 0%, rgba(101,115,255,0.10), transparent 60%),
             #141823;
-          border: 1px solid var(--border);
+          border: 1.5px solid #303a56;          /* явная рамка */
           box-shadow:
             inset 0 0 0 1px rgba(255,255,255,0.02),
             0 8px 24px rgba(0,0,0,.35);
-          transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease;
+          transition: box-shadow .18s ease, transform .18s ease, border-color .18s ease, background-color .18s ease;
         }
         .tool-card:hover {
           transform: translateY(-1px);
-          box-shadow:
-            0 0 0 3px rgba(101,115,255,.15),
-            0 14px 36px rgba(0,0,0,.55);
           border-color: #4b57b3;
+          box-shadow:
+            0 0 0 3px rgba(101,115,255,.16),
+            0 14px 36px rgba(0,0,0,.55);
         }
+
         .emoji-wrap {
-          width: 56px;
-          height: 56px;
-          border-radius: 14px;
+          width: 62px;
+          height: 62px;
+          border-radius: 16px;
           display: grid;
           place-items: center;
           background:
-            radial-gradient(100% 100% at 30% 30%, rgba(101,115,255,.25), rgba(0,0,0,0)),
+            radial-gradient(100% 100% at 30% 30%, rgba(101,115,255,.22), rgba(0,0,0,0)),
             #1b2130;
-          border: 1px solid #2a3355;
+          border: 1.5px solid #2a3355;         /* рамка на иконке */
           box-shadow: inset 0 0 24px rgba(101,115,255,.08);
         }
         .emoji { font-size: 28px; line-height: 1; }
+
         .title {
           text-align: center;
-          font-weight: 800;
+          font-weight: 900;
           letter-spacing: .2px;
           color: var(--fg, #fff);
+          text-decoration: none;                /* на всякий случай */
+          border-bottom: none;                  /* iOS иногда рисует underline */
+          -webkit-text-decoration-skip: none;
+          text-decoration-skip-ink: none;
         }
+
         .empty {
           grid-column: 1 / -1;
           opacity: .7;
