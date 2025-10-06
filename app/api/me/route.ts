@@ -1,7 +1,10 @@
-// app/api/me/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
-import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
+import {
+  verifyInitData,
+  getInitDataFrom,
+  getTelegramIdStrict,
+} from '@/lib/auth/verifyInitData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,91 +12,98 @@ export const dynamic = 'force-dynamic';
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 const ALLOW_BROWSER_DEBUG = (process.env.ALLOW_BROWSER_DEBUG || '').trim() === '1';
 
-function hmacIsValid(initData: string, botToken: string) {
-  try {
-    if (!initData || !botToken) return { valid: false, reason: 'empty' };
-    const url = new URLSearchParams(initData);
-    const hash = url.get('hash') || '';
-    url.delete('hash');
-
-    const data = [...url.entries()]
-      .map(([k, v]) => `${k}=${v}`)
-      .sort()
-      .join('\n');
-
-    const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
-    const check = crypto.createHmac('sha256', secret).update(data).digest('hex');
-
-    return { valid: check === hash, hash, check };
-  } catch (e: any) {
-    return { valid: false, reason: e?.message || 'hmac error' };
-  }
-}
-
-function extractUserIdFromInitData(initData: string): string | null {
+function extractUnsafeUser(initData: string): {
+  id?: number | string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+} | null {
   try {
     const p = new URLSearchParams(initData);
-    const unsafe = JSON.parse(p.get('user') || 'null');
-    const id = unsafe?.id ? String(unsafe.id) : null;
-    return id;
-  } catch { return null; }
+    const raw = p.get('user');
+    return raw ? (JSON.parse(raw) as any) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const initData = getInitDataFrom(req);
     const url = new URL(req.url);
-    const initData = req.headers.get('x-init-data') || '';
-    let userId: string | null = null;
+
+    let telegramId = '';
     let via: 'initData' | 'debugId' | 'none' = 'none';
 
-    // 1) Нормальный путь через initData
     if (initData) {
-      const h = hmacIsValid(initData, BOT_TOKEN);
-      if (!h.valid) {
-        return NextResponse.json({ ok:false, error:'BAD_INITDATA', why: h.reason || 'invalid_hmac' }, { status: 401 });
+      if (!BOT_TOKEN || !verifyInitData(initData, BOT_TOKEN)) {
+        return NextResponse.json({ ok: false, error: 'BAD_INITDATA' }, { status: 401 });
       }
-      userId = extractUserIdFromInitData(initData);
-      if (!userId) return NextResponse.json({ ok:false, error:'NO_USER_IN_INITDATA' }, { status: 400 });
+      telegramId = getTelegramIdStrict(initData);
       via = 'initData';
     }
 
-    // 2) Браузерный дебаг (без Telegram)
-    if (!userId && ALLOW_BROWSER_DEBUG) {
-      const debugId = url.searchParams.get('id');
-      if (debugId && /^\d{3,15}$/.test(debugId)) {
-        userId = debugId;
+    if (!telegramId && ALLOW_BROWSER_DEBUG) {
+      const id = url.searchParams.get('id') || '';
+      if (/^\d{3,15}$/.test(id)) {
+        telegramId = id;
         via = 'debugId';
       }
     }
 
-    if (!userId) {
+    if (!telegramId) {
       return NextResponse.json({
-        ok:false,
-        error:'AUTH_REQUIRED',
+        ok: false,
+        error: 'AUTH_REQUIRED',
         hint: ALLOW_BROWSER_DEBUG
-          ? 'Pass ?id=<TELEGRAM_ID> in query for debug mode'
-          : 'Open from Telegram Mini App so initData is present'
+          ? 'Pass ?id=<TELEGRAM_ID> for debug mode'
+          : 'Open from Telegram Mini App so initData is present',
       }, { status: 401 });
     }
 
-    // 3) Достаём подписку
-    const u = await prisma.user.findFirst({ where: { telegramId: String(userId) } });
+    // ---- upsert user + lastSeenAt ----
+    const uUnsafe = initData ? extractUnsafeUser(initData) : null;
     const now = new Date();
-    const active = !!(u?.subscriptionUntil && u.subscriptionUntil > now);
+
+    const user = await prisma.user.upsert({
+      where: { telegramId },
+      create: {
+        telegramId,
+        username: uUnsafe?.username || null,
+        firstName: uUnsafe?.first_name || null,
+        lastName: uUnsafe?.last_name || null,
+        lastSeenAt: now,
+      },
+      update: {
+        username: uUnsafe?.username ?? undefined,
+        firstName: uUnsafe?.first_name ?? undefined,
+        lastName: uUnsafe?.last_name ?? undefined,
+        lastSeenAt: now,
+      },
+      select: {
+        id: true,
+        telegramId: true,
+        subscriptionUntil: true,
+        plan: true,
+      },
+    });
+
+    const active = !!(user.subscriptionUntil && user.subscriptionUntil > now);
 
     return NextResponse.json({
       ok: true,
-      user: { telegramId: String(userId) },
+      user: { telegramId: user.telegramId },
       subscription: {
         active,
-        expiresAt: u?.subscriptionUntil || null
+        expiresAt: user.subscriptionUntil || null,
+        plan: user.plan || null,
       },
-      via
+      via,
     });
   } catch (e: any) {
-    return NextResponse.json({ ok:false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
 }
 
-// для удобства можно дернуть GET (в браузере)
+// Для удобства — GET зеркалит POST
 export const GET = POST;
