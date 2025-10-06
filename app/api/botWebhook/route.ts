@@ -1,4 +1,3 @@
-// app/api/botWebhook/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getPrices, resolvePlan, resolveTier, type Tier, type Plan } from '@/lib/pricing';
@@ -25,7 +24,7 @@ type TgUpdate = {
       telegram_payment_charge_id?: string;
       provider_payment_charge_id?: string;
       currency?: string;
-      total_amount?: number;
+      total_amount?: number; // in minor units (Stars)
     }
   }
 };
@@ -39,19 +38,12 @@ async function tg(method: string, payload: any) {
   return res.json();
 }
 
-// Поддерживаем оба формата:
-//   subs:PLAN
-//   subs2:TIER:PLAN
+// subs2:TIER:PLAN  |  subs:PLAN (legacy → PRO)
 function parsePayload(raw: string): { tier: Tier; plan: Plan } | null {
   const m2 = /^subs2:([A-Za-z_]+):([A-Za-z_]+)$/i.exec(String(raw || ''));
-  if (m2) {
-    return { tier: resolveTier(m2[1]), plan: resolvePlan(m2[2]) };
-  }
+  if (m2) return { tier: resolveTier(m2[1]), plan: resolvePlan(m2[2]) };
   const m1 = /^subs:([A-Za-z_]+)$/i.exec(String(raw || ''));
-  if (m1) {
-    // Старые оплаты считаем Pro
-    return { tier: 'PRO', plan: resolvePlan(m1[1]) };
-  }
+  if (m1) return { tier: 'PRO', plan: resolvePlan(m1[1]) };
   return null;
 }
 
@@ -63,25 +55,29 @@ function addDays(base: Date, days: number): Date {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!BOT_TOKEN) return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
+    if (!BOT_TOKEN) {
+      return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
+    }
 
     if (WH_SECRET) {
       const got = (req.headers.get('x-telegram-bot-api-secret-token') || '').trim();
-      if (got !== WH_SECRET) return NextResponse.json({ ok:false, error:'WEBHOOK_FORBIDDEN' }, { status:403 });
+      if (got !== WH_SECRET) {
+        return NextResponse.json({ ok: false, error: 'WEBHOOK_FORBIDDEN' }, { status: 403 });
+      }
     }
 
     const update = (await req.json().catch(() => ({}))) as TgUpdate;
 
-    // Быстрый ответ на pre_checkout_query
+    // Pre-checkout fast ack
     if (update.pre_checkout_query) {
       const { id } = update.pre_checkout_query;
       await tg('answerPreCheckoutQuery', { pre_checkout_query_id: id, ok: true });
       return NextResponse.json({ ok: true, stage: 'pre_checkout_ok' });
     }
 
-    // Успешная оплата
     const sp = update.message?.successful_payment;
     const chatId = update.message?.chat?.id || update.message?.from?.id;
+
     if (sp && chatId) {
       const parsed = parsePayload(sp.invoice_payload);
       if (!parsed) return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
@@ -92,32 +88,69 @@ export async function POST(req: NextRequest) {
         update.message?.chat?.username ||
         null;
 
+      const telegramId = String(chatId);
+      const chargeId = sp.telegram_payment_charge_id || null;
+      const providerChargeId = sp.provider_payment_charge_id || null;
+
+      // ----- ИДЕМПОТЕНТНОСТЬ -----
+      if (chargeId) {
+        const exists = await prisma.payment.findFirst({
+          where: { telegramId, telegramChargeId: chargeId },
+          select: { id: true },
+        });
+        if (exists) {
+          // уже обработано
+          return NextResponse.json({ ok: true, stage: 'already_processed' });
+        }
+      }
+
+      // upsert user
       const u = await prisma.user.upsert({
-        where: { telegramId: String(chatId) },
-        create: { telegramId: String(chatId), ...(username ? { username } : {}) },
-        update: { ...(username ? { username } : {}) },
+        where: { telegramId },
+        create: { telegramId, username: username || undefined, plan: tier },
+        update: { username: username || undefined, plan: tier },
+        select: { id: true, subscriptionUntil: true },
       });
 
       const now = new Date();
       const from = u.subscriptionUntil && u.subscriptionUntil > now ? u.subscriptionUntil : now;
 
       const prices = getPrices(tier);
-      const days   = prices[plan].days;
-      const until  = addDays(from, days);
+      const days = prices[plan].days;
+      const until = addDays(from, days);
 
+      // записываем платёж (лог)
+      await prisma.payment.create({
+        data: {
+          userId: u.id,
+          telegramId,
+          payload: sp.invoice_payload,
+          tier,
+          plan,
+          amount: sp.total_amount ?? prices[plan].stars,
+          currency: sp.currency || 'XTR',
+          days,
+          telegramChargeId: chargeId || undefined,
+          providerPaymentChargeId: providerChargeId || undefined,
+        },
+      });
+
+      // продлеваем подписку + фиксируем план
       await prisma.user.update({
         where: { id: u.id },
         data: {
           subscriptionUntil: until,
-          // При желании можно хранить tier (понадобится миграция)
-          updatedAt: new Date(),
+          plan: tier,
+          // updatedAt обновится автоматически (@updatedAt)
         },
       });
 
       try {
         await tg('sendMessage', {
           chat_id: chatId,
-          text: `✅ Подписка активна до ${until.toISOString().slice(0,10)}.\nТариф: ${tier === 'PROPLUS' ? 'Pro+' : 'Pro'} — ${prices[plan].label}. Спасибо за покупку!`,
+          text:
+            `✅ Подписка активна до ${until.toISOString().slice(0, 10)}.\n` +
+            `Тариф: ${tier === 'PROPLUS' ? 'Pro+' : 'Pro'} — ${prices[plan].label}. Спасибо за покупку!`,
         });
       } catch {}
 
