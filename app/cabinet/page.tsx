@@ -4,16 +4,11 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
-const ADMIN_IDS = String(process.env.NEXT_PUBLIC_ADMIN_TG_IDS || '')
-  .split(/[,\s]+/)
-  .map(s => s.trim())
-  .filter(Boolean);
 
 type MeResp = {
   ok: boolean;
   error?: string;
   user?: {
-    id?: number | string;
     first_name?: string;
     last_name?: string;
     username?: string;
@@ -25,6 +20,8 @@ type MeResp = {
     plan?: string | null;
   } | null;
 };
+
+type AdminCheck = { ok: boolean; admin?: boolean; id?: string | null; via?: string; error?: string };
 
 /* ------------ helpers ------------- */
 function getCookie(name: string): string {
@@ -65,9 +62,9 @@ export default function CabinetPage() {
   const [statusText, setStatusText] = useState('Подписка не активна.');
   const [loading, setLoading] = useState(false);
 
-  // серверный вердикт админа (реагирует на ADMIN_TG_IDS без ребилда)
-  const [serverAdmin, setServerAdmin] = useState<null | boolean>(null);
-  const [serverAdminInfo, setServerAdminInfo] = useState<string>('');
+  // admin visibility
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [adminInfo, setAdminInfo] = useState<string>('');
 
   // debug id из URL (для браузерного режима)
   const debugId = useMemo(() => {
@@ -79,10 +76,17 @@ export default function CabinetPage() {
   }, []);
 
   // typedRoutes-совместимые href
-  const hrefPro   = useMemo(() => (debugId ? { pathname: '/pro' as const,               query: { id: debugId } } : '/pro'),               [debugId]);
-  const hrefCases = useMemo(() => (debugId ? { pathname: '/cabinet/cases' as const,      query: { id: debugId } } : '/cabinet/cases'),      [debugId]);
-  const hrefFav   = useMemo(() => (debugId ? { pathname: '/cabinet/favorites' as const,  query: { id: debugId } } : '/cabinet/favorites'),  [debugId]);
-  const hrefAdmin = useMemo(() => (debugId ? { pathname: '/cabinet/admin' as const,      query: { id: debugId } } : '/cabinet/admin'),      [debugId]);
+  const hrefPro   = useMemo(() =>
+    (debugId ? { pathname: '/pro' as const,               query: { id: debugId } } : '/pro'), [debugId]);
+
+  const hrefCases = useMemo(() =>
+    (debugId ? { pathname: '/cabinet/cases' as const,      query: { id: debugId } } : '/cabinet/cases'), [debugId]);
+
+  const hrefFav   = useMemo(() =>
+    (debugId ? { pathname: '/cabinet/favorites' as const,  query: { id: debugId } } : '/cabinet/favorites'), [debugId]);
+
+  const hrefAdmin = useMemo(() =>
+    (debugId ? { pathname: '/cabinet/admin' as const,      query: { id: debugId } } : '/cabinet/admin'), [debugId]);
 
   async function loadMe(initData?: string) {
     setLoading(true);
@@ -92,11 +96,7 @@ export default function CabinetPage() {
       if (initData) headers['x-init-data'] = initData;
       else if (DEBUG && debugId) endpoint += `?id=${encodeURIComponent(debugId)}`;
 
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 15000);
-      const resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store', signal: ctrl.signal });
-      clearTimeout(t);
-
+      const resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
       const data: MeResp = await resp.json();
 
       if (data?.user) setUser(prev => prev ?? data.user);
@@ -120,23 +120,21 @@ export default function CabinetPage() {
     }
   }
 
-  // Чек админа на сервере (реагирует на ADMIN_TG_IDS)
-  async function checkAdminServer() {
+  async function checkAdmin(initData?: string) {
     try {
       const headers: Record<string, string> = {};
-      const initData = (window as any)?.Telegram?.WebApp?.initData || getInitDataFromCookie();
       if (initData) headers['x-init-data'] = initData;
 
       let url = '/api/admin/check';
       if (!initData && DEBUG && debugId) url += `?id=${encodeURIComponent(debugId)}`;
 
       const r = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
-      const data = await r.json().catch(() => ({}));
-      setServerAdmin(Boolean(data?.admin));
-      if (DEBUG) setServerAdminInfo(`server says: ${String(data?.admin)} (id=${data?.id || 'n/a'})`);
+      const data: AdminCheck = await r.json().catch(() => ({ ok: false }));
+      setIsAdmin(Boolean(data?.admin));
+      if (DEBUG) setAdminInfo(`id=${data?.id || 'n/a'} via=${data?.via || 'n/a'} admin=${String(data?.admin)}`);
     } catch {
-      setServerAdmin(false);
-      if (DEBUG) setServerAdminInfo('server check error');
+      setIsAdmin(false);
+      if (DEBUG) setAdminInfo('check error');
     }
   }
 
@@ -160,16 +158,17 @@ export default function CabinetPage() {
     setUser(u);
 
     const initData = WebApp?.initData || getInitDataFromCookie();
-    if (initData) loadMe(initData);
-    else if (DEBUG) loadMe();
-
-    // серверный чек независимо от client env
-    checkAdminServer();
+    if (initData) {
+      loadMe(initData);
+      checkAdmin(initData); // ← здесь проверяем права админа
+    } else if (DEBUG) {
+      loadMe();
+      checkAdmin();
+    } else {
+      // если ничего нет — по умолчанию скрываем
+      setIsAdmin(false);
+    }
   }, [debugId]);
-
-  const myId = (user && (user as any).id != null) ? String((user as any).id) : (DEBUG && debugId ? debugId : '');
-  const isAdminClient = ADMIN_IDS.includes(myId);
-  const isAdmin = isAdminClient || serverAdmin === true;
 
   const hello =
     (user?.first_name || '') +
@@ -180,8 +179,9 @@ export default function CabinetPage() {
   return (
     <main>
       <div className="safe" style={{ padding: 20, maxWidth: 720, margin: '0 auto', display:'flex', flexDirection:'column', gap:14 }}>
-        {/* Верхняя панель: Назад + admin (если доступ есть) */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+
+        {/* Верхняя панель: Назад + (условно) Admin */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
           <button
             type="button"
             onClick={() => { haptic('light'); goBackFallback(); }}
@@ -201,12 +201,13 @@ export default function CabinetPage() {
             <span style={{ fontWeight: 600 }}>Назад</span>
           </button>
 
-          {isAdmin && (
+          {/* Кнопка Admin рендерится ТОЛЬКО когда сервер сказал admin=true */}
+          {isAdmin ? (
             <Link
               href={hrefAdmin}
               className="list-btn"
               style={{
-                padding: '10px 12px',
+                padding: '10px 14px',
                 borderRadius: 12,
                 background: '#171a21',
                 border: '1px solid var(--border)',
@@ -216,20 +217,17 @@ export default function CabinetPage() {
             >
               admin
             </Link>
-          )}
+          ) : <span /> }
         </div>
+
+        {DEBUG && isAdmin !== null && (
+          <div style={{ fontSize: 12, opacity: .5, marginTop: -6 }}>{adminInfo}</div>
+        )}
 
         <h1 style={{ textAlign: 'center' }}>Личный кабинет</h1>
         <p style={{ textAlign: 'center', opacity: .85 }}>
           {hello ? <>Здравствуйте, <b>{hello}</b></> : 'Добро пожаловать!'}
         </p>
-
-        {/* Небольшой дебаг под заголовком (виден только при DEBUG) */}
-        {DEBUG && (
-          <p style={{ textAlign:'center', opacity:.5, fontSize:12 }}>
-            myId={myId || 'n/a'} · client={String(isAdminClient)} · {serverAdminInfo || 'server…'}
-          </p>
-        )}
 
         <div style={{ marginTop: 2 }}>
           <div style={{ margin: '0 auto', maxWidth: 680, padding: 12, border: '1px solid #333', borderRadius: 12 }}>
