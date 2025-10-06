@@ -4,11 +4,16 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
+const ADMIN_IDS = String(process.env.NEXT_PUBLIC_ADMIN_TG_IDS || '')
+  .split(/[,\s]+/)
+  .map(s => s.trim())
+  .filter(Boolean);
 
 type MeResp = {
   ok: boolean;
   error?: string;
   user?: {
+    id?: number | string;          // <-- добавили id, чтобы TS не ругался
     first_name?: string;
     last_name?: string;
     username?: string;
@@ -73,6 +78,7 @@ export default function CabinetPage() {
   const hrefPro   = useMemo(() => (debugId ? { pathname: '/pro' as const,               query: { id: debugId } } : '/pro'),               [debugId]);
   const hrefCases = useMemo(() => (debugId ? { pathname: '/cabinet/cases' as const,      query: { id: debugId } } : '/cabinet/cases'),      [debugId]);
   const hrefFav   = useMemo(() => (debugId ? { pathname: '/cabinet/favorites' as const,  query: { id: debugId } } : '/cabinet/favorites'),  [debugId]);
+  const hrefAdmin = useMemo(() => (debugId ? { pathname: '/admin' as const,              query: { id: debugId } } : '/admin'),              [debugId]);
 
   async function loadMe(initData?: string) {
     setLoading(true);
@@ -119,6 +125,7 @@ export default function CabinetPage() {
     } catch {}
   }, []);
 
+  // Инициализация user + загрузка статуса
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
     let u = WebApp?.initDataUnsafe?.user || null;
@@ -130,6 +137,10 @@ export default function CabinetPage() {
     else if (DEBUG) loadMe();
   }, [debugId]);
 
+  // Определяем «я админ?»
+  const myId = (user && (user as any).id != null) ? String((user as any).id) : (DEBUG && debugId ? debugId : '');
+  const isAdmin = ADMIN_IDS.includes(myId);
+
   const hello =
     (user?.first_name || '') +
     (user?.last_name ? ` ${user.last_name}` : '') ||
@@ -139,25 +150,45 @@ export default function CabinetPage() {
   return (
     <main>
       <div className="safe" style={{ padding: 20, maxWidth: 720, margin: '0 auto', display:'flex', flexDirection:'column', gap:14 }}>
-        {/* Кнопка Назад — как на остальных страницах */}
-        <button
-          type="button"
-          onClick={() => { haptic('light'); goBackFallback(); }}
-          className="list-btn"
-          style={{
-            width: 120,
-            padding: '10px 14px',
-            borderRadius: 12,
-            background: '#171a21',
-            border: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-        >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
-          <span style={{ fontWeight: 600 }}>Назад</span>
-        </button>
+        {/* Верхняя панель: Назад + (справа) admin */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <button
+            type="button"
+            onClick={() => { haptic('light'); goBackFallback(); }}
+            className="list-btn"
+            style={{
+              width: 120,
+              padding: '10px 14px',
+              borderRadius: 12,
+              background: '#171a21',
+              border: '1px solid var(--border)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}
+          >
+            <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
+            <span style={{ fontWeight: 600 }}>Назад</span>
+          </button>
+
+          {isAdmin && (
+            <Link
+              href={hrefAdmin}
+              className="list-btn"
+              style={{
+                padding: '10px 12px',
+                borderRadius: 12,
+                background: '#171a21',
+                border: '1px solid var(--border)',
+                textDecoration: 'none',
+                fontWeight: 700,
+                textTransform: 'lowercase'
+              }}
+            >
+              admin
+            </Link>
+          )}
+        </div>
 
         <h1 style={{ textAlign: 'center' }}>Личный кабинет</h1>
         <p style={{ textAlign: 'center', opacity: .85 }}>
@@ -181,7 +212,7 @@ export default function CabinetPage() {
               <Link href={hrefCases} className="list-btn" style={{ textDecoration: 'none' }}>
                 <span className="list-btn__left">
                   <span className="list-btn__emoji">📁</span>
-                  <b>Моё дело (таймлайн и дедлайны)</b>
+                  <b>Моё дело (таймлайн и дедлайны)</б>
                 </span>
                 <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
               </Link>
@@ -189,7 +220,7 @@ export default function CabinetPage() {
               <Link href={hrefFav} className="list-btn" style={{ textDecoration: 'none' }}>
                 <span className="list-btn__left">
                   <span className="list-btn__emoji">🌟</span>
-                  <b>Избранное</b>
+                  <b>Избранное</б>
                 </span>
                 <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
               </Link>
