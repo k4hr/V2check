@@ -9,8 +9,8 @@ type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 type Attach = {
   id: string;
   file: File;
-  previewUrl: string;    // objectURL для чипса
-  uploadedUrl?: string;  // data:jpeg;base64,... после аплоада
+  previewUrl: string;
+  uploadedUrl?: string;
   status: 'pending' | 'uploading' | 'done' | 'error';
   errMsg?: string;
 };
@@ -23,8 +23,8 @@ export default function CinemaConcierge() {
     { role: 'assistant', content: 'Что хотите посмотреть сегодня: фильм или сериал?' },
   ]);
   const [text, setText] = useState('');
-  const [loading, setLoading] = useState(false);     // запрос к ассистенту
-  const [uploading, setUploading] = useState(false); // аплоад вложений при send()
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [attach, setAttach] = useState<Attach[]>([]);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -40,7 +40,6 @@ export default function CinemaConcierge() {
     listRef.current?.scrollTo({ top: 9e9, behavior: 'smooth' });
   }, [messages, loading, uploading, attach.length]);
 
-  // пробрасываем ?id= для определения Pro на бэке
   const idSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -49,13 +48,13 @@ export default function CinemaConcierge() {
     } catch { return ''; }
   }, []);
 
-  // =============== Attachments basket ===============
+  // -------- Attachments --------
   function addFilesFromPicker(list: FileList | null) {
     const files = Array.from(list || []);
     if (!files.length) return;
 
     setAttach(prev => {
-      const next: Attach[] = [...prev];
+      const next = [...prev];
       for (const f of files) {
         if (!f.type.startsWith('image/')) continue;
         if (next.length >= MAX_ATTACH) break;
@@ -82,7 +81,7 @@ export default function CinemaConcierge() {
     });
   }
 
-  // =============== Send ===============
+  // -------- Send flow --------
   async function send() {
     const t = text.trim();
     if ((!t && attach.length === 0) || loading || uploading) return;
@@ -90,13 +89,11 @@ export default function CinemaConcierge() {
     setLoading(true);
     setUploading(true);
 
-    // показываем «пользовательское» сообщение без вставки превью в сам текст
     setMessages(m => [
       ...m,
       { role: 'user', content: (t || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') }
     ]);
 
-    // 1) Загружаем все вложения по одному (стабильнее на мобилках)
     const uploadedUrls: string[] = [];
     try {
       for (let i = 0; i < attach.length; i++) {
@@ -142,7 +139,6 @@ export default function CinemaConcierge() {
       return;
     }
 
-    // 2) Финальный промпт
     const imagesNote = uploadedUrls.length
       ? '\n\nПрикреплённые изображения:\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
       : '';
@@ -228,16 +224,16 @@ export default function CinemaConcierge() {
         )}
       </div>
 
-      {/* НИЖНЯЯ ПАНЕЛЬ: чипсы + строка ввода */}
+      {/* Нижняя панель — компактные боковые кнопки и длинный input */}
       <div
         style={{
           position: 'sticky',
           bottom: 0,
           display: 'grid',
           gridTemplateColumns: 'auto 1fr auto',
-          gap: 10,
+          gap: 6,
           alignItems: 'center',
-          padding: 10,
+          padding: 8,
           borderRadius: 16,
           background: 'rgba(9, 13, 22, 0.7)',
           backdropFilter: 'saturate(160%) blur(12px)',
@@ -245,7 +241,7 @@ export default function CinemaConcierge() {
           boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
         }}
       >
-        {/* ПЛЮСИК */}
+        {/* Плюс (40x40) */}
         <button
           type="button"
           onClick={() => pickerRef.current?.click()}
@@ -253,15 +249,14 @@ export default function CinemaConcierge() {
           disabled={attach.length >= MAX_ATTACH || uploading || loading}
           title={attach.length >= MAX_ATTACH ? 'Достигнут лимит 10 фото' : 'Прикрепить изображения'}
           style={{
-            width: 48, height: 48, borderRadius: 12,
+            width: 40, height: 40, borderRadius: 10,
             border: '1px solid #2b3552', background: '#121722',
             display: 'grid', placeItems: 'center',
-            fontSize: 26, lineHeight: 1,
+            fontSize: 22, lineHeight: 1,
             opacity: attach.length >= MAX_ATTACH ? .5 : 1
           }}
         >+</button>
 
-        {/* СКРЫТЫЙ input */}
         <input
           ref={pickerRef}
           type="file"
@@ -271,30 +266,30 @@ export default function CinemaConcierge() {
           onChange={(e) => addFilesFromPicker(e.target.files)}
         />
 
-        {/* СРЕДНЯЯ ОБЛАСТЬ: ЧИПСЫ + ОДНОСТРОЧНОЕ ПОЛЕ */}
+        {/* Средняя область: чипсы (узкая) + длинный input */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'auto 1fr',
           alignItems: 'center',
-          gap: 8,
-          minHeight: 48
+          gap: 6,
+          minHeight: 40
         }}>
-          {/* Чипсы вложений — горизонтальный скролл, не ломают строку */}
+          {/* Чипсы 32x32, максимум 90px ширины */}
           <div
             ref={chipsScrollRef}
             style={{
-              maxWidth: 140,
+              maxWidth: 90,
               overflowX: 'auto',
               whiteSpace: 'nowrap',
               display: 'flex',
-              gap: 6,
+              gap: 4,
               padding: '2px 0'
             }}
           >
             {attach.map(a => (
               <div key={a.id} style={{
                 position: 'relative',
-                width: 36, height: 36,
+                width: 32, height: 32,
                 borderRadius: 8,
                 border: '1px solid #2b3552',
                 overflow: 'hidden',
@@ -308,31 +303,25 @@ export default function CinemaConcierge() {
                   onClick={() => removeAttach(a.id)}
                   style={{
                     position: 'absolute', top: -6, right: -6,
-                    width: 20, height: 20, borderRadius: 999,
+                    width: 18, height: 18, borderRadius: 999,
                     border: '1px solid #2b3552', background: '#0e1422',
-                    color: '#fff', fontSize: 12, lineHeight: '18px'
+                    color: '#fff', fontSize: 11, lineHeight: '16px'
                   }}
                 >×</button>
-                {a.status === 'uploading' && (
-                  <div style={{
-                    position: 'absolute', left: 0, right: 0, bottom: 0,
-                    height: 4, background: 'rgba(255,255,255,.25)'
-                  }} />
-                )}
               </div>
             ))}
           </div>
 
-          {/* Однострочный input — НЕ переносится */}
+          {/* Однострочный input — длинный, без переносов */}
           <input
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
             placeholder="Опишите настроение, жанры, платформу…"
             style={{
-              height: 48,
-              padding: '0 14px',
-              borderRadius: 14,
+              height: 40,
+              padding: '0 12px',
+              borderRadius: 12,
               border: '1px solid #2b3552',
               background: '#121722',
               color: 'var(--fg)',
@@ -345,21 +334,25 @@ export default function CinemaConcierge() {
           />
         </div>
 
-        {/* ОТПРАВИТЬ */}
+        {/* МАЛЕНЬКАЯ КНОПКА ОТПРАВКИ (40x40) со стрелкой ↑ */}
         <button
           onClick={send}
           disabled={(loading || uploading) || (!text.trim() && !attach.length)}
+          aria-label="Отправить"
+          title="Отправить"
           style={{
-            height: 48, padding: '0 18px',
-            borderRadius: 14,
+            width: 40, height: 40, borderRadius: 10,
             border: '1px solid #2b3552',
-            background: 'transparent',
+            background: '#121722',
             color: 'var(--fg)',
-            fontSize: 16,
+            fontSize: 20,
+            lineHeight: 1,
+            display: 'grid',
+            placeItems: 'center',
             opacity: (loading || uploading) || (!text.trim() && !attach.length) ? .6 : 1
           }}
         >
-          Отправить{attach.length ? ` (${attach.length})` : ''}
+          ↑
         </button>
       </div>
     </main>
