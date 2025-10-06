@@ -9,8 +9,8 @@ type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 type Attach = {
   id: string;
   file: File;
-  previewUrl: string;
-  uploadedUrl?: string;
+  previewUrl: string;    // objectURL
+  uploadedUrl?: string;  // data:jpeg;base64,...
   status: 'pending' | 'uploading' | 'done' | 'error';
   errMsg?: string;
 };
@@ -29,17 +29,26 @@ export default function CinemaConcierge() {
 
   const listRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
-  const chipsScrollRef = useRef<HTMLDivElement>(null);
+  const trayRef = useRef<HTMLDivElement>(null);
 
+  // --- TMA ready/expand
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
+  // автоскролл ленты
   useEffect(() => {
     listRef.current?.scrollTo({ top: 9e9, behavior: 'smooth' });
-  }, [messages, loading, uploading, attach.length]);
+  }, [messages, loading, uploading]);
 
+  // автоскролл трей-вложений до конца при добавлении
+  useEffect(() => {
+    if (!attach.length) return;
+    trayRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
+  }, [attach.length]);
+
+  // пробрасываем ?id=
   const idSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -48,7 +57,7 @@ export default function CinemaConcierge() {
     } catch { return ''; }
   }, []);
 
-  // -------- Attachments --------
+  // -------- Корзина вложений --------
   function addFilesFromPicker(list: FileList | null) {
     const files = Array.from(list || []);
     if (!files.length) return;
@@ -65,11 +74,6 @@ export default function CinemaConcierge() {
       return next;
     });
 
-    // автоскролл чипсов вправо
-    setTimeout(() => {
-      chipsScrollRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
-    }, 0);
-
     if (pickerRef.current) pickerRef.current.value = '';
   }
 
@@ -81,7 +85,7 @@ export default function CinemaConcierge() {
     });
   }
 
-  // -------- Send flow --------
+  // -------- Отправка --------
   async function send() {
     const t = text.trim();
     if ((!t && attach.length === 0) || loading || uploading) return;
@@ -89,11 +93,13 @@ export default function CinemaConcierge() {
     setLoading(true);
     setUploading(true);
 
+    // показываем «пользовательское» сообщение (без превью в тексте)
     setMessages(m => [
       ...m,
       { role: 'user', content: (t || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') }
     ]);
 
+    // 1) Аплоад всех вложений последовательно
     const uploadedUrls: string[] = [];
     try {
       for (let i = 0; i < attach.length; i++) {
@@ -139,6 +145,7 @@ export default function CinemaConcierge() {
       return;
     }
 
+    // 2) Запрос ассистенту
     const imagesNote = uploadedUrls.length
       ? '\n\nПрикреплённые изображения:\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
       : '';
@@ -224,7 +231,55 @@ export default function CinemaConcierge() {
         )}
       </div>
 
-      {/* Нижняя панель — компактные боковые кнопки и длинный input */}
+      {/* ТРЕЙ ВЛОЖЕНИЙ — НАД ПАНЕЛЬЮ */}
+      {!!attach.length && (
+        <div
+          ref={trayRef}
+          style={{
+            overflowX: 'auto',
+            display: 'flex',
+            gap: 10,
+            padding: '8px 4px',
+            borderRadius: 14,
+            background: 'rgba(9, 13, 22, 0.6)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            backdropFilter: 'saturate(160%) blur(8px)',
+          }}
+        >
+          {attach.map(a => (
+            <div key={a.id} style={{
+              position: 'relative',
+              width: 64, height: 64,
+              borderRadius: 12,
+              border: '1px solid #2b3552',
+              overflow: 'hidden',
+              flex: '0 0 auto',
+            }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={a.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <button
+                type="button"
+                aria-label="Удалить"
+                onClick={() => removeAttach(a.id)}
+                style={{
+                  position: 'absolute', top: -6, right: -6,
+                  width: 26, height: 26, borderRadius: 999,
+                  border: '1px solid #2b3552', background: '#0e1422',
+                  color: '#fff', fontSize: 16, lineHeight: '22px'
+                }}
+              >×</button>
+              {a.status === 'uploading' && (
+                <div style={{
+                  position: 'absolute', left: 0, right: 0, bottom: 0,
+                  height: 5, background: 'rgba(255,255,255,.25)'
+                }} />
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* НИЖНЯЯ ПАНЕЛЬ: +, длинная строка, маленькая ↑ */}
       <div
         style={{
           position: 'sticky',
@@ -266,75 +321,28 @@ export default function CinemaConcierge() {
           onChange={(e) => addFilesFromPicker(e.target.files)}
         />
 
-        {/* Средняя область: чипсы (узкая) + длинный input */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr',
-          alignItems: 'center',
-          gap: 6,
-          minHeight: 40
-        }}>
-          {/* Чипсы 32x32, максимум 90px ширины */}
-          <div
-            ref={chipsScrollRef}
-            style={{
-              maxWidth: 90,
-              overflowX: 'auto',
-              whiteSpace: 'nowrap',
-              display: 'flex',
-              gap: 4,
-              padding: '2px 0'
-            }}
-          >
-            {attach.map(a => (
-              <div key={a.id} style={{
-                position: 'relative',
-                width: 32, height: 32,
-                borderRadius: 8,
-                border: '1px solid #2b3552',
-                overflow: 'hidden',
-                flex: '0 0 auto',
-              }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={a.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <button
-                  type="button"
-                  aria-label="Удалить"
-                  onClick={() => removeAttach(a.id)}
-                  style={{
-                    position: 'absolute', top: -6, right: -6,
-                    width: 18, height: 18, borderRadius: 999,
-                    border: '1px solid #2b3552', background: '#0e1422',
-                    color: '#fff', fontSize: 11, lineHeight: '16px'
-                  }}
-                >×</button>
-              </div>
-            ))}
-          </div>
+        {/* Однострочный input — длинный */}
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+          placeholder="Опишите настроение, жанры, платформу…"
+          style={{
+            height: 40,
+            padding: '0 12px',
+            borderRadius: 12,
+            border: '1px solid #2b3552',
+            background: '#121722',
+            color: 'var(--fg)',
+            fontSize: 16,
+            outline: 'none',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        />
 
-          {/* Однострочный input — длинный, без переносов */}
-          <input
-            value={text}
-            onChange={e => setText(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-            placeholder="Опишите настроение, жанры, платформу…"
-            style={{
-              height: 40,
-              padding: '0 12px',
-              borderRadius: 12,
-              border: '1px solid #2b3552',
-              background: '#121722',
-              color: 'var(--fg)',
-              fontSize: 16,
-              outline: 'none',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          />
-        </div>
-
-        {/* МАЛЕНЬКАЯ КНОПКА ОТПРАВКИ (40x40) со стрелкой ↑ */}
+        {/* Отправить (40x40) со стрелкой ↑ */}
         <button
           onClick={send}
           disabled={(loading || uploading) || (!text.trim() && !attach.length)}
