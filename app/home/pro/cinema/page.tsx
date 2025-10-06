@@ -170,7 +170,11 @@ export default function CinemaConcierge() {
         const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
       } else {
-        setMessages(m => [...м, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
+        // 👇 Исправлено: латинская m (не кириллическая «м»)
+        setMessages(m => [
+          ...m,
+          { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' },
+        ]);
       }
     } catch {
       setMessages(m => [...m, { role: 'assistant', content: 'Не получилось получить ответ. Попробуем ещё раз?' }]);
@@ -199,9 +203,9 @@ export default function CinemaConcierge() {
           style={{
             textAlign: 'center',
             marginTop: 8,
-            fontSize: 22,           // уменьшили кегль
+            fontSize: 22,
             fontWeight: 800,
-            whiteSpace: 'nowrap',   // одна строка
+            whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis'
           }}
