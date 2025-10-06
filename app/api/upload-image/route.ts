@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import sharp from 'sharp';
 
-export const runtime = 'nodejs'; // нужно для sharp на Railway
+export const runtime = 'nodejs'; // sharp требует nodejs runtime
 
 export async function POST(req: Request) {
   try {
@@ -11,22 +11,14 @@ export async function POST(req: Request) {
     if (!file) {
       return NextResponse.json({ error: 'Файл не найден' }, { status: 400 });
     }
-
-    if (!file.type.startsWith('image/')) {
+    if (!file.type || !file.type.startsWith('image/')) {
       return NextResponse.json({ error: 'Можно загружать только изображения' }, { status: 415 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Сжимаем JPEG до 80% качества
-    const compressed = await sharp(buffer)
-      .jpeg({ quality: 80 })
-      .toBuffer();
-
-    // Кодируем в base64 (временно вместо CDN)
+    const buf = Buffer.from(await file.arrayBuffer());
+    const compressed = await sharp(buf).jpeg({ quality: 80 }).toBuffer();
     const base64 = compressed.toString('base64');
-    const mime = file.type || 'image/jpeg';
+    const mime = 'image/jpeg';
     const dataUrl = `data:${mime};base64,${base64}`;
 
     return NextResponse.json({
