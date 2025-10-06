@@ -213,7 +213,7 @@ export default function CinemaConcierge() {
           🎬 Подбор фильма/сериала
         </h1>
         <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>
-          Киноконсерж задаст несколько вопросов и подберёт идеальные варианты.
+          Опишите задачу — ассистент всё уточнит и поможет.
         </p>
       </div>
 
@@ -343,7 +343,7 @@ export default function CinemaConcierge() {
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-          placeholder="Опишите настроение, жанры, платформу…"
+          placeholder="Я вас слушаю..."
           style={{
             height: 40,
             padding: '0 12px',
