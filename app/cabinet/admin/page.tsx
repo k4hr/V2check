@@ -1,155 +1,105 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
-const ADMIN_IDS = String(process.env.NEXT_PUBLIC_ADMIN_TG_IDS || '')
-  .split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
 
-type Overview = {
-  ok: boolean;
-  totals?: { users: number; activeSubs: number; pro: number; proplus: number; payments: number; };
-  latestUsers?: { telegramId: string; username?: string | null; plan?: string | null;
-                  subscriptionUntil?: string | null; lastSeenAt?: string | null; createdAt: string; }[];
-  latestPayments?: { telegramId: string; tier?: string | null; plan?: string | null;
-                     amount?: number | null; currency?: string | null; days?: number | null;
-                     createdAt: string; }[];
-  error?: string;
-};
+type CheckResp = { ok: boolean; admin?: boolean; id?: string | null; via?: string; error?: string };
 
-function getCookie(name: string): string {
-  try {
-    const rows = document.cookie ? document.cookie.split('; ') : [];
-    for (const row of rows) {
-      const [k, ...rest] = row.split('=');
-      if (decodeURIComponent(k) === name) return decodeURIComponent(rest.join('='));
-    }
-  } catch {}
-  return '';
+function haptic(type: 'light' | 'medium' = 'light') {
+  try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
 }
-function getInitDataFromCookie(): string { return getCookie('tg_init_data'); }
 
-export default function AdminPage() {
-  const [ov, setOv] = useState<Overview | null>(null);
-  const [err, setErr] = useState('');
+export default function AdminHome() {
+  const [allowed, setAllowed] = useState<null | boolean>(null);
+  const [info, setInfo] = useState<string>('');
 
+  // для браузерного режима
   const debugId = useMemo(() => {
-    try { const u = new URL(location.href); const id = u.searchParams.get('id'); return id || ''; }
-    catch { return ''; }
+    try {
+      const u = new URL(window.location.href);
+      const id = u.searchParams.get('id');
+      return id && /^\d{3,15}$/.test(id) ? id : '';
+    } catch { return ''; }
   }, []);
 
-  const isAdminByClient = useMemo(() => {
+  async function check() {
     try {
-      const WebApp: any = (window as any)?.Telegram?.WebApp;
-      const id = WebApp?.initDataUnsafe?.user?.id
-        ? String(WebApp.initDataUnsafe.user.id)
-        : (DEBUG && debugId) ? debugId : '';
-      return ADMIN_IDS.includes(id);
-    } catch { return false; }
-  }, [debugId]);
-
-  async function load() {
-    try {
-      setErr('');
       const headers: Record<string, string> = {};
-      const init = (window as any)?.Telegram?.WebApp?.initData || getInitDataFromCookie();
-      if (init) headers['x-init-data'] = init;
+      const initData = (window as any)?.Telegram?.WebApp?.initData || '';
+      if (initData) headers['x-init-data'] = initData;
 
-      let url = '/api/admin/overview';
-      if (!init && DEBUG && debugId) url += `?id=${encodeURIComponent(debugId)}`;
+      let url = '/api/admin/check';
+      if (!initData && DEBUG && debugId) url += `?id=${encodeURIComponent(debugId)}`;
 
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 15000);
-      const r = await fetch(url, { method: 'GET', headers, cache: 'no-store', signal: ctrl.signal });
-      clearTimeout(t);
-      const data: Overview = await r.json();
-      if (!data.ok) throw new Error(data.error || 'ACCESS_DENIED');
-      setOv(data);
-    } catch (e: any) {
-      setErr(String(e?.message || 'Ошибка доступа'));
+      const r = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
+      const data: CheckResp = await r.json().catch(() => ({ ok: false }));
+
+      setAllowed(Boolean(data?.admin));
+      if (DEBUG) setInfo(`id=${data?.id || 'n/a'} via=${data?.via || 'n/a'} admin=${String(data?.admin)}`);
+    } catch {
+      setAllowed(false);
+      if (DEBUG) setInfo('check error');
     }
   }
 
   useEffect(() => {
     try { (window as any)?.Telegram?.WebApp?.ready?.(); } catch {}
-    load();
-  }, []);
+    check();
+  }, [debugId]);
 
-  if (!isAdminByClient) {
+  if (allowed === false) {
     return (
-      <main style={{ padding: 20 }}>
-        <p style={{ opacity: .8 }}>Доступ запрещён.</p>
-        <Link href="/cabinet" className="list-btn" style={{ textDecoration: 'none', display:'inline-block', marginTop: 12 }}>
+      <main className="safe" style={{ padding: 20 }}>
+        <p>Доступ запрещён.</p>
+        {DEBUG && <p style={{ opacity: .6, fontSize: 12 }}>{info}</p>}
+        <Link href={debugId ? { pathname: '/cabinet', query: { id: debugId } } : '/cabinet'} className="list-btn"
+          onClick={() => haptic('light')}
+          style={{ display: 'inline-flex', marginTop: 12 }}>
           ← В кабинет
         </Link>
       </main>
     );
   }
 
+  if (allowed === null) {
+    return (
+      <main className="safe" style={{ padding: 20 }}>
+        <p>Проверяем доступ…</p>
+        {DEBUG && <p style={{ opacity: .6, fontSize: 12 }}>{info}</p>}
+      </main>
+    );
+  }
+
+  // allowed === true
   return (
-    <main style={{ padding: 16, maxWidth: 920, margin: '0 auto', display:'grid', gap: 12 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-        <Link href="/cabinet" className="list-btn" style={{ textDecoration: 'none' }}>
+    <main className="safe" style={{ padding: 20, display: 'grid', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <Link href={debugId ? { pathname: '/cabinet', query: { id: debugId } } : '/cabinet'} className="list-btn"
+          onClick={() => haptic('light')}
+          style={{ width: 120, textDecoration: 'none' }}>
           ← Назад
         </Link>
-        <h1>Админ-панель</h1>
-        <span />
+        <h1 style={{ margin: 0 }}>Admin</h1>
       </div>
 
-      {err && <div style={{ border:'1px solid #512', background:'#2a1218', padding:10, borderRadius:10 }}>{err}</div>}
+      {DEBUG && <p style={{ opacity: .6, fontSize: 12 }}>{info}</p>}
 
-      {!ov && !err && <div style={{ opacity:.8 }}>Загружаем сводку…</div>}
-
-      {ov?.totals && (
-        <section style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:10 }}>
-          <div className="list-btn"><b>Пользователи</b><div>{ov.totals.users}</div></div>
-          <div className="list-btn"><b>Активные</b><div>{ov.totals.activeSubs}</div></div>
-          <div className="list-btn"><b>Pro</b><div>{ov.totals.pro}</div></div>
-          <div className="list-btn"><b>Pro+</b><div>{ov.totals.proplus}</div></div>
-          <div className="list-btn"><b>Платежи</b><div>{ov.totals.payments}</div></div>
-        </section>
-      )}
-
-      <section style={{ display:'grid', gap:8 }}>
-        <h3 style={{ marginBottom: 0 }}>Последние пользователи</h3>
-        <div style={{ display:'grid', gap:6 }}>
-          {(ov?.latestUsers || []).map((u, i) => (
-            <div key={i} className="list-btn" style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:10 }}>
-              <div>
-                <div><b>{u.username ? '@'+u.username : u.telegramId}</b></div>
-                <div style={{ opacity:.75, fontSize:13 }}>
-                  план: {u.plan || '—'} · до: {u.subscriptionUntil ? u.subscriptionUntil.slice(0,10) : '—'}
-                </div>
-              </div>
-              <div style={{ opacity:.7, fontSize:13 }}>
-                {new Date(u.createdAt).toLocaleString()}
-              </div>
-            </div>
-          ))}
-          {!ov?.latestUsers?.length && <div style={{ opacity:.7 }}>Пока пусто</div>}
-        </div>
-      </section>
-
-      <section style={{ display:'grid', gap:8 }}>
-        <h3 style={{ marginBottom: 0 }}>Последние платежи</h3>
-        <div style={{ display:'grid', gap:6 }}>
-          {(ov?.latestPayments || []).map((p, i) => (
-            <div key={i} className="list-btn" style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:10 }}>
-              <div>
-                <div><b>{p.telegramId}</b> · {p.tier || 'PRO'} / {p.plan || '—'}</div>
-                <div style={{ opacity:.75, fontSize:13 }}>
-                  {p.amount ?? '—'} {p.currency || 'XTR'} · {p.days ?? '—'} дн.
-                </div>
-              </div>
-              <div style={{ opacity:.7, fontSize:13 }}>
-                {new Date(p.createdAt).toLocaleString()}
-              </div>
-            </div>
-          ))}
-          {!ov?.latestPayments?.length && <div style={{ opacity:.7 }}>Пока пусто</div>}
-        </div>
-      </section>
+      <div style={{ display: 'grid', gap: 10 }}>
+        <Link href="/cabinet/admin/users" className="list-btn" style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left"><span className="list-btn__emoji">👤</span><b>Пользователи</b></span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+        <Link href="/cabinet/admin/payments" className="list-btn" style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left"><span className="list-btn__emoji">💳</span><b>Платежи</b></span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+        <Link href="/cabinet/admin/metrics" className="list-btn" style={{ textDecoration: 'none' }}>
+          <span className="list-btn__left"><span className="list-btn__emoji">📈</span><b>Метрики</b></span>
+          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
+        </Link>
+      </div>
     </main>
   );
 }
