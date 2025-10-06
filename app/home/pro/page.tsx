@@ -1,35 +1,69 @@
+// app/home/pro/page.tsx
 'use client';
 
-import Link from 'next/link';
+import { useEffect, useMemo } from 'react';
 import BackBtn from '../../components/BackBtn';
-import { useEffect } from 'react';
+import CardLink from '@/components/CardLink';
+import type { Route } from 'next';
 
-export default function ProHub(){
-  useEffect(()=>{ const w:any=window; w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); },[]);
+export default function ProHub() {
+  useEffect(() => {
+    const w: any = window;
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
+  }, []);
+
+  // пробрасываем ?id= чтобы не терять дебаг/Pro в ссылках
+  const linkSuffix = useMemo(() => {
+    try {
+      const u = new URL(window.location.href);
+      const id = u.searchParams.get('id');
+      return id ? `?id=${encodeURIComponent(id)}` : '';
+    } catch { return ''; }
+  }, []);
+
   return (
-    <main style={{padding:20,maxWidth:720,margin:'0 auto'}}>
+    <main className="lm-wrap">
       <BackBtn fallback="/home" />
 
-      <h1 style={{textAlign:'center'}}>Ежедневные задачи — Pro</h1>
-      <p style={{textAlign:'center',opacity:.7,marginTop:6}}>Хаб инструментов. Наполняем блоки по мере готовности.</p>
+      <h1 style={{ textAlign: 'center' }}>Ежедневные задачи — Pro</h1>
+      <p className="lm-subtitle" style={{ textAlign: 'center' }}>
+        Хаб инструментов. Наполняем блоки по мере готовности.
+      </p>
 
-      <div style={{display:'grid',gap:12,marginTop:16}}>
-        <div className="list-btn" style={{opacity:.6,justifyContent:'space-between'}}>
-          <span className="list-btn__left"><span className="list-btn__emoji">📝</span><b>Переписать текст</b></span>
-          <span className="list-btn__right">Скоро</span>
-        </div>
+      <div className="lm-grid" style={{ marginTop: 16 }}>
+        {/* Переписать текст — заглушка */}
+        <CardLink
+          disabled
+          icon="📝"
+          title="Переписать текст"
+          subtitle="Изложение проще, короче или официальнее"
+          variant="default"
+        />
 
-        <div className="list-btn" style={{opacity:.6,justifyContent:'space-between'}}>
-          <span className="list-btn__left"><span className="list-btn__emoji">📅</span><b>План на день</b></span>
-          <span className="list-btn__right">Скоро</span>
-        </div>
+        {/* План на день — заглушка */}
+        <CardLink
+          disabled
+          icon="📅"
+          title="План на день"
+          subtitle="Список задач и приоритеты из вашего описания"
+          variant="default"
+        />
 
-        {/* НОВОЕ: подбор фильма/сериала */}
-        <Link href="/home/pro/cinema" className="list-btn" style={{textDecoration:'none', justifyContent:'space-between'}}>
-          <span className="list-btn__left"><span className="list-btn__emoji">🎬</span><b>Выбрать фильм/сериал на вечер</b></span>
-          <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-        </Link>
+        {/* Готовая функция: подбор фильма/сериала */}
+        <CardLink
+          href={`/home/pro/cinema${linkSuffix}` as Route}
+          icon="🎬"
+          title="Выбрать фильм/сериал на вечер"
+          subtitle="Киноконсерж спросит пару вопросов и подберёт варианты"
+          variant="pro"
+        />
       </div>
+
+      <style jsx>{`
+        .lm-wrap { padding: 20px; max-width: 780px; margin: 0 auto; }
+        .lm-subtitle { opacity: .7; margin-top: 6px; }
+        .lm-grid { display: grid; gap: 12px; }
+      `}</style>
     </main>
   );
 }
