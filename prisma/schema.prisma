@@ -1,4 +1,3 @@
-// prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -16,13 +15,19 @@ model User {
   username          String?
   firstName         String?
   lastName          String?
+
+  // ----- подписка / тариф -----
+  plan              String?    // 'PRO' | 'PROPLUS' (валидируем в коде)
   subscriptionUntil DateTime?
+
+  // ----- аудит -----
   createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  lastSeenAt        DateTime?
 
   favorites         Favorite[]
-  // личные дела (новое)
   cases             Case[]
+  payments          Payment[]
 }
 
 // ============ Favorites ============
@@ -40,12 +45,12 @@ model Favorite {
   @@index([userId])
 }
 
-// ============ Library docs (new) ============
+// ============ Library docs ============
 model Doc {
   id        String        @id @default(cuid())
   slug      String        @unique
   title     String
-  category  String        // "constitution" | "codes" | "ustavy" | "pdd" | "federal"
+  category  String
   sourceUrl String?
   updatedAt DateTime      @default(now())
   createdAt DateTime      @default(now())
@@ -64,7 +69,7 @@ model DocVersion {
   @@index([docId])
 }
 
-// ============ Cases (новое) ============
+// ============ Cases ============
 model Case {
   id        String    @id @default(cuid())
   userId    String
@@ -81,7 +86,7 @@ model Case {
   @@index([status])
   @@index([nextDueAt])
 
-  @@map("cases") // имя таблицы в БД
+  @@map("cases")
 }
 
 // Элементы таймлайна дела
@@ -103,4 +108,26 @@ model CaseItem {
   @@index([dueAt])
 
   @@map("case_items")
+}
+
+// ============ Payments (лог и идемпотентность) ============
+model Payment {
+  id                      String   @id @default(cuid())
+  userId                  String
+  telegramId              String
+  payload                 String?
+  tier                    String?  // 'PRO' | 'PROPLUS'
+  plan                    String?  // 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR'
+  amount                  Int?     // Stars
+  currency                String?  // 'XTR'
+  days                    Int?
+  telegramChargeId        String?  // telegram_payment_charge_id
+  providerPaymentChargeId String?  // provider_payment_charge_id
+  createdAt               DateTime @default(now())
+
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([telegramId, telegramChargeId])
+  @@index([userId])
+  @@index([telegramId])
 }
