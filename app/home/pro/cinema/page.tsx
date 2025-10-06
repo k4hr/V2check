@@ -170,7 +170,7 @@ export default function CinemaConcierge() {
         const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
       } else {
-        setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
+        setMessages(m => [...м, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
       }
     } catch {
       setMessages(m => [...m, { role: 'assistant', content: 'Не получилось получить ответ. Попробуем ещё раз?' }]);
@@ -194,7 +194,20 @@ export default function CinemaConcierge() {
     >
       <div>
         <BackBtn fallback="/home/pro" />
-        <h1 style={{ textAlign: 'center', marginTop: 8 }}>🎬 Подбор фильма/сериала</h1>
+        {/* Заголовок в ОДНУ строку */}
+        <h1
+          style={{
+            textAlign: 'center',
+            marginTop: 8,
+            fontSize: 22,           // уменьшили кегль
+            fontWeight: 800,
+            whiteSpace: 'nowrap',   // одна строка
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          🎬 Подбор фильма/сериала
+        </h1>
         <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>
           Киноконсерж задаст несколько вопросов и подберёт идеальные варианты.
         </p>
