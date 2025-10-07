@@ -3,6 +3,7 @@ import './globals.css';
 import { cookies } from 'next/headers';
 import { I18nProvider } from '../components/I18nProvider';
 import TwaBootstrap from '../components/TwaBootstrap';
+import GlobalSafeTop from '../components/GlobalSafeTop';
 
 import ru from '../i18n/messages/ru';
 import en from '../i18n/messages/en';
@@ -26,13 +27,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale}>
       <body>
+        {/* Глобальный фон */}
         <div className="lm-bg" />
+        {/* Глобальная безопасная зона для Telegram-хедера */}
+        <GlobalSafeTop />
+        {/* Контент приложения */}
         <div className="lm-page">
           {/* Глобальная инициализация TWA + i18n */}
           <TwaBootstrap>
-            <I18nProvider messages={messages}>
-              {children}
-            </I18nProvider>
+            <I18nProvider messages={messages}>{children}</I18nProvider>
           </TwaBootstrap>
         </div>
       </body>
