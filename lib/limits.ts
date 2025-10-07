@@ -1,4 +1,4 @@
-// lib/limits.ts — заглушка подсчёта usage и мягкого/жёсткого лимита
+// lib/limits.ts — учёт usage + совместимость с существующими импортами
 import { prisma } from '@/lib/prisma';
 
 export type Tier = 'FREE' | 'PRO' | 'PROPLUS';
@@ -8,7 +8,7 @@ const FREE_QA_PER_DAY    = Number(process.env.FREE_QA_PER_DAY    || 2);
 const PRO_QA_PER_DAY     = Number(process.env.PRO_QA_PER_DAY     || 0);
 const PROPLUS_QA_PER_DAY = Number(process.env.PROPLUS_QA_PER_DAY || 0);
 
-// включение «жёсткого» ограничения по тарифам
+// кого реально ограничиваем (жёстко)
 const ENF_FREE    = (process.env.LIMITS_ENFORCE_FREE    || '1').trim() === '1';
 const ENF_PRO     = (process.env.LIMITS_ENFORCE_PRO     || '0').trim() === '1';
 const ENF_PROPLUS = (process.env.LIMITS_ENFORCE_PROPLUS || '0').trim() === '1';
@@ -22,10 +22,10 @@ export function todayStrUTC(): string {
   return `${y}-${m}-${dd}`;
 }
 
-// alias под ожидаемое имя
+// alias под ожидаемое имя в импортах
 export const todayUTC = todayStrUTC;
 
-// определить тариф пользователя
+// тариф
 export function resolveTier(u?: { plan?: string | null; subscriptionUntil?: Date | null }): Tier {
   if (!u) return 'FREE';
   const active = !!(u.subscriptionUntil && u.subscriptionUntil > new Date());
@@ -33,28 +33,24 @@ export function resolveTier(u?: { plan?: string | null; subscriptionUntil?: Date
   const plan = String(u.plan || '').toUpperCase();
   return plan === 'PROPLUS' ? 'PROPLUS' : 'PRO';
 }
-
-// alias под ожидаемое имя
 export const getUserTier = resolveTier;
 
-// квота по тарифу
+// лимит по тарифу
 export function dailyLimitByTier(tier: Tier): number {
   if (tier === 'PROPLUS') return PROPLUS_QA_PER_DAY;
   if (tier === 'PRO')     return PRO_QA_PER_DAY;
   return FREE_QA_PER_DAY;
 }
-
-// alias под ожидаемое имя
 export const getDailyLimitByTier = dailyLimitByTier;
 
-// нужно ли «жёстко» ограничивать для тарифа
+// строгая ли политика для тарифа
 export function enforceByTier(tier: Tier): boolean {
   if (tier === 'PROPLUS') return ENF_PROPLUS;
   if (tier === 'PRO')     return ENF_PRO;
   return ENF_FREE;
 }
 
-// текущее использованное за сегодня
+// текущее использованное
 export async function getUsedToday(userId: string): Promise<number> {
   const date = todayStrUTC();
   const row = await prisma.usageDaily.findUnique({
@@ -64,7 +60,7 @@ export async function getUsedToday(userId: string): Promise<number> {
   return row?.used ?? 0;
 }
 
-// +1 к счётчику
+// инкремент
 export async function incUsedToday(userId: string): Promise<number> {
   const date = todayStrUTC();
   const row = await prisma.usageDaily.upsert({
@@ -76,8 +72,14 @@ export async function incUsedToday(userId: string): Promise<number> {
   return row.used;
 }
 
-// ===== универсальная точка — по telegramId =====
-export async function trackAndGateByTelegramId(telegramId: string): Promise<{
+/**
+ * Совместим оба способа вызова:
+ * 1) Новый:   checkAndCountDailyUsage(id, { by: 'telegramId'|'userId' })
+ * 2) Легаси:  checkAndCountDailyUsage(prisma, userId, limit, enforce)
+ *
+ * Возвращает унифицированный ответ.
+ */
+type UsageResult = {
   ok: boolean;
   reason?: 'LIMIT_REACHED';
   tier: Tier;
@@ -85,105 +87,75 @@ export async function trackAndGateByTelegramId(telegramId: string): Promise<{
   limit: number;
   remaining: number | null;
   userId: string;
-}> {
-  // гарантируем пользователя
-  const user = await prisma.user.upsert({
-    where: { telegramId },
-    create: { telegramId },
+};
+
+export async function checkAndCountDailyUsage(a: any, b?: any, c?: any, d?: any): Promise<UsageResult> {
+  // ---- ЛЕГАСИ ВАРИАНТ: (prisma, userId, limit, enforce)
+  if (typeof a === 'object' && a !== null && typeof b === 'string') {
+    const userId = String(b);
+    const limit = Number(c ?? 0);
+    const enforce = Boolean(d);
+
+    const tier: Tier = 'FREE'; // легаси не знает тариф — не критично
+    if (!enforce || limit === 0) {
+      const used = await incUsedToday(userId);
+      return { ok: true, tier, used, limit, remaining: limit === 0 ? null : Math.max(limit - used, 0), userId };
+    }
+    const usedBefore = await getUsedToday(userId);
+    if (usedBefore >= limit) {
+      return { ok: false, reason: 'LIMIT_REACHED', tier, used: usedBefore, limit, remaining: 0, userId };
+    }
+    const used = await incUsedToday(userId);
+    return { ok: true, tier, used, limit, remaining: Math.max(limit - used, 0), userId };
+  }
+
+  // ---- НОВЫЙ ВАРИАНТ: (id, { by })
+  const id = String(a || '');
+  const by = (b?.by as 'telegramId' | 'userId') || 'telegramId';
+
+  if (by === 'userId') {
+    const u = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, plan: true, subscriptionUntil: true },
+    });
+    // если нет — создадим «пустого» пользователя с telegramId=id (мягкий путь)
+    const ensured = u ?? (await prisma.user.create({ data: { telegramId: id } }));
+    const tier = resolveTier(ensured);
+    const limit = dailyLimitByTier(tier);
+    const enforce = enforceByTier(tier);
+
+    if (!enforce || limit === 0) {
+      const used = await incUsedToday(ensured.id);
+      return { ok: true, tier, used, limit, remaining: limit === 0 ? null : Math.max(limit - used, 0), userId: ensured.id };
+    }
+    const usedBefore = await getUsedToday(ensured.id);
+    if (usedBefore >= limit) {
+      return { ok: false, reason: 'LIMIT_REACHED', tier, used: usedBefore, limit, remaining: 0, userId: ensured.id };
+    }
+    const used = await incUsedToday(ensured.id);
+    return { ok: true, tier, used, limit, remaining: Math.max(limit - used, 0), userId: ensured.id };
+  }
+
+  // by === 'telegramId'
+  const ensured = await prisma.user.upsert({
+    where: { telegramId: id },
+    create: { telegramId: id },
     update: {},
     select: { id: true, plan: true, subscriptionUntil: true },
   });
 
-  const tier     = resolveTier(user);
-  const limit    = dailyLimitByTier(tier);
-  const enforce  = enforceByTier(tier);
+  const tier = resolveTier(ensured);
+  const limit = dailyLimitByTier(tier);
+  const enforce = enforceByTier(tier);
 
   if (!enforce || limit === 0) {
-    const used = await incUsedToday(user.id);
-    return {
-      ok: true,
-      tier,
-      used,
-      limit,
-      remaining: limit === 0 ? null : Math.max(limit - used, 0),
-      userId: user.id,
-    };
+    const used = await incUsedToday(ensured.id);
+    return { ok: true, tier, used, limit, remaining: limit === 0 ? null : Math.max(limit - used, 0), userId: ensured.id };
   }
-
-  const usedBefore = await getUsedToday(user.id);
+  const usedBefore = await getUsedToday(ensured.id);
   if (usedBefore >= limit) {
-    return {
-      ok: false,
-      reason: 'LIMIT_REACHED',
-      tier,
-      used: usedBefore,
-      limit,
-      remaining: 0,
-      userId: user.id,
-    };
+    return { ok: false, reason: 'LIMIT_REACHED', tier, used: usedBefore, limit, remaining: 0, userId: ensured.id };
   }
-  const used = await incUsedToday(user.id);
-  return {
-    ok: true,
-    tier,
-    used,
-    limit,
-    remaining: Math.max(limit - used, 0),
-    userId: user.id,
-  };
-}
-
-/**
- * Совместимость с импортами в твоём route.ts:
- * checkAndCountDailyUsage(id, { by: 'telegramId' | 'userId' })
- * Возвращает { ok, reason?, tier, used, limit, remaining, userId }
- */
-export async function checkAndCountDailyUsage(
-  id: string,
-  opts?: { by?: 'telegramId' | 'userId' } | any,
-): Promise<{
-  ok: boolean;
-  reason?: 'LIMIT_REACHED';
-  tier: Tier;
-  used: number;
-  limit: number;
-  remaining: number | null;
-  userId: string;
-}> {
-  const by = (opts?.by as 'telegramId' | 'userId') || 'telegramId';
-
-  if (by === 'userId') {
-    // уже знаем userId
-    const u = await prisma.user.findUnique({
-      where: { id },
-      select: { id: true, plan: true, subscriptionUntil: true, telegramId: true },
-    });
-    if (!u) {
-      // на всякий случай создадим запись c пустым телеграмId
-      const nu = await prisma.user.create({ data: { telegramId: id } });
-      const tier = 'FREE' as Tier;
-      const limit = dailyLimitByTier(tier);
-      const used = await incUsedToday(nu.id);
-      return { ok: true, tier, used, limit, remaining: limit === 0 ? null : Math.max(limit - used, 0), userId: nu.id };
-    }
-
-    const tier    = resolveTier(u);
-    const limit   = dailyLimitByTier(tier);
-    const enforce = enforceByTier(tier);
-
-    if (!enforce || limit === 0) {
-      const used = await incUsedToday(u.id);
-      return { ok: true, tier, used, limit, remaining: limit === 0 ? null : Math.max(limit - used, 0), userId: u.id };
-    }
-
-    const usedBefore = await getUsedToday(u.id);
-    if (usedBefore >= limit) {
-      return { ok: false, reason: 'LIMIT_REACHED', tier, used: usedBefore, limit, remaining: 0, userId: u.id };
-    }
-    const used = await incUsedToday(u.id);
-    return { ok: true, tier, used, limit, remaining: Math.max(limit - used, 0), userId: u.id };
-  }
-
-  // by === 'telegramId' (дефолт)
-  return trackAndGateByTelegramId(id);
+  const used = await incUsedToday(ensured.id);
+  return { ok: true, tier, used, limit, remaining: Math.max(limit - used, 0), userId: ensured.id };
 }
