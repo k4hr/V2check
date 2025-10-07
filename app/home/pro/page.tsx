@@ -58,13 +58,6 @@ export default function ProHub() {
         variant: 'pro',
       },
       // Добавляйте новые инструменты сюда по мере готовности
-      // {
-      //   icon: '📝',
-      //   title: 'Переписать текст',
-      //   subtitle: 'Изложение проще, короче или официальнее',
-      //   href: (`/home/pro/rewrite${linkSuffix}` as Route),
-      //   variant: 'pro',
-      // },
     ],
     [linkSuffix]
   );
@@ -78,11 +71,9 @@ export default function ProHub() {
   }, [query, tools]);
 
   const onInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value),
+    (e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.currentTarget.value),
     []
   );
-
-  const clear = useCallback(() => setQuery(''), []);
 
   return (
     <main className="lm-wrap">
@@ -93,26 +84,29 @@ export default function ProHub() {
         Выберите инструмент
       </p>
 
-      {/* Поиск по инструментам */}
-      <div className="search">
+      {/* Быстрый поиск — идентичен Pro+ */}
+      <div style={{ marginTop: 12 }}>
         <input
+          type="search"
+          inputMode="search"
           placeholder="Поиск по инструментам…"
           value={query}
           onChange={onInput}
-          inputMode="search"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          aria-label="Поиск по инструментам"
+          style={{
+            width: '100%',
+            padding: '12px 14px',
+            borderRadius: 12,
+            background: '#141823',
+            border: '1px solid var(--border)',
+            color: 'var(--fg, #fff)',
+            outline: 'none'
+          }}
         />
-        {query ? (
-          <button className="clear" onClick={clear} aria-label="Очистить">×</button>
-        ) : null}
       </div>
 
-      <div className="lm-grid" style={{ marginTop: 16 }}>
+      <div className="lm-grid" style={{ marginTop: 14 }}>
         {filtered.length === 0 ? (
-          <div className="empty">Ничего не найдено. Попробуйте другой запрос.</div>
+          <div className="empty">Ничего не найдено</div>
         ) : (
           filtered.map((t, i) => (
             <CardLink
@@ -131,39 +125,7 @@ export default function ProHub() {
         .lm-wrap { padding: 20px; max-width: 780px; margin: 0 auto; }
         .lm-subtitle { opacity: .7; margin-top: 6px; }
         .lm-grid { display: grid; gap: 12px; }
-        .search {
-          position: relative;
-          margin-top: 12px;
-        }
-        .search input {
-          width: 100%;
-          height: 44px;
-          padding: 0 40px 0 14px;
-          border-radius: 12px;
-          border: 1px solid rgba(255,255,255,.08);
-          background: rgba(255,255,255,.06);
-          color: inherit;
-          outline: none;
-          font-size: 16px;
-        }
-        .clear {
-          position: absolute;
-          right: 8px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 28px;
-          height: 28px;
-          border: 0;
-          border-radius: 50%;
-          background: rgba(255,255,255,.12);
-          color: inherit;
-          font-size: 18px;
-          line-height: 28px;
-        }
-        .empty {
-          opacity: .7;
-          padding: 12px 8px;
-        }
+        .empty { opacity: .7; padding: 12px 8px; text-align: center; }
       `}</style>
     </main>
   );
