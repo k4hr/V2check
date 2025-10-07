@@ -2,17 +2,12 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { askAI, type ChatMessage } from '@/lib/ai';
 import { prisma } from '@/lib/prisma';
-import {
-  todayUTC,
-  getUserTier,
-  getDailyLimitByTier,
-  enforceByTier,
-  checkAndCountDailyUsage,
-  type Tier,
-} from '@/lib/limits';
+import cleanAssistantText from '@/lib/cleanText';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+const FREE_QA_PER_DAY = Number(process.env.FREE_QA_PER_DAY || 2);
 
 // --- МОДЕЛИ: AI_* (канон), с фолбэком на OPENAI_* ---
 const MODEL_DEFAULT =
@@ -33,10 +28,17 @@ const MODEL_PRO_PLUS =
 
 function pickModelByMode(mode?: string): string {
   if (!mode) return MODEL_DEFAULT;
-  if (mode.startsWith('proplus-')) return MODEL_PRO_PLUS; // Pro+
-  if (mode.startsWith('legal-'))   return MODEL_PRO;      // пример режима
-  if (mode.startsWith('pro-'))     return MODEL_PRO;      // Pro
+  if (mode.startsWith('proplus-')) return MODEL_PRO_PLUS; // Бизнес-план: launch/analysis
+  if (mode.startsWith('legal-'))   return MODEL_PRO;      // Юр-режимы
   return MODEL_DEFAULT;
+}
+
+function todayStr() {
+  const d = new Date();
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${dd}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -51,45 +53,77 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
     }
 
-    // Telegram ID из query (?id=...)
+    // Определяем Pro по telegramId (?id=...)
     const { searchParams } = new URL(req.url);
     const tgId = searchParams.get('id');
-    const userId = tgId ? String(tgId) : null;
 
-    // Тариф и лимиты
-    let tier: Tier = 'FREE';
-    if (userId) tier = await getUserTier(prisma, userId);
-
-    const limit = getDailyLimitByTier(tier);
-    const enforce = enforceByTier(tier);
-
-    // Учёт/ограничение запросов (по пользователю); если userId отсутствует — пропускаем
-    let used = 0;
-    if (userId) {
-      const res = await checkAndCountDailyUsage(prisma, userId, limit, enforce);
-      used = res.used;
-      if (!res.ok && res.reached) {
-        // для совместимости с фронтом — тот же код ошибки
-        return NextResponse.json(
-          { ok: false, error: 'FREE_LIMIT_REACHED', freeLimit: limit, used, date: todayUTC() },
-          { status: 429 }
-        );
+    let isPro = false;
+    if (tgId) {
+      const user = await prisma.user.findFirst({
+        where: { telegramId: String(tgId) },
+        select: { subscriptionUntil: true },
+      });
+      if (user?.subscriptionUntil && user.subscriptionUntil > new Date()) {
+        isPro = true;
       }
     }
 
-    // Запрос к модели — используем историю как прислали со страницы (system уже внутри)
-    const answer = await askAI(history, { model });
+    // Бесплатный лимит для не-Pro: cookie
+    if (!isPro) {
+      const cookies = req.cookies;
+      const usedStr = cookies.get('ai_free_used')?.value || '0';
+      const dateStr = cookies.get('ai_free_date')?.value || '';
+      const today = todayStr();
+      let used = Number(usedStr) || 0;
 
-    return NextResponse.json({
-      ok: true,
-      answer,
-      model,
-      tier,
-      pro: tier !== 'FREE',
-      limit,
-      used,
-      date: todayUTC(),
-    });
+      if (dateStr !== today) used = 0;
+      if (used >= FREE_QA_PER_DAY) {
+        return NextResponse.json(
+          { ok: false, error: 'FREE_LIMIT_REACHED', freeLimit: FREE_QA_PER_DAY },
+          { status: 429 }
+        );
+      }
+
+      const raw = await askAI(
+        [
+          { role: 'system', content: 'Ты ассистент. Пиши кратко, без Markdown.' },
+          ...history,
+          { role: 'user', content: prompt },
+        ],
+        { model }
+      );
+
+      const answer = cleanAssistantText(raw);
+
+      const resp = NextResponse.json({
+        ok: true,
+        answer,
+        model,
+        pro: false,
+        freeLimit: FREE_QA_PER_DAY,
+        used: used + 1,
+      });
+
+      const expires = new Date();
+      expires.setUTCHours(23, 59, 59, 999);
+      resp.cookies.set('ai_free_used', String(used + 1), { path: '/', expires });
+      resp.cookies.set('ai_free_date', today, { path: '/', expires });
+      return resp;
+    }
+
+    // Pro — безлимит
+    const raw = await askAI(
+      [
+        { role: 'system', content: 'Ты ассистент. Пиши развернуто, но без Markdown.' },
+        ...history,
+        { role: 'user', content: prompt },
+      ],
+      { model }
+    );
+
+    const answer = cleanAssistantText(raw);
+
+    return NextResponse.json({ ok: true, answer, model, pro: true });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
