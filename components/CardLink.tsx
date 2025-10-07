@@ -6,6 +6,38 @@ import type { Route } from 'next';
 
 type Variant = 'default' | 'pro' | 'proplus';
 
+/** ===== Статические строки (i18n-light) ===== */
+export type Locale = 'ru' | 'en';
+
+type UiPack = {
+  searchPlaceholder: string;
+  notFound: string;
+  chooseTool: string;
+  searchAria: string;
+};
+
+export const UI_STRINGS: Record<Locale, UiPack> = {
+  ru: {
+    searchPlaceholder: 'Поиск по инструментам…',
+    notFound: 'Ничего не найдено',
+    chooseTool: 'Выберите инструмент',
+    searchAria: 'Поиск по инструментам',
+  },
+  en: {
+    searchPlaceholder: 'Search tools…',
+    notFound: 'Nothing found',
+    chooseTool: 'Choose a tool',
+    searchAria: 'Search tools',
+  },
+};
+
+/** Удобный хелпер: t('searchPlaceholder', 'ru') */
+export function t<K extends keyof UiPack>(key: K, locale: Locale = 'ru'): UiPack[K] {
+  const pack = UI_STRINGS[locale] || UI_STRINGS.ru;
+  return pack[key];
+}
+/** =========================================== */
+
 type CardBaseProps = {
   icon?: string;          // emoji/иконка слева
   title: string;          // заголовок
