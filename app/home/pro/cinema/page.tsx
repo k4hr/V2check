@@ -9,8 +9,8 @@ type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 type Attach = {
   id: string;
   file: File;
-  previewUrl: string;    // objectURL
-  uploadedUrl?: string;  // data:jpeg;base64,...
+  previewUrl: string;     // objectURL
+  uploadedUrl?: string;   // URL, который вернёт /api/upload-image
   status: 'pending' | 'uploading' | 'done' | 'error';
   errMsg?: string;
 };
@@ -96,7 +96,10 @@ export default function CinemaConcierge() {
     // показываем «пользовательское» сообщение (без превью в тексте)
     setMessages(m => [
       ...m,
-      { role: 'user', content: (t || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') }
+      {
+        role: 'user',
+        content: (t || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '')
+      }
     ]);
 
     // 1) Аплоад всех вложений последовательно
@@ -152,14 +155,23 @@ export default function CinemaConcierge() {
     const promptText = (t || '') + imagesNote;
 
     try {
-      const history = [...messages, { role: 'user', content: promptText } as Msg]
-        .filter(m => m.role !== 'system')
-        .slice(-20);
+      // ВАЖНО: всегда кладём system-промпт этой страницы в начало истории
+      const history = [
+        { role: 'system', content: PROMPT },
+        ...messages.filter(m => m.role !== 'system'),
+        { role: 'user', content: promptText } as Msg,
+      ].slice(-20) as Msg[];
 
       const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText, history, images: uploadedUrls }),
+        body: JSON.stringify({
+          prompt: promptText,
+          history,
+          images: uploadedUrls,
+          // эта страница — в разделе Pro → берём pro-режим; для Pro+ ставь 'proplus-cinema'
+          mode: 'pro-cinema',
+        }),
       });
 
       const data = await r.json().catch(() => ({} as any));
@@ -170,7 +182,6 @@ export default function CinemaConcierge() {
         const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
       } else {
-        // 👇 Исправлено: латинская m (не кириллическая «м»)
         setMessages(m => [
           ...m,
           { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' },
@@ -220,11 +231,14 @@ export default function CinemaConcierge() {
       {/* Лента сообщений */}
       <div ref={listRef} style={{ minHeight: 0, overflow: 'auto', padding: '4px 2px' }}>
         {messages.filter(m => m.role !== 'system').map((m, i) => (
-          <div key={i} style={{
-            margin: '10px 0',
-            display: 'flex',
-            justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start'
-          }}>
+          <div
+            key={i}
+            style={{
+              margin: '10px 0',
+              display: 'flex',
+              justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start'
+            }}
+          >
             <div
               style={{
                 maxWidth: '86%',
@@ -264,14 +278,17 @@ export default function CinemaConcierge() {
           }}
         >
           {attach.map(a => (
-            <div key={a.id} style={{
-              position: 'relative',
-              width: 64, height: 64,
-              borderRadius: 12,
-              border: '1px solid #2b3552',
-              overflow: 'hidden',
-              flex: '0 0 auto',
-            }}>
+            <div
+              key={a.id}
+              style={{
+                position: 'relative',
+                width: 64, height: 64,
+                borderRadius: 12,
+                border: '1px solid #2b3552',
+                overflow: 'hidden',
+                flex: '0 0 auto',
+              }}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={a.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               <button
@@ -284,12 +301,16 @@ export default function CinemaConcierge() {
                   border: '1px solid #2b3552', background: '#0e1422',
                   color: '#fff', fontSize: 16, lineHeight: '22px'
                 }}
-              >×</button>
+              >
+                ×
+              </button>
               {a.status === 'uploading' && (
-                <div style={{
-                  position: 'absolute', left: 0, right: 0, bottom: 0,
-                  height: 5, background: 'rgba(255,255,255,.25)'
-                }} />
+                <div
+                  style={{
+                    position: 'absolute', left: 0, right: 0, bottom: 0,
+                    height: 5, background: 'rgba(255,255,255,.25)'
+                  }}
+                />
               )}
             </div>
           ))}
@@ -327,7 +348,9 @@ export default function CinemaConcierge() {
             fontSize: 22, lineHeight: 1,
             opacity: attach.length >= MAX_ATTACH ? .5 : 1
           }}
-        >+</button>
+        >
+          +
+        </button>
 
         <input
           ref={pickerRef}
