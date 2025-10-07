@@ -8,7 +8,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* ============ Users ============ */
+// ============ Users ============
 model User {
   id                String     @id @default(cuid())
   telegramId        String     @unique
@@ -16,11 +16,11 @@ model User {
   firstName         String?
   lastName          String?
 
-  // ----- подписка / тариф -----
+  // подписка / тариф
   plan              String?    // 'PRO' | 'PROPLUS' (валидируем в коде)
   subscriptionUntil DateTime?
 
-  // ----- аудит -----
+  // аудит
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
   lastSeenAt        DateTime?
@@ -31,7 +31,7 @@ model User {
   usageDaily        UsageDaily[]
 }
 
-/* ============ Суточный учёт запросов ============ */
+// ============ Суточный учёт запросов ============
 model UsageDaily {
   id        String   @id @default(cuid())
   userId    String
@@ -42,12 +42,11 @@ model UsageDaily {
 
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // без имени, чтобы в клиенте был where: { userId_date: { userId, date } }
   @@unique([userId, date])
   @@index([date])
 }
 
-/* ============ Favorites ============ */
+// ============ Favorites ============
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
@@ -62,7 +61,7 @@ model Favorite {
   @@index([userId])
 }
 
-/* ============ Library docs ============ */
+// ============ Library docs ============
 model Doc {
   id        String        @id @default(cuid())
   slug      String        @unique
@@ -86,7 +85,7 @@ model DocVersion {
   @@index([docId])
 }
 
-/* ============ Cases ============ */
+// ============ Cases ============
 model Case {
   id        String    @id @default(cuid())
   userId    String
@@ -106,7 +105,7 @@ model Case {
   @@map("cases")
 }
 
-/* Элементы таймлайна дела */
+// Элементы таймлайна дела
 model CaseItem {
   id        String   @id @default(cuid())
   caseId    String
@@ -127,7 +126,7 @@ model CaseItem {
   @@map("case_items")
 }
 
-/* ============ Payments (лог + идемпотентность) ============ */
+// ============ Payments (лог + идемпотентность) ============
 model Payment {
   id                      String   @id @default(cuid())
   userId                  String
