@@ -16,16 +16,16 @@ const DAYS = { WEEK: 7, MONTH: 30, HALF_YEAR: 180, YEAR: 365 } as const;
 
 export const PRICES: Record<Tier, Record<Plan, PricingItem>> = {
   PRO: {
-    WEEK:      { label:'Неделя',  title:'LiveManager Pro — Неделя',  description:'Доступ на 7 дней',   amount:59,   stars:59,   days:DAYS.WEEK },
-    MONTH:     { label:'Месяц',   title:'LiveManager Pro — Месяц',   description:'Доступ на 30 дней',  amount:199,  stars:199,  days:DAYS.MONTH },
-    HALF_YEAR: { label:'Полгода', title:'LiveManager Pro — Полгода', description:'Доступ на 180 дней', amount:999,  stars:999,  days:DAYS.HALF_YEAR },
-    YEAR:      { label:'Год',     title:'LiveManager Pro — Год',     description:'Доступ на 365 дней', amount:1799, stars:1799, days:DAYS.YEAR },
+    WEEK:      { label:'Неделя',  title:'LiveManager Pro — Неделя',  description:'Доступ на 7 дней',   amount:129,  stars:129,  days:DAYS.WEEK },
+    MONTH:     { label:'Месяц',   title:'LiveManager Pro — Месяц',   description:'Доступ на 30 дней',  amount:399,  stars:399,  days:DAYS.MONTH },
+    HALF_YEAR: { label:'Полгода', title:'LiveManager Pro — Полгода', description:'Доступ на 180 дней', amount:1999, stars:1999, days:DAYS.HALF_YEAR },
+    YEAR:      { label:'Год',     title:'LiveManager Pro — Год',     description:'Доступ на 365 дней', amount:3499, stars:3499, days:DAYS.YEAR },
   },
   PROPLUS: {
-    WEEK:      { label:'Неделя',  title:'LiveManager Pro+ — Неделя',  description:'Доступ на 7 дней',   amount:129,  stars:129,  days:DAYS.WEEK },
-    MONTH:     { label:'Месяц',   title:'LiveManager Pro+ — Месяц',   description:'Доступ на 30 дней',  amount:399,  stars:399,  days:DAYS.MONTH },
-    HALF_YEAR: { label:'Полгода', title:'LiveManager Pro+ — Полгода', description:'Доступ на 180 дней', amount:1999, stars:1999, days:DAYS.HALF_YEAR },
-    YEAR:      { label:'Год',     title:'LiveManager Pro+ — Год',     description:'Доступ на 365 дней', amount:3499, stars:3499, days:DAYS.YEAR },
+    WEEK:      { label:'Неделя',  title:'LiveManager Pro+ — Неделя',  description:'Доступ на 7 дней',   amount:249,  stars:249,  days:DAYS.WEEK },
+    MONTH:     { label:'Месяц',   title:'LiveManager Pro+ — Месяц',   description:'Доступ на 30 дней',  amount:749,  stars:749,  days:DAYS.MONTH },
+    HALF_YEAR: { label:'Полгода', title:'LiveManager Pro+ — Полгода', description:'Доступ на 180 дней', amount:3699, stars:3699, days:DAYS.HALF_YEAR },
+    YEAR:      { label:'Год',     title:'LiveManager Pro+ — Год',     description:'Доступ на 365 дней', amount:6499, stars:6499, days:DAYS.YEAR },
   },
 } as const;
 
