@@ -47,6 +47,13 @@ export default function ProHub() {
   const tools = useMemo<ToolItem[]>(
     () => [
       {
+        icon: '🌅',
+        title: 'Утренний ритуал',
+        subtitle: 'План на 20–30 минут под ваши цели',
+        href: (`/home/pro/morning${linkSuffix}` as Route),
+        variant: 'pro',
+      },
+      {
         icon: '🎬',
         title: 'Выбрать фильм/сериал',
         subtitle: 'Персональный подбор — быстро и качественно',
