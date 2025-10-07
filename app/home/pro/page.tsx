@@ -1,4 +1,3 @@
-// app/home/pro/page.tsx
 'use client';
 
 import { useEffect, useMemo } from 'react';
@@ -9,16 +8,21 @@ import type { Route } from 'next';
 export default function ProHub() {
   useEffect(() => {
     const w: any = window;
-    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
+    try {
+      w?.Telegram?.WebApp?.ready?.();
+      w?.Telegram?.WebApp?.expand?.();
+    } catch {}
   }, []);
 
-  // пробрасываем ?id= чтобы не терять дебаг/Pro в ссылках
+  // Пробрасываем ?id= чтобы не терять дебаг/Pro в ссылках
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
       const id = u.searchParams.get('id');
       return id ? `?id=${encodeURIComponent(id)}` : '';
-    } catch { return ''; }
+    } catch {
+      return '';
+    }
   }, []);
 
   return (
@@ -27,34 +31,16 @@ export default function ProHub() {
 
       <h1 style={{ textAlign: 'center' }}>Ежедневные задачи — Pro</h1>
       <p className="lm-subtitle" style={{ textAlign: 'center' }}>
-        Хаб инструментов. Наполняем блоки по мере готовности.
+        Ежедневные инструменты для вашего удобства.
       </p>
 
       <div className="lm-grid" style={{ marginTop: 16 }}>
-        {/* Переписать текст — заглушка */}
-        <CardLink
-          disabled
-          icon="📝"
-          title="Переписать текст"
-          subtitle="Изложение проще, короче или официальнее"
-          variant="default"
-        />
-
-        {/* План на день — заглушка */}
-        <CardLink
-          disabled
-          icon="📅"
-          title="План на день"
-          subtitle="Список задач и приоритеты из вашего описания"
-          variant="default"
-        />
-
-        {/* Готовая функция: подбор фильма/сериала */}
+        {/* Оставляем только готовую функцию: подбор фильма/сериала */}
         <CardLink
           href={`/home/pro/cinema${linkSuffix}` as Route}
           icon="🎬"
           title="Выбрать фильм/сериал"
-          subtitle="Персональный подбор - быстро и качественно"
+          subtitle="Персональный подбор — быстро и качественно"
           variant="pro"
         />
       </div>
