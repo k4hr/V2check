@@ -19,13 +19,14 @@ function norm(s: string) {
 
 export default function ProHub() {
   const [query, setQuery] = useState('');
-  const ui = UI_STRINGS.ru; // можно переключить на en при необходимости
+  const ui = UI_STRINGS.ru;
 
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
+  // пробрасываем ?id= чтобы не терять дебаг/Pro в ссылках
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -34,6 +35,7 @@ export default function ProHub() {
     } catch { return ''; }
   }, []);
 
+  // Префил из ?q=
   useEffect(() => {
     try {
       const u = new URL(window.location.href);
@@ -72,16 +74,22 @@ export default function ProHub() {
     <main className="lm-wrap">
       <BackBtn fallback="/home" />
 
+      {/* Заголовок: всегда в одну строку, уменьшается, если не влезает */}
       <h1
         style={{
           textAlign: 'center',
           whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          overflow: 'visible',
+          textOverflow: 'clip',
+          // 18px минимум (узкие экраны), 28px максимум (широкие); 6vw — плавная адаптация
+          fontSize: 'clamp(18px, 6vw, 28px)',
+          lineHeight: 1.15,
+          margin: 0,
         }}
       >
         Ежедневные задачи
       </h1>
+
       <p className="lm-subtitle" style={{ textAlign: 'center' }}>
         {ui.chooseTool}
       </p>
