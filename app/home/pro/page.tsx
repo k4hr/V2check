@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import BackBtn from '../../components/BackBtn';
-import CardLink from '@/components/CardLink';
+import CardLink, { UI_STRINGS } from '@/components/CardLink';
 import type { Route } from 'next';
 
 type ToolItem = {
@@ -19,27 +19,21 @@ function norm(s: string) {
 
 export default function ProHub() {
   const [query, setQuery] = useState('');
+  const ui = UI_STRINGS.ru; // можно переключить на en при необходимости
 
   useEffect(() => {
     const w: any = window;
-    try {
-      w?.Telegram?.WebApp?.ready?.();
-      w?.Telegram?.WebApp?.expand?.();
-    } catch {}
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // пробрасываем ?id= чтобы не терять дебаг/Pro в ссылках
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
       const id = u.searchParams.get('id');
       return id ? `?id=${encodeURIComponent(id)}` : '';
-    } catch {
-      return '';
-    }
+    } catch { return ''; }
   }, []);
 
-  // Префил из ?q=
   useEffect(() => {
     try {
       const u = new URL(window.location.href);
@@ -57,7 +51,6 @@ export default function ProHub() {
         href: (`/home/pro/cinema${linkSuffix}` as Route),
         variant: 'pro',
       },
-      // Добавляйте новые инструменты сюда по мере готовности
     ],
     [linkSuffix]
   );
@@ -79,17 +72,27 @@ export default function ProHub() {
     <main className="lm-wrap">
       <BackBtn fallback="/home" />
 
-      <h1 style={{ textAlign: 'center' }}>Ежедневные задачи — Pro</h1>
+      <h1
+        style={{
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        Ежедневные задачи
+      </h1>
       <p className="lm-subtitle" style={{ textAlign: 'center' }}>
-        Выберите инструмент
+        {ui.chooseTool}
       </p>
 
-      {/* Быстрый поиск — идентичен Pro+ */}
+      {/* Поиск — строки из словаря */}
       <div style={{ marginTop: 12 }}>
         <input
           type="search"
           inputMode="search"
-          placeholder="Поиск по инструментам…"
+          placeholder={ui.searchPlaceholder}
+          aria-label={ui.searchAria}
           value={query}
           onChange={onInput}
           style={{
@@ -106,7 +109,7 @@ export default function ProHub() {
 
       <div className="lm-grid" style={{ marginTop: 14 }}>
         {filtered.length === 0 ? (
-          <div className="empty">Ничего не найдено</div>
+          <div className="empty">{ui.notFound}</div>
         ) : (
           filtered.map((t, i) => (
             <CardLink
