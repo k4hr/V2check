@@ -54,6 +54,27 @@ export default function ProHub() {
         variant: 'pro',
       },
       {
+        icon: '📆',
+        title: 'План на неделю',
+        subtitle: 'Организуем с легкостью...',
+        href: (`/home/pro/weekly-plan${linkSuffix}` as Route),
+        variant: 'pro',
+      },
+      {
+        icon: '⏳',
+        title: 'Таймблоки дня',
+        subtitle: 'Спланированный день без суеты',
+        href: (`/home/pro/time-blocks${linkSuffix}` as Route),
+        variant: 'pro',
+      },
+      {
+        icon: '🧽',
+        title: 'Быстрая уборка дома',
+        subtitle: 'Наверное стоит собраться... И прибраться!',
+        href: (`/home/pro/quick-cleaning${linkSuffix}` as Route),
+        variant: 'pro',
+      },
+      {
         icon: '🎬',
         title: 'Выбрать фильм/сериал',
         subtitle: 'Персональный подбор — быстро и качественно',
@@ -77,6 +98,8 @@ export default function ProHub() {
     []
   );
 
+  const clear = useCallback(() => setQuery(''), []);
+
   return (
     <main className="lm-wrap">
       <BackBtn fallback="/home" />
@@ -88,7 +111,6 @@ export default function ProHub() {
           whiteSpace: 'nowrap',
           overflow: 'visible',
           textOverflow: 'clip',
-          // 18px минимум (узкие экраны), 28px максимум (широкие); 6vw — плавная адаптация
           fontSize: 'clamp(18px, 6vw, 28px)',
           lineHeight: 1.15,
           margin: 0,
@@ -102,7 +124,7 @@ export default function ProHub() {
       </p>
 
       {/* Поиск — строки из словаря */}
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 12, position: 'relative' }}>
         <input
           type="search"
           inputMode="search"
@@ -120,6 +142,21 @@ export default function ProHub() {
             outline: 'none'
           }}
         />
+        {query ? (
+          <button
+            onClick={clear}
+            aria-label="Очистить"
+            style={{
+              position: 'absolute',
+              right: 8, top: '50%', transform: 'translateY(-50%)',
+              width: 28, height: 28, borderRadius: 999,
+              border: 0, background: 'rgba(255,255,255,.12)',
+              color: 'inherit', fontSize: 18, lineHeight: '28px'
+            }}
+          >
+            ×
+          </button>
+        ) : null}
       </div>
 
       <div className="lm-grid" style={{ marginTop: 14 }}>
