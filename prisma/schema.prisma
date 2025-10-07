@@ -28,6 +28,22 @@ model User {
   favorites         Favorite[]
   cases             Case[]
   payments          Payment[]
+  usageDaily        UsageDaily[]
+}
+
+// ============ Суточный учёт запросов ============
+model UsageDaily {
+  id        String   @id @default(cuid())
+  userId    String
+  date      String   // YYYY-MM-DD (UTC)
+  used      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date], name: "usage_user_date_unique")
+  @@index([date])
 }
 
 // ============ Favorites ============
