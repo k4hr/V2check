@@ -13,13 +13,22 @@ const TITLES: Record<Plan, string> = {
   YEAR: 'Pro+ — Год',
 };
 
-type PayMethod = 'stars' | 'crypto';
+function Star({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z" fill="currentColor" />
+    </svg>
+  );
+}
 
 export default function ProMaxPage() {
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [method, setMethod] = useState<PayMethod>('stars');
+
+  // Crypto Pay
+  const [planCrypto, setPlanCrypto] = useState<Plan>('MONTH');
+  const [busyCrypto, setBusyCrypto] = useState(false);
 
   const prices = useMemo(() => getPrices(tier), []);
 
@@ -46,21 +55,16 @@ export default function ProMaxPage() {
     } catch {}
   }, []);
 
-  async function buy(plan: Plan) {
+  async function buyStars(plan: Plan) {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
     try {
-      const endpoint =
-        method === 'crypto'
-          ? `/api/pay/cryptopay/createInvoice?tier=${tier}&plan=${plan}`
-          : `/api/createInvoice?tier=${tier}&plan=${plan}`;
-
-      const res = await fetch(endpoint, { method: 'POST' });
+      const res = await fetch(`/api/createInvoice?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, link, error } = await res.json();
       if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
 
       const tg: any = (window as any).Telegram?.WebApp;
-      if (tg?.openInvoice && method === 'stars') tg.openInvoice(link, () => {});
+      if (tg?.openInvoice) tg.openInvoice(link, () => {});
       else if (tg?.openTelegramLink) tg.openTelegramLink(link);
       else window.location.href = link;
     } catch (e: any) {
@@ -70,85 +74,171 @@ export default function ProMaxPage() {
     }
   }
 
+  async function buyCrypto() {
+    if (busyCrypto) return;
+    setBusyCrypto(true); setMsg(null); setInfo(null);
+    try {
+      const res = await fetch(`/api/pay/cryptopay/createInvoice?tier=${tier}&plan=${planCrypto}`, { method: 'POST' });
+      const { ok, link, error, detail } = await res.json();
+      if (!ok || !link) throw new Error(error || detail || 'cryptopay:createInvoice failed');
+
+      const tg: any = (window as any).Telegram?.WebApp;
+      if (tg?.openTelegramLink) tg.openTelegramLink(link);
+      else window.location.href = link;
+    } catch (e: any) {
+      setMsg(String(e?.message || 'Crypto Pay error'));
+    } finally {
+      setBusyCrypto(false);
+    }
+  }
+
   const entries = Object.entries(prices) as [Plan, typeof prices[Plan]][];
 
   return (
     <main>
-      <div className="safe" style={{ maxWidth: 600, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14, padding: 20 }}>
+      <div className="safe">
         {/* Назад */}
         <button
           type="button"
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
-          className="list-btn"
-          style={{ width: 120, padding: '10px 14px', borderRadius: 12, background: '#171a21', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}
+          className="back"
         >
-          <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
-          <span style={{ fontWeight: 600 }}>Назад</span>
+          <span>←</span><b>Назад</b>
         </button>
 
-        <h1 style={{ textAlign: 'center' }}>LiveManager Pro+ — оплата</h1>
-        {msg && <p style={{ color: 'crimson', textAlign: 'center' }}>{msg}</p>}
-        {info && <p style={{ opacity: .7, textAlign: 'center' }}>{info}</p>}
+        <h1 className="title">LiveManager Pro+ — оплата</h1>
+        {msg && <p className="err">{msg}</p>}
+        {info && <p className="info">{info}</p>}
 
-        <div style={{ display: 'grid', gap: 12 }}>
+        {/* Stars */}
+        <div className="list">
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
             return (
               <button
                 key={key}
                 disabled={!can}
-                onClick={() => buy(key)}
-                className="list-btn"
-                style={{
-                  width: '100%',
-                  border: '1px solid #333',
-                  borderRadius: 14,
-                  padding: '14px 18px',
-                  opacity: can ? 1 : .6,
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 120px',
-                  alignItems: 'center',
-                  columnGap: 12,
-                }}
+                onClick={() => buyStars(key)}
+                className="row"
+                aria-label={`${TITLES[key]} — ${cfg.amount} звёзд`}
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  <span className="list-btn__emoji" aria-hidden>✨</span>
-                  <b style={{ whiteSpace: 'nowrap' }}>{TITLES[key]}</b>
+                <span className="left">
+                  <span className="dot">✨</span>
+                  <b className="name">{TITLES[key]}</b>
                 </span>
-
-                <span className="list-btn__right" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontVariantNumeric: 'tabular-nums' }}>
-                  <span>{cfg.amount}</span>
-                  <span aria-hidden>{method === 'crypto' ? '🪙' : '⭐'}</span>
-                  <span className="list-btn__chev">›</span>
+                <span className="right">
+                  <span className="price">{cfg.amount}</span>
+                  <span className="star" aria-hidden><Star size={16} /></span>
+                  <span className="chev">›</span>
                 </span>
               </button>
             );
           })}
         </div>
 
-        {/* Переключатель метода оплаты вместо текста внизу */}
-        <div style={{ marginTop: 'auto' }}>
+        {/* Crypto Pay */}
+        <div className="crypto-card">
+          <div className="crypto-header">
+            <span className="crypto-icon">✨</span>
+            <div className="crypto-text">
+              <b className="crypto-title">Оплатить через Crypto&nbsp;Pay</b>
+              <small className="crypto-sub">TON/USDT — безопасно и быстро</small>
+            </div>
+          </div>
+
+          <div className="seg">
+            {(['WEEK','MONTH','HALF_YEAR','YEAR'] as Plan[]).map(p => (
+              <button
+                key={p}
+                className={`seg__btn ${planCrypto === p ? 'is-active' : ''}`}
+                onClick={() => setPlanCrypto(p)}
+                type="button"
+              >
+                {TITLES[p].split('— ')[1]}
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
-            onClick={() => setMethod(m => (m === 'stars' ? 'crypto' : 'stars'))}
-            style={{
-              width: '100%',
-              marginTop: 20,
-              padding: '14px 16px',
-              borderRadius: 14,
-              border: '1px solid rgba(255,191,73,.45)',
-              background: method === 'crypto'
-                ? 'linear-gradient(180deg, rgba(255,210,120,.18), rgba(255,210,120,.06))'
-                : 'linear-gradient(180deg, rgba(255,191,73,.18), rgba(255,191,73,.06))',
-              boxShadow:
-                '0 10px 28px rgba(255,191,73,.18), inset 0 0 0 1px rgba(255,191,73,.10)',
-              fontWeight: 700
-            }}
+            onClick={buyCrypto}
+            disabled={busyCrypto}
+            className="crypto-cta"
           >
-            {method === 'crypto' ? 'Оплата через Crypto Pay' : 'Оплата Stars в Telegram'}
+            {busyCrypto ? 'Создаём счёт…' : `Оплатить (${TITLES[planCrypto].split('— ')[1]})`}
           </button>
         </div>
       </div>
+
+      <style jsx>{`
+        .safe { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding: 20px; }
+        .title { text-align: center; margin: 6px 0 2px; }
+        .err { color: #ff4d6d; text-align: center; }
+        .info { opacity: .7; text-align: center; }
+        .back {
+          width: 120px; padding: 10px 14px; border-radius: 12px;
+          background:#171a21; border:1px solid var(--border);
+          display:flex; align-items:center; gap:8px;
+        }
+        .list { display: grid; gap: 12px; }
+        .row {
+          width: 100%; border: 1px solid #333; border-radius: 14px;
+          padding: 14px 18px; display: grid; grid-template-columns: 1fr auto;
+          align-items: center; column-gap: 12px; background: #121621;
+        }
+        .left { display:flex; align-items:center; gap:10px; min-width:0; }
+        .name { white-space: nowrap; }
+        .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
+        .star :global(svg){ display:block; }
+        .chev { opacity:.6; }
+
+        /* Crypto card (золото, но весь текст белый) */
+        .crypto-card {
+          margin-top: 6px;
+          padding: 14px;
+          border-radius: 16px;
+          background: radial-gradient(120% 140% at 10% 0%, rgba(255,210,120,.18), rgba(255,255,255,.03));
+          border: 1px solid rgba(255,210,120,.30);
+          box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
+          display:flex; flex-direction:column; gap:12px;
+          color:#fff;
+        }
+        .crypto-header { display:flex; gap:10px; align-items:center; }
+        .crypto-icon {
+          width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
+          background: rgba(255,210,120,.24); border: 1px solid rgba(255,210,120,.36);
+          color:#fff;
+        }
+        .crypto-text { line-height: 1.15; }
+        .crypto-title {
+          display:block;
+          white-space: nowrap;
+          color:#fff;
+          font-weight: 800;
+          letter-spacing: .2px;
+        }
+        .crypto-sub {
+          display:block;
+          margin-top: 4px;
+          color: rgba(255,255,255,.85);
+          font-size: 13px;
+        }
+
+        .seg { display:flex; gap:8px; flex-wrap:wrap; }
+        .seg__btn {
+          padding:8px 12px; border-radius:12px; background:#121722; border:1px solid rgba(255,255,255,.08);
+          color:#fff;
+        }
+        .seg__btn.is-active { border-color: rgba(255,210,120,.7); box-shadow: inset 0 0 0 1px rgba(255,210,120,.35); }
+        .crypto-cta {
+          width: 100%; padding: 14px 16px; border-radius: 14px;
+          background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
+          border: 1px solid rgba(255,191,73,.55);
+          box-shadow: 0 12px 36px rgba(255,191,73,.28);
+          font-weight: 700;
+          color:#fff;
+        }
+      `}</style>
     </main>
   );
 }
