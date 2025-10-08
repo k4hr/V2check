@@ -13,10 +13,13 @@ const TITLES: Record<Plan, string> = {
   YEAR: 'Pro+ — Год',
 };
 
+type PayMethod = 'stars' | 'crypto';
+
 export default function ProMaxPage() {
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [method, setMethod] = useState<PayMethod>('stars');
 
   const prices = useMemo(() => getPrices(tier), []);
 
@@ -47,12 +50,17 @@ export default function ProMaxPage() {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/createInvoice?tier=${tier}&plan=${plan}`, { method: 'POST' });
+      const endpoint =
+        method === 'crypto'
+          ? `/api/pay/cryptopay/createInvoice?tier=${tier}&plan=${plan}`
+          : `/api/createInvoice?tier=${tier}&plan=${plan}`;
+
+      const res = await fetch(endpoint, { method: 'POST' });
       const { ok, link, error } = await res.json();
       if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
 
       const tg: any = (window as any).Telegram?.WebApp;
-      if (tg?.openInvoice) tg.openInvoice(link, () => {});
+      if (tg?.openInvoice && method === 'stars') tg.openInvoice(link, () => {});
       else if (tg?.openTelegramLink) tg.openTelegramLink(link);
       else window.location.href = link;
     } catch (e: any) {
@@ -98,21 +106,19 @@ export default function ProMaxPage() {
                   padding: '14px 18px',
                   opacity: can ? 1 : .6,
                   display: 'grid',
-                  gridTemplateColumns: '1fr 120px', // лево | правая фикс-колонка
+                  gridTemplateColumns: '1fr 120px',
                   alignItems: 'center',
                   columnGap: 12,
                 }}
               >
-                {/* Лево: иконка + название */}
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span className="list-btn__emoji" aria-hidden>✨</span>
                   <b style={{ whiteSpace: 'nowrap' }}>{TITLES[key]}</b>
                 </span>
 
-                {/* Право: цена + ⭐ + стрелка */}
                 <span className="list-btn__right" style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontVariantNumeric: 'tabular-nums' }}>
                   <span>{cfg.amount}</span>
-                  <span aria-hidden>⭐</span>
+                  <span aria-hidden>{method === 'crypto' ? '🪙' : '⭐'}</span>
                   <span className="list-btn__chev">›</span>
                 </span>
               </button>
@@ -120,13 +126,27 @@ export default function ProMaxPage() {
           })}
         </div>
 
+        {/* Переключатель метода оплаты вместо текста внизу */}
         <div style={{ marginTop: 'auto' }}>
-          <p style={{ fontSize: 12, opacity: .55, textAlign: 'center', marginTop: 24 }}>
-            Подтверждая, вы соглашаетесь с <a href="/terms" style={{ textDecoration: 'underline' }}>условиями подписки</a>.
-          </p>
-          <p style={{ fontSize: 12, opacity: .55, textAlign: 'center' }}>
-            Также ознакомьтесь с <a href="/legal" style={{ textDecoration: 'underline' }}>правовой информацией</a>.
-          </p>
+          <button
+            type="button"
+            onClick={() => setMethod(m => (m === 'stars' ? 'crypto' : 'stars'))}
+            style={{
+              width: '100%',
+              marginTop: 20,
+              padding: '14px 16px',
+              borderRadius: 14,
+              border: '1px solid rgba(255,191,73,.45)',
+              background: method === 'crypto'
+                ? 'linear-gradient(180deg, rgba(255,210,120,.18), rgba(255,210,120,.06))'
+                : 'linear-gradient(180deg, rgba(255,191,73,.18), rgba(255,191,73,.06))',
+              boxShadow:
+                '0 10px 28px rgba(255,191,73,.18), inset 0 0 0 1px rgba(255,191,73,.10)',
+              fontWeight: 700
+            }}
+          >
+            {method === 'crypto' ? 'Оплата через Crypto Pay' : 'Оплата Stars в Telegram'}
+          </button>
         </div>
       </div>
     </main>
