@@ -1,93 +1,75 @@
 // app/api/pay/cryptopay/createInvoice/route.ts
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
-import { getPrices, resolvePlan, resolveTier, type Plan, type Tier } from '@/lib/pricing';
+import { NextResponse, type NextRequest } from 'next/server';
+import { getPrices, resolvePlan, resolveTier, type Tier, type Plan } from '@/lib/pricing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const CRYPTO_PAY_TOKEN      = (process.env.CRYPTO_PAY_TOKEN || '').trim(); // токен мерчанта из @CryptoBot
-const CRYPTO_DEFAULT_ASSET  = (process.env.CRYPTO_DEFAULT_ASSET || 'TON').trim().toUpperCase(); // 'TON' | 'USDT' ...
-const USD_PER_STAR          = Number(process.env.USD_PER_STAR || 0.01); // сколько USD считаем за 1 Star
-const TON_USD_RATE          = Number(process.env.TON_USD_RATE || 5);    // курс TON->USD (руками/кроной обновляем)
+// ENV
+const CP_TOKEN   = process.env.CRYPTO_PAY_TOKEN || '';                  // из @CryptoBot → Crypto Pay → Create App
+const CP_API     = process.env.CRYPTO_PAY_API_BASE || 'https://pay.crypt.bot/api';
+const CP_ASSET   = (process.env.CRYPTO_PAY_ASSET || 'TON').toUpperCase(); // TON | USDT | USDC | BTC | ETH
+// во что конвертируем “звёзды”: amount = stars * MULTIPLIER (пример: 0.01 → 399⭐ = 3.99 TON)
+const MULTIPLIER = Number(process.env.CRYPTO_PAY_AMOUNT_PER_STAR || '0.01');
 
-type CreateInvoiceResp = {
-  ok: boolean;
-  result?: {
-    invoice_id: string;
-    status: string;
-    pay_url: string;
-    bot_invoice_url?: string;
-  };
-  description?: string;
-};
-
-function starsToAssetAmount(stars: number, asset: string): string {
-  const usd = stars * USD_PER_STAR;
-  if (asset === 'USDT') return usd.toFixed(2);
-  if (asset === 'TON')  return (usd / (TON_USD_RATE || 5)).toFixed(4);
-  // по умолчанию считаем как USD-токен
-  return usd.toFixed(2);
+function toFixedAmount(n: number) {
+  // TON/USDT спокойно принимают 2 знака; ограничим до 2-х.
+  return n.toFixed(2);
 }
 
 export async function POST(req: NextRequest) {
   try {
-    if (!CRYPTO_PAY_TOKEN) {
+    if (!CP_TOKEN) {
       return NextResponse.json({ ok: false, error: 'CRYPTO_PAY_TOKEN_MISSING' }, { status: 500 });
     }
 
     let body: any = null;
     try { body = await req.json(); } catch {}
-
     const url = new URL(req.url);
 
-    // совместимость: и body, и query
-    const tier: Tier = resolveTier(body?.tier || url.searchParams.get('tier') || 'PRO');
-    const plan: Plan = resolvePlan(body?.plan || url.searchParams.get('plan') || 'MONTH');
+    const tier: Tier  = resolveTier(body?.tier || url.searchParams.get('tier') || 'PRO');
+    const plan: Plan  = resolvePlan(body?.plan || url.searchParams.get('plan') || 'MONTH');
+    const price       = getPrices(tier)[plan];
 
-    // пробросим telegramId (как и в других эндпоинтах) через ?id=
-    const tgId = (body?.id || url.searchParams.get('id') || '').trim();
+    // Конвертация “звёзд” → крипто-сумма по вашему правилу
+    const amountStr = toFixedAmount(price.stars * MULTIPLIER);
+    const payload   = `subs2:${tier}:${plan}`;
 
-    // выставляем цены
-    const price = getPrices(tier)[plan];
-    const asset = String((body?.asset || url.searchParams.get('asset') || CRYPTO_DEFAULT_ASSET)).toUpperCase();
-    const amount = starsToAssetAmount(price.stars, asset);
-
-    // payload: чтобы в вебхуке понять тариф/план и пользователя
-    // формат: cpay:subs2:TIER:PLAN[:TGID]
-    const payload = `cpay:subs2:${tier}:${plan}${tgId ? `:${tgId}` : ''}`;
-
-    const res = await fetch('https://pay.crypt.bot/api/createInvoice', {
+    const res = await fetch(`${CP_API}/createInvoice`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Crypto-Pay-API-Token': CRYPTO_PAY_TOKEN,
+        'Crypto-Pay-API-Token': CP_TOKEN,     // <-- правильный заголовок
       },
       body: JSON.stringify({
-        asset,               // 'TON' | 'USDT' ...
-        amount,              // строка, 2..8 знаков после запятой
+        asset: CP_ASSET,                      // TON/USDT/…
+        amount: amountStr,                    // строкой, например "3.99"
         description: price.title,
-        payload,             // вернётся в вебхук как есть
+        payload,                              // вернётся в webhook
         allow_anonymous: true,
-        expires_in: 3600 * 24, // сутки
+        allow_comments: false,
+        // paid_btn_name: 'callback',         // опционально
+        // paid_btn_url:  'https://…',        // опционально
       }),
     });
 
-    const data = (await res.json().catch(() => ({}))) as CreateInvoiceResp;
+    const data: any = await res.json().catch(() => null);
+
     if (!data?.ok || !data?.result?.pay_url) {
-      const detail = data?.description || 'Crypto Pay createInvoice failed';
-      return NextResponse.json({ ok: false, error: detail, detail: data }, { status: 502 });
+      const detail = data?.error || data?.description || `HTTP_${res.status}`;
+      return NextResponse.json(
+        { ok: false, error: `cryptopay:createInvoice failed`, detail, request: { asset: CP_ASSET, amount: amountStr, tier, plan } },
+        { status: 502 },
+      );
     }
 
     return NextResponse.json({
       ok: true,
-      pay_url: data.result.pay_url,
+      link: data.result.pay_url,             // это то, что надо открывать
       invoice_id: data.result.invoice_id,
-      asset,
-      tier,
-      plan,
-      stars: price.stars,
-      amount_asset: amount,
+      tier, plan,
+      asset: CP_ASSET,
+      amount: amountStr,
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
