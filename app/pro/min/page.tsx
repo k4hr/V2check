@@ -144,8 +144,8 @@ export default function ProMinPage() {
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
             <div className="crypto-text">
-              <b>Оплатить через Crypto&nbsp;Pay</b>
-              <span>TON/USDT — безопасно и быстро</span>
+              <b className="crypto-title">Оплатить через Crypto&nbsp;Pay</b>
+              <small className="crypto-sub">TON/USDT — безопасно и быстро</small>
             </div>
           </div>
 
@@ -195,6 +195,7 @@ export default function ProMinPage() {
         .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
+
         /* Crypto card */
         .crypto-card {
           margin-top: 6px;
@@ -204,16 +205,33 @@ export default function ProMinPage() {
           border: 1px solid rgba(120,170,255,.18);
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
           display:flex; flex-direction:column; gap:12px;
+          color: #fff; /* базовый белый внутри карточки */
         }
         .crypto-header { display:flex; gap:10px; align-items:center; }
         .crypto-icon {
           width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
           background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
+          color:#fff;
         }
-        .crypto-text span { opacity:.75; font-size: 13px; }
+        .crypto-text { line-height: 1.15; }
+        .crypto-title {
+          display:block;
+          white-space: nowrap; /* в одну строку */
+          color:#fff;
+          font-weight: 800;
+          letter-spacing: .2px;
+        }
+        .crypto-sub {
+          display:block;
+          margin-top: 4px;
+          color: rgba(255,255,255,.85); /* белый, но чуть мягче */
+          font-size: 13px;
+        }
+
         .seg { display:flex; gap:8px; flex-wrap:wrap; }
         .seg__btn {
           padding:8px 12px; border-radius:12px; background:#121722; border:1px solid rgba(255,255,255,.08);
+          color:#fff;
         }
         .seg__btn.is-active { border-color: rgba(120,170,255,.5); box-shadow: inset 0 0 0 1px rgba(120,170,255,.25); }
         .crypto-cta {
@@ -222,6 +240,7 @@ export default function ProMinPage() {
           border: 1px solid rgba(120,170,255,.45);
           box-shadow: 0 12px 36px rgba(90,140,255,.28);
           font-weight: 700;
+          color:#fff;
         }
       `}</style>
     </main>
