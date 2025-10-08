@@ -1,4 +1,3 @@
-// /lib/tma/AIChatClient.tsx
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -20,11 +19,11 @@ export type AIChatClientProps = {
   title: string;
   subtitle?: string;
   initialAssistant: string;
-  systemPrompt: string;     // ВАЖНО: импортируешь из ./prompt
-  mode: string;             // например 'pro-cinema'
-  backHref?: Route;         // по умолчанию '/home'
-  maxAttach?: number;       // по умолчанию 10
-  passthroughIdParam?: boolean; // пробрасывать ?id= к API, по умолчанию true
+  systemPrompt: string;          // импортируешь из ./prompt
+  mode: string;                  // например 'pro-cinema'
+  backHref?: Route;              // по умолчанию '/home'
+  maxAttach?: number;            // по умолчанию 10 (0 — скрыть вложения)
+  passthroughIdParam?: boolean;  // пробрасывать ?id= к API, по умолчанию true
 };
 
 const MAX_ATTACH_DEFAULT = 10;
@@ -44,6 +43,8 @@ export default function AIChatClient(props: AIChatClientProps) {
     maxAttach = MAX_ATTACH_DEFAULT,
     passthroughIdParam = true,
   } = props;
+
+  const allowAttach = maxAttach > 0;
 
   const [messages, setMessages] = useState<Msg[]>([
     { role: 'system', content: systemPrompt },
@@ -120,14 +121,13 @@ export default function AIChatClient(props: AIChatClientProps) {
     setLoading(true);
     setUploading(true);
 
+    // показываем «пользовательское» сообщение
     setMessages(m => [
       ...m,
-      { role: 'user',
-        content: (t || '(сообщение без текста)') +
-          (attach.length ? `\n📎 Вложений: ${attach.length}` : '')
-      },
+      { role: 'user', content: (t || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') },
     ]);
 
+    // 1) Аплоад вложений
     const uploadedUrls: string[] = [];
     try {
       for (let i = 0; i < attach.length; i++) {
@@ -155,36 +155,31 @@ export default function AIChatClient(props: AIChatClientProps) {
         if (!res.ok || !data?.url) throw new Error(data?.error || 'Upload failed');
 
         uploadedUrls.push(String(data.url));
-        setAttach(prev =>
-          prev.map(x => (x.id === it.id ? { ...x, status: 'done', uploadedUrl: data.url } : x)),
-        );
+        setAttach(prev => prev.map(x => (x.id === it.id ? { ...x, status: 'done', uploadedUrl: data.url } : x)));
       }
     } catch (e: any) {
       setAttach(prev => {
         if (!prev.length) return prev;
         const last = prev[prev.length - 1];
-        return prev.map(x =>
-          x.id === last.id ? { ...x, status: 'error', errMsg: String(e?.message || 'Ошибка') } : x
-        );
+        return prev.map(x => x.id === last.id ? { ...x, status: 'error', errMsg: String(e?.message || 'Ошибка') } : x);
       });
-      setMessages(m => [...m, { role: 'assistant',
-        content: 'Не удалось загрузить все вложения. Попробуем ещё раз?' }]);
+      setMessages(m => [...m, { role: 'assistant', content: 'Не удалось загрузить все вложения. Попробуем ещё раз?' }]);
       setUploading(false);
       setLoading(false);
       return;
     }
 
+    // 2) Запрос ассистенту
     const imagesNote = uploadedUrls.length
       ? '\n\nПрикреплённые изображения:\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
       : '';
     const promptText = (t || '') + imagesNote;
 
     try {
-      const history = [
-        { role: 'system', content: systemPrompt },
-        ...messages.filter(m => m.role !== 'system'),
-        { role: 'user', content: promptText } as Msg,
-      ].slice(-20) as Msg[];
+      // ВАЖНО: не добавляем сюда новое user-сообщение — сервер сам добавит prompt.
+      const history = messages
+        .filter(m => m.role !== 'system')
+        .slice(-20) as Msg[];
 
       const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
@@ -197,16 +192,13 @@ export default function AIChatClient(props: AIChatClientProps) {
         const reply = String(data.answer || '').trim();
         setMessages(m => [...m, { role: 'assistant', content: reply || 'Готово. Продолжим?' }]);
       } else if (data?.error === 'FREE_LIMIT_REACHED') {
-        const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). ` +
-                    `Оформите Pro или попробуйте завтра.`;
+        const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
       } else {
-        setMessages(m => [...m, { role: 'assistant',
-          content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
+        setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
       }
     } catch {
-      setMessages(m => [...m, { role: 'assistant',
-        content: 'Не получилось получить ответ. Попробуем ещё раз?' }]);
+      setMessages(m => [...m, { role: 'assistant', content: 'Не получилось получить ответ. Попробуем ещё раз?' }]);
     } finally {
       setLoading(false);
       setUploading(false);
@@ -274,7 +266,7 @@ export default function AIChatClient(props: AIChatClientProps) {
         ))}
         {(loading || uploading) && (
           <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>
-            {uploading ? 'Думаю...' : 'Думаю…'}
+            {uploading ? 'Загружаем вложения…' : 'ИИ печатает…'}
           </div>
         )}
       </div>
@@ -307,9 +299,7 @@ export default function AIChatClient(props: AIChatClientProps) {
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={a.previewUrl} alt="" style={{
-                width: '100%', height: '100%', objectFit: 'cover'
-              }} />
+              <img src={a.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               <button
                 type="button"
                 aria-label="Удалить"
@@ -324,99 +314,6 @@ export default function AIChatClient(props: AIChatClientProps) {
                 ×
               </button>
               {a.status === 'uploading' && (
-                <div style={{
-                  position: 'absolute', left: 0, right: 0, bottom: 0,
-                  height: 5, background: 'rgba(255,255,255,.25)'
-                }} />
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 5, background: 'rgba(255,255,255,.25)' }} />
               )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Нижняя панель */}
-      <div
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr auto',
-          gap: 6,
-          alignItems: 'center',
-          padding: 8,
-          borderRadius: 16,
-          background: 'rgba(9, 13, 22, 0.7)',
-          backdropFilter: 'saturate(160%) blur(12px)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
-        }}
-      >
-        {/* плюс */}
-        <button
-          type="button"
-          onClick={() => pickerRef.current?.click()}
-          aria-label="Прикрепить"
-          disabled={attach.length >= maxAttach || uploading || loading}
-          title={attach.length >= maxAttach ? `Достигнут лимит ${maxAttach} фото` : 'Прикрепить изображения'}
-          style={{
-            width: 40, height: 40, borderRadius: 10,
-            border: '1px solid #2b3552', background: '#121722',
-            display: 'grid', placeItems: 'center',
-            fontSize: 22, lineHeight: 1,
-            opacity: attach.length >= maxAttach ? .5 : 1
-          }}
-        >
-          +
-        </button>
-
-        <input
-          ref={pickerRef}
-          type="file"
-          accept="image/*"
-          multiple
-          style={{ display: 'none' }}
-          onChange={(e) => addFilesFromPicker(e.target.files)}
-        />
-
-        <input
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-          placeholder="Я вас слушаю..."
-          style={{
-            height: 40,
-            padding: '0 12px',
-            borderRadius: 12,
-            border: '1px solid #2b3552',
-            background: '#121722',
-            color: 'var(--fg)',
-            fontSize: 16,
-            outline: 'none',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        />
-
-        <button
-          onClick={send}
-          disabled={(loading || uploading) || (!norm(text) && !attach.length)}
-          aria-label="Отправить"
-          title="Отправить"
-          style={{
-            width: 40, height: 40, borderRadius: 10,
-            border: '1px solid #2b3552',
-            background: '#121722',
-            color: 'var(--fg)',
-            fontSize: 20, lineHeight: 1,
-            display: 'grid',
-            placeItems: 'center',
-            opacity: (loading || uploading) || (!norm(text) && !attach.length) ? .6 : 1
-          }}
-        >
-          ↑
-        </button>
-      </div>
-    </main>
-  );
-}
+            </div
