@@ -1,3 +1,4 @@
+// app/home/pro/page.tsx
 'use client';
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
@@ -26,7 +27,7 @@ export default function ProHub() {
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // пробрасываем ?id= чтобы не терять дебаг/Pro в ссылках
+  // пробрасываем ?id=
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -46,41 +47,31 @@ export default function ProHub() {
 
   const tools = useMemo<ToolItem[]>(
     () => [
-      {
-        icon: '🌅',
-        title: 'Утренний ритуал',
-        subtitle: 'План на 20–30 минут под ваши цели',
-        href: (`/home/pro/morning${linkSuffix}` as Route),
-        variant: 'pro',
-      },
-      {
-        icon: '📆',
-        title: 'План на неделю',
-        subtitle: 'Организуем с легкостью...',
-        href: (`/home/pro/weekly-plan${linkSuffix}` as Route),
-        variant: 'pro',
-      },
-      {
-        icon: '⏳',
-        title: 'Таймблоки дня',
-        subtitle: 'Спланированный день без суеты',
-        href: (`/home/pro/time-blocks${linkSuffix}` as Route),
-        variant: 'pro',
-      },
-      {
-        icon: '🧽',
-        title: 'Быстрая уборка дома',
-        subtitle: 'Наверное стоит собраться... И прибраться!',
-        href: (`/home/pro/quick-cleaning${linkSuffix}` as Route),
-        variant: 'pro',
-      },
-      {
-        icon: '🎬',
-        title: 'Выбрать фильм/сериал',
-        subtitle: 'Персональный подбор — быстро и качественно',
-        href: (`/home/pro/cinema${linkSuffix}` as Route),
-        variant: 'pro',
-      },
+      // ежедневные
+      { icon: '🌅', title: 'Утренний ритуал', subtitle: 'План на 20–30 минут', href: (`/home/pro/morning${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '📆', title: 'План на неделю', subtitle: 'Неделя без стресса', href: (`/home/pro/weekly-plan${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '⏳', title: 'Таймблоки дня', subtitle: 'День по блокам', href: (`/home/pro/time-blocks${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🧽', title: 'Быстрая уборка дома', subtitle: 'Скорая уборка по шагам', href: (`/home/pro/quick-cleaning${linkSuffix}` as Route), variant: 'pro' },
+
+      // досуг
+      { icon: '🎬', title: 'Выбрать фильм/сериал', subtitle: 'Персональный подбор', href: (`/home/pro/cinema${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🍥', title: 'Выбор аниме', subtitle: 'Идеально под ваш вкус', href: (`/home/pro/anime${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '📚', title: 'Подбор книги', subtitle: 'Книги под ваш вкус', href: (`/home/pro/book-pick${linkSuffix}` as Route), variant: 'pro' },
+
+      // отношения и коммуникации
+      { icon: '⚖️', title: 'Выбор между вариантами', subtitle: 'Помогу определиться', href: (`/home/pro/choose-between${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🕊️', title: 'Разбор конфликта', subtitle: 'Спокойные формулировки', href: (`/home/pro/conflict-notes${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '💞', title: 'Свидание-план', subtitle: 'Сценарий под вас', href: (`/home/pro/date-night${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🎁', title: 'Подарки по интересам', subtitle: '20 идей, топ-5', href: (`/home/pro/gift-ideas${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🏷️', title: 'Хэштеги к посту', subtitle: 'Ядро и вариации', href: (`/home/pro/hashtag-helper${linkSuffix}` as Route), variant: 'pro' },
+
+      // здоровье и быт
+      { icon: '🩺', title: 'К визиту к врачу', subtitle: 'Вопросы и заметки', href: (`/home/pro/health-visit${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🧠', title: 'Разгрузка головы', subtitle: 'Быстрая очистка мыслей', href: (`/home/pro/mind-dump${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🐾', title: 'Рутина для питомца', subtitle: 'Уход, прогулки, игры', href: (`/home/pro/pet-care${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '💸', title: 'Быстрый бюджет', subtitle: 'Бюджет и лимиты', href: (`/home/pro/quick-budget${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '😴', title: 'Гигиена сна', subtitle: 'План улучшения сна', href: (`/home/pro/sleep-hygiene${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🚶', title: 'План прогулок', subtitle: 'Шаги, маршруты, мотивация', href: (`/home/pro/walk-program${linkSuffix}` as Route), variant: 'pro' },
     ],
     [linkSuffix]
   );
@@ -104,7 +95,6 @@ export default function ProHub() {
     <main className="lm-wrap">
       <BackBtn fallback="/home" />
 
-      {/* Заголовок: всегда в одну строку, уменьшается, если не влезает */}
       <h1
         style={{
           textAlign: 'center',
@@ -123,7 +113,6 @@ export default function ProHub() {
         {ui.chooseTool}
       </p>
 
-      {/* Поиск — строки из словаря */}
       <div style={{ marginTop: 12, position: 'relative' }}>
         <input
           type="search"
