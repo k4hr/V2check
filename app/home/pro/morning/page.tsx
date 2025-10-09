@@ -12,7 +12,7 @@ export default function MorningRoutine() {
       systemPrompt={PROMPT}       // <- промпт из этой же папки
       mode="pro-morning"
       backHref="/home/pro"
-      maxAttach={10}              // можно поставить 0, если вложения не нужны
+      maxAttach={0}              // можно поставить 0, если вложения не нужны
       passthroughIdParam
     />
   );
