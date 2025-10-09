@@ -13,7 +13,7 @@ export default function CinemaConcierge() {
       systemPrompt={PROMPT}        // <- берём из той же папки
       mode="pro-cinema"
       backHref="/home/pro"
-      maxAttach={10}
+      maxAttach={0}
       passthroughIdParam
     />
   );
