@@ -47,30 +47,64 @@ export default function ProHub() {
 
   const tools = useMemo<ToolItem[]>(
     () => [
-      // ежедневные
+      // ЕЖЕДНЕВНЫЕ / ОРГАНИЗАЦИЯ
       { icon: '🌅', title: 'Утренний ритуал', subtitle: 'План на 20–30 минут', href: (`/home/pro/morning${linkSuffix}` as Route), variant: 'pro' },
       { icon: '📆', title: 'План на неделю', subtitle: 'Неделя без стресса', href: (`/home/pro/weekly-plan${linkSuffix}` as Route), variant: 'pro' },
       { icon: '⏳', title: 'Таймблоки дня', subtitle: 'День по блокам', href: (`/home/pro/time-blocks${linkSuffix}` as Route), variant: 'pro' },
       { icon: '🧽', title: 'Быстрая уборка дома', subtitle: 'Скорая уборка по шагам', href: (`/home/pro/quick-cleaning${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🧠', title: 'Разгрузка головы', subtitle: 'Быстрая очистка мыслей', href: (`/home/pro/mind-dump${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '⚡', title: 'Фокус-спринт', subtitle: '25–40 минут концентрации', href: (`/home/pro/focus-sprint${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🔁', title: 'План привычки', subtitle: 'Шаги, триггеры, трекер', href: (`/home/pro/habit-plan${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '💧', title: 'Трекер воды', subtitle: 'Сколько пить в день', href: (`/home/pro/water-tracker${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '💪', title: 'Микро-тренировка', subtitle: '5–15 минут дома', href: (`/home/pro/micro-workout${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🧘', title: 'Перерыв для осанки', subtitle: '2–3 минуты выпрямиться', href: (`/home/pro/posture-break${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🧺', title: 'Разгребаем завалы', subtitle: 'Деклаттер по зонам', href: (`/home/pro/declutter-plan${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '📍', title: 'Маршрут дел по городу', subtitle: 'Сэкономим время в пути', href: (`/home/pro/errand-route${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🏙️', title: 'День в городе', subtitle: 'Готовый мини-маршрут', href: (`/home/pro/city-day${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🎒', title: 'Список в поездку', subtitle: 'Ничего не забыть', href: (`/home/pro/pack-list${linkSuffix}` as Route), variant: 'pro' },
 
-      // досуг
+      // ЗДОРОВЬЕ / БЫТ
+      { icon: '🩺', title: 'К визиту к врачу', subtitle: 'Вопросы и заметки', href: (`/home/pro/health-visit${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '😴', title: 'Гигиена сна', subtitle: 'План улучшения сна', href: (`/home/pro/sleep-hygiene${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🥗', title: 'Мини-план питания', subtitle: 'Меню на 1–3 дня', href: (`/home/pro/meal-plan-mini${linkSuffix}` as Route), variant: 'pro' },
+
+      // ДОСУГ / КОНТЕНТ
       { icon: '🎬', title: 'Выбрать фильм/сериал', subtitle: 'Персональный подбор', href: (`/home/pro/cinema${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '📺', title: 'Подбор сериала', subtitle: 'Найдем «тот самый»', href: (`/home/pro/series-pick${linkSuffix}` as Route), variant: 'pro' },
       { icon: '🍥', title: 'Выбор аниме', subtitle: 'Идеально под ваш вкус', href: (`/home/pro/anime${linkSuffix}` as Route), variant: 'pro' },
       { icon: '📚', title: 'Подбор книги', subtitle: 'Книги под ваш вкус', href: (`/home/pro/book-pick${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🎮', title: 'Выбор видеоигры', subtitle: 'Под интересы и время', href: (`/home/pro/game-pick${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🎵', title: 'Плейлист по настроению', subtitle: 'Треки под вайб дня', href: (`/home/pro/playlist-mood${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🎲', title: 'Настолка под компанию', subtitle: 'Матч по жанру и людям', href: (`/home/pro/boardgame-match${linkSuffix}` as Route), variant: 'pro' },
 
-      // отношения и коммуникации
-      { icon: '⚖️', title: 'Выбор между вариантами', subtitle: 'Помогу определиться', href: (`/home/pro/choose-between${linkSuffix}` as Route), variant: 'pro' },
-      { icon: '🕊️', title: 'Разбор конфликта', subtitle: 'Спокойные формулировки', href: (`/home/pro/conflict-notes${linkSuffix}` as Route), variant: 'pro' },
+      // ОТНОШЕНИЯ / ТЕКСТЫ
       { icon: '💞', title: 'Свидание-план', subtitle: 'Сценарий под вас', href: (`/home/pro/date-night${linkSuffix}` as Route), variant: 'pro' },
-      { icon: '🎁', title: 'Подарки по интересам', subtitle: '20 идей, топ-5', href: (`/home/pro/gift-ideas${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🕊️', title: 'Разбор конфликта', subtitle: 'Спокойные формулировки', href: (`/home/pro/conflict-notes${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🥂', title: 'Тост/поздравление', subtitle: 'Уместно и по делу', href: (`/home/pro/event-toast${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '📝', title: 'Эссе без палев', subtitle: 'Живой человеческий стиль', href: (`/home/pro/essay${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '⭐', title: 'Отзыв/рекомендация', subtitle: 'Позитив/нейтр/негатив', href: (`/home/pro/review${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🎤', title: 'Рэп-текст', subtitle: 'Ритм, смысл, хуки', href: (`/home/pro/rap-lyrics${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🧒', title: 'Детский стих', subtitle: 'Для 8–10 лет', href: (`/home/pro/kids-poem${linkSuffix}` as Route), variant: 'pro' },
       { icon: '🏷️', title: 'Хэштеги к посту', subtitle: 'Ядро и вариации', href: (`/home/pro/hashtag-helper${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '💡', title: 'Название бренда', subtitle: 'Коротко и цепко', href: (`/home/pro/brand-name${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🍼', title: 'Имя для ребёнка', subtitle: 'Смысл, краткие формы', href: (`/home/pro/baby-name${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🗓️', title: 'Повестка встречи', subtitle: 'Чёткая структура', href: (`/home/pro/meeting-agenda${linkSuffix}` as Route), variant: 'pro' },
 
-      // здоровье и быт
-      { icon: '🩺', title: 'К визиту к врачу', subtitle: 'Вопросы и заметки', href: (`/home/pro/health-visit${linkSuffix}` as Route), variant: 'pro' },
-      { icon: '🧠', title: 'Разгрузка головы', subtitle: 'Быстрая очистка мыслей', href: (`/home/pro/mind-dump${linkSuffix}` as Route), variant: 'pro' },
-      { icon: '🐾', title: 'Рутина для питомца', subtitle: 'Уход, прогулки, игры', href: (`/home/pro/pet-care${linkSuffix}` as Route), variant: 'pro' },
+      // ВЫБОР / ПОКУПКИ
+      { icon: '⚖️', title: 'Выбор между вариантами', subtitle: 'Помогу определиться', href: (`/home/pro/choose-between${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🚗', title: 'Подбор авто', subtitle: 'Под бюджет и цели', href: (`/home/pro/car-pick${linkSuffix}` as Route), variant: 'pro' },
+
+      // ДЕНЬГИ
       { icon: '💸', title: 'Быстрый бюджет', subtitle: 'Бюджет и лимиты', href: (`/home/pro/quick-budget${linkSuffix}` as Route), variant: 'pro' },
-      { icon: '😴', title: 'Гигиена сна', subtitle: 'План улучшения сна', href: (`/home/pro/sleep-hygiene${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '💳', title: 'Закрыть долги', subtitle: 'План выплат и сроки', href: (`/home/pro/debt-payoff${linkSuffix}` as Route), variant: 'pro' },
+
+      // ЕДА И НАПИТКИ
+      { icon: '🍷', title: 'Выбор вина', subtitle: 'Стиль и закуски', href: (`/home/pro/wine${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🍺', title: 'Выбор пива', subtitle: 'Стили и пары', href: (`/home/pro/beer${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🥃', title: 'Крепкий алкоголь', subtitle: 'Профиль и подача', href: (`/home/pro/spirits${linkSuffix}` as Route), variant: 'pro' },
+      { icon: '🍿', title: 'Закуска к напитку', subtitle: 'Лучшие сочетания', href: (`/home/pro/snack-pair${linkSuffix}` as Route), variant: 'pro' },
+
+      // ПРОГУЛКИ
       { icon: '🚶', title: 'План прогулок', subtitle: 'Шаги, маршруты, мотивация', href: (`/home/pro/walk-program${linkSuffix}` as Route), variant: 'pro' },
     ],
     [linkSuffix]
