@@ -39,8 +39,8 @@ export default function ProPlusHub() {
   ];
 
   const filtered = rows.filter(r =>
-    r.title.toLowerCase().includes(q.trim().toLowerCase())
-    || r.desc.toLowerCase().includes(q.trim().toLowerCase())
+    r.title.toLowerCase().includes(q.trim().toLowerCase()) ||
+    r.desc.toLowerCase().includes(q.trim().toLowerCase())
   );
 
   return (
@@ -62,9 +62,7 @@ export default function ProPlusHub() {
       </div>
 
       <div className="grid">
-        {filtered.length === 0 && (
-          <div className="pro-card empty">Ничего не найдено</div>
-        )}
+        {filtered.length === 0 && <div className="pro-card empty">Ничего не найдено</div>}
 
         {filtered.map((r, i) => (
           <div className="pro-card" key={i}>
@@ -76,10 +74,12 @@ export default function ProPlusHub() {
               </div>
             </div>
 
-            {/* Большая фиксированная кнопка: всегда одинаковый размер */}
-            <Link href={to(r.href)} className="cta" aria-label={`Открыть: ${r.title}`}>
-              Попробовать
-            </Link>
+            {/* Центрированная CTA-кнопка фиксированного размера */}
+            <div className="ctaWrap">
+              <Link href={to(r.href)} className="cta" aria-label={`Открыть: ${r.title}`}>
+                Попробовать
+              </Link>
+            </div>
           </div>
         ))}
       </div>
@@ -98,7 +98,7 @@ export default function ProPlusHub() {
 
         .grid { display: grid; gap: 16px; margin-top: 16px; }
 
-        /* Карточка в «золотом» стиле Crypto Pay */
+        /* Золотая карточка как у Crypto Pay */
         .pro-card {
           padding: 20px; border-radius: 18px; color: #fff;
           background:
@@ -110,7 +110,7 @@ export default function ProPlusHub() {
         .pro-card.empty { display:flex; justify-content:center; align-items:center; min-height:96px; opacity:.7; }
 
         .pro-head { display:flex; gap:14px; align-items:center; }
-        /* Фиксированный бокс для эмодзи, строго по центру */
+        /* фикс-бокс для эмодзи, строго по центру */
         .pro-ico {
           width: 60px; height: 60px; flex: 0 0 60px;
           display: grid; place-items: center;
@@ -120,15 +120,21 @@ export default function ProPlusHub() {
           border-radius: 14px;
         }
         .pro-text { line-height: 1.15; min-width: 0; }
-        .pro-title { display:block; font-weight: 800; font-size: 20px; }
-        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 14px; }
+        .pro-title { display:block; font-weight: 800; font-size: 18px; }  /* -2px */
+        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; } /* -1px */
 
-        /* Большая CTA как в crypto-cta — фиксированная высота */
+        /* обёртка чтобы кнопка была по центру */
+        .ctaWrap {
+          display: grid;
+          grid-template-columns: 1fr minmax(240px, 420px) 1fr;
+          margin-top: 16px;
+        }
+        .ctaWrap :global(a) { grid-column: 2; }
+
+        /* собственно кнопка */
         .cta {
           display: grid; place-items: center;
-          width: 100%;
-          height: 60px;               /* фиксированный размер */
-          margin-top: 16px;
+          height: 60px;                      /* фиксированная высота */
           border-radius: 14px;
           font-weight: 700;
           font-size: 16px;
