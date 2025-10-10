@@ -1,4 +1,4 @@
-// lib/tma/Proplus/static.ts
+// lib/tma/Proplus/static.tsx
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
@@ -11,7 +11,7 @@ import {
   PRO_PLUS_SUBTITLE,
   PRO_PLUS_CTA,
   type Row,
-} from '@/app/home/pro-plus/page'; // импортим данные из страницы
+} from '@/app/home/pro-plus/page';
 
 export default function ProPlusHub() {
   const [q, setQ] = useState('');
@@ -120,6 +120,7 @@ export default function ProPlusHub() {
         .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; }
 
         .ctaWrap { display:flex; justify-content:center; margin-top:16px; }
+
         .cta {
           display:flex; align-items:center; justify-content:center;
           width: min(420px, 100%); height: 60px;
