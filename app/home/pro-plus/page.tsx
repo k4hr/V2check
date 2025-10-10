@@ -40,6 +40,7 @@ export default function ProPlusHub() {
 
   const filtered = rows.filter(r =>
     r.title.toLowerCase().includes(q.trim().toLowerCase())
+    || r.desc.toLowerCase().includes(q.trim().toLowerCase())
   );
 
   return (
@@ -68,17 +69,16 @@ export default function ProPlusHub() {
         {filtered.map((r, i) => (
           <div className="pro-card" key={i}>
             <div className="pro-head">
-              <span className="pro-ico">{r.emoji}</span>
+              <span className="pro-ico" aria-hidden>{r.emoji}</span>
               <div className="pro-text">
                 <b className="pro-title">{r.title}</b>
-                {/* вместо TON/USDT — описание функции */}
                 <small className="pro-sub">{r.desc}</small>
               </div>
             </div>
 
-            {/* вместо «Оплатить…» — название функции */}
-            <Link href={to(r.href)} className="cta" aria-label={r.title}>
-              {r.title}
+            {/* Большая фиксированная кнопка: всегда одинаковый размер */}
+            <Link href={to(r.href)} className="cta" aria-label={`Открыть: ${r.title}`}>
+              Попробовать
             </Link>
           </div>
         ))}
@@ -98,7 +98,7 @@ export default function ProPlusHub() {
 
         .grid { display: grid; gap: 16px; margin-top: 16px; }
 
-        /* «Золотая» карточка в стиле Crypto Pay */
+        /* Карточка в «золотом» стиле Crypto Pay */
         .pro-card {
           padding: 20px; border-radius: 18px; color: #fff;
           background:
@@ -109,20 +109,31 @@ export default function ProPlusHub() {
         }
         .pro-card.empty { display:flex; justify-content:center; align-items:center; min-height:96px; opacity:.7; }
 
-        .pro-head { display:flex; gap:12px; align-items:center; }
+        .pro-head { display:flex; gap:14px; align-items:center; }
+        /* Фиксированный бокс для эмодзи, строго по центру */
         .pro-ico {
-          width: 48px; height: 48px; border-radius: 12px; display:grid; place-items:center;
-          font-size: 28px; line-height: 1;
-          background: rgba(255,210,120,.22); border: 1px solid rgba(255,210,120,.34);
+          width: 60px; height: 60px; flex: 0 0 60px;
+          display: grid; place-items: center;
+          font-size: 30px; line-height: 1;
+          background: rgba(255,210,120,.22);
+          border: 1px solid rgba(255,210,120,.34);
+          border-radius: 14px;
         }
-        .pro-text { line-height: 1.15; }
-        .pro-title { display:block; font-weight: 800; font-size: 18px; }
-        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; }
+        .pro-text { line-height: 1.15; min-width: 0; }
+        .pro-title { display:block; font-weight: 800; font-size: 20px; }
+        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 14px; }
 
-        /* Большая CTA как в crypto-cta */
+        /* Большая CTA как в crypto-cta — фиксированная высота */
         .cta {
-          display: block; width: 100%; text-align: center; margin-top: 16px;
-          padding: 18px; border-radius: 14px; font-weight: 700; color: #fff; text-decoration: none;
+          display: grid; place-items: center;
+          width: 100%;
+          height: 60px;               /* фиксированный размер */
+          margin-top: 16px;
+          border-radius: 14px;
+          font-weight: 700;
+          font-size: 16px;
+          text-decoration: none;
+          color: #fff;
           background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
           border: 1px solid rgba(255,191,73,.55);
           box-shadow: 0 12px 36px rgba(255,191,73,.28);
