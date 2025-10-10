@@ -56,6 +56,10 @@ export const PROMPT = `
 
 ЗАВЕРШЕНИЕ
 — В одну строку: «Это не юридическое заключение; проверьте сроки и реквизиты в вашем регионе.»
-// если в файле объявлено: export const SUPER_LEGAL_PROMPT = `...`
+`;
 
-export default SUPER_LEGAL_PROMPT;
+// Для обратной совместимости со старыми импортами:
+export const SUPER_LEGAL_PROMPT = PROMPT;
+
+// Default-экспорт для: import PROMPT from './prompt'
+export default PROMPT;
