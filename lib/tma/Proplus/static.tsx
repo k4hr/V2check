@@ -11,7 +11,7 @@ import {
   PRO_PLUS_SUBTITLE,
   PRO_PLUS_CTA,
   type Row,
-} from '@/app/home/pro-plus/page';
+} from '@/app/home/pro-plus/constants';
 
 export default function ProPlusHub() {
   const [q, setQ] = useState('');
@@ -21,19 +21,13 @@ export default function ProPlusHub() {
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // проброс ?id=
   const id = useMemo(() => {
-    try {
-      const u = new URL(window.location.href);
-      return u.searchParams.get('id') || '';
-    } catch {
-      return '';
-    }
+    try { return new URL(window.location.href).searchParams.get('id') || ''; }
+    catch { return ''; }
   }, []);
 
   const to = (pathname: Route) => (id ? { pathname, query: { id } } : pathname);
 
-  // поиск
   const filtered: Row[] = useMemo(() => {
     const n = q.trim().toLowerCase();
     if (!n) return PRO_PLUS_ROWS;
@@ -71,7 +65,6 @@ export default function ProPlusHub() {
               </div>
             </div>
 
-            {/* Центрированная CTA-кнопка фиксированного размера */}
             <div className="ctaWrap">
               <Link href={to(r.href)} className="cta" aria-label={`Открыть: ${r.title}`}>
                 {PRO_PLUS_CTA}
@@ -95,7 +88,6 @@ export default function ProPlusHub() {
 
         .grid { display: grid; gap: 16px; margin-top: 16px; }
 
-        /* Золотая карточка как у Crypto Pay */
         .pro-card {
           padding: 20px; border-radius: 18px; color: #fff;
           background:
@@ -120,7 +112,6 @@ export default function ProPlusHub() {
         .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; }
 
         .ctaWrap { display:flex; justify-content:center; margin-top:16px; }
-
         .cta {
           display:flex; align-items:center; justify-content:center;
           width: min(420px, 100%); height: 60px;
