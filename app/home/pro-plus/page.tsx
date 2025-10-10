@@ -76,8 +76,8 @@ export default function ProPlusHub() {
 
             {/* Центрированная CTA-кнопка фиксированного размера */}
             <div className="ctaWrap">
-              <Link href={to(r.href)} className="cta" aria-label={`Открыть: ${r.title}`}>
-                Попробовать
+              <Link href={to(r.href)} legacyBehavior>
+                <a className="cta" aria-label={`Открыть: ${r.title}`}>Попробовать</a>
               </Link>
             </div>
           </div>
@@ -120,26 +120,19 @@ export default function ProPlusHub() {
           border-radius: 14px;
         }
         .pro-text { line-height: 1.15; min-width: 0; }
-        .pro-title { display:block; font-weight: 800; font-size: 18px; }  /* -2px */
-        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; } /* -1px */
+        .pro-title { display:block; font-weight: 800; font-size: 18px; }  /* уменьшено на 2 */
+        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; } /* уменьшено на 1 */
 
         /* обёртка чтобы кнопка была по центру */
-        .ctaWrap {
-          display: grid;
-          grid-template-columns: 1fr minmax(240px, 420px) 1fr;
-          margin-top: 16px;
-        }
-        .ctaWrap :global(a) { grid-column: 2; }
+        .ctaWrap { display:flex; justify-content:center; margin-top:16px; }
 
-        /* собственно кнопка */
+        /* собственно кнопка – фиксированный размер и золотой стиль */
         .cta {
-          display: grid; place-items: center;
-          height: 60px;                      /* фиксированная высота */
+          display:flex; align-items:center; justify-content:center;
+          width: min(420px, 100%); height: 60px;            /* фиксированная ширина/высота */
           border-radius: 14px;
-          font-weight: 700;
-          font-size: 16px;
-          text-decoration: none;
-          color: #fff;
+          font-weight: 700; font-size: 16px;
+          color: #fff !important; text-decoration: none !important;
           background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
           border: 1px solid rgba(255,191,73,.55);
           box-shadow: 0 12px 36px rgba(255,191,73,.28);
