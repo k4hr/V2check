@@ -1,7 +1,7 @@
 'use client';
 
 import AIChatClientPro from '@/lib/tma/AIChatClientPro';
-import PROMPT from './prompt';
+import { SUPER_LEGAL_PROMPT as PROMPT } from './prompt';
 
 export default function ProPlusChatPage() {
   return (
