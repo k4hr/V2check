@@ -6,7 +6,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import BackBtn from '@/app/components/BackBtn';
 
-type Row = { emoji: string; title: string; href: Route };
+type Row = { emoji: string; title: string; desc: string; href: Route };
 
 export default function ProPlusHub() {
   const [q, setQ] = useState('');
@@ -21,13 +21,21 @@ export default function ProPlusHub() {
     catch { return ''; }
   }, []);
 
-  // typedRoutes-friendly
-  const to = (pathname: Route) =>
-    (id ? { pathname, query: { id } } : pathname);
+  const to = (pathname: Route) => (id ? { pathname, query: { id } } : pathname);
 
   const rows: Row[] = [
-    { emoji: '🤖', title: 'Pro+ чат ИИ (юрид.)',       href: '/home/pro-plus/urchatgpt' as Route },
-    { emoji: '💼', title: 'Бизнес-чат: запуск/анализ', href: '/home/pro-plus/businesschat' as Route },
+    {
+      emoji: '🤖',
+      title: 'Pro+ чат ИИ (юрид.)',
+      desc: 'Юр-вопросы, черновики документов, анализ кейсов — быстро и аккуратно.',
+      href: '/home/pro-plus/urchatgpt' as Route,
+    },
+    {
+      emoji: '💼',
+      title: 'Бизнес-чат: запуск/анализ',
+      desc: 'Гипотезы, юнит-экономика, воронки, идеи роста и риски для вашего проекта.',
+      href: '/home/pro-plus/businesschat' as Route,
+    },
   ];
 
   const filtered = rows.filter(r =>
@@ -41,8 +49,7 @@ export default function ProPlusHub() {
       <h1 className="title">Эксперт центр Pro+</h1>
       <p className="subtitle">Выберите инструмент</p>
 
-      {/* Быстрый поиск */}
-      <div style={{ marginTop: 14 }}>
+      <div className="searchBox">
         <input
           type="search"
           inputMode="search"
@@ -55,22 +62,25 @@ export default function ProPlusHub() {
 
       <div className="grid">
         {filtered.length === 0 && (
-          <div className="gold-btn empty">Ничего не найдено</div>
+          <div className="pro-card empty">Ничего не найдено</div>
         )}
 
         {filtered.map((r, i) => (
-          <Link
-            key={i}
-            href={to(r.href)}
-            className="gold-btn"
-            style={{ textDecoration: 'none' }}
-          >
-            <span className="left">
-              <span className="emoji">{r.emoji}</span>
-              <b className="label">{r.title}</b>
-            </span>
-            <span className="chev">›</span>
-          </Link>
+          <div className="pro-card" key={i}>
+            <div className="pro-head">
+              <span className="pro-ico">{r.emoji}</span>
+              <div className="pro-text">
+                <b className="pro-title">{r.title}</b>
+                {/* вместо TON/USDT — описание функции */}
+                <small className="pro-sub">{r.desc}</small>
+              </div>
+            </div>
+
+            {/* вместо «Оплатить…» — название функции */}
+            <Link href={to(r.href)} className="cta" aria-label={r.title}>
+              {r.title}
+            </Link>
+          </div>
         ))}
       </div>
 
@@ -79,66 +89,46 @@ export default function ProPlusHub() {
         .title { text-align: center; margin: 0; }
         .subtitle { text-align: center; opacity: .7; margin-top: 6px; }
 
+        .searchBox { margin-top: 14px; }
         .search {
-          width: 100%;
-          padding: 14px 16px;
-          border-radius: 14px;
-          background: #141823;
-          border: 1px solid var(--border);
-          color: var(--fg, #fff);
-          outline: none;
-          font-size: 16px;
+          width: 100%; padding: 14px 16px; border-radius: 14px;
+          background: #141823; border: 1px solid var(--border);
+          color: var(--fg, #fff); outline: none; font-size: 16px;
         }
 
-        .grid { display: grid; gap: 14px; margin-top: 16px; }
+        .grid { display: grid; gap: 16px; margin-top: 16px; }
 
-        /* ЗОЛОТАЯ ПОДСВЕТКА + крупные кнопки */
-        .gold-btn {
-          display: flex; align-items: center; justify-content: space-between;
-          min-height: 96px;                 /* ~3x выше прежнего */
-          padding: 22px 20px;               /* больше «воздуха» */
-          border-radius: 18px;
-
+        /* «Золотая» карточка в стиле Crypto Pay */
+        .pro-card {
+          padding: 20px; border-radius: 18px; color: #fff;
           background:
             radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.18), rgba(255,255,255,.03)),
             linear-gradient(135deg, rgba(255,210,120,.10), rgba(255,191,73,.06));
           border: 1px solid rgba(255,210,120,.32);
-          box-shadow:
-            0 12px 36px rgba(255,191,73,.25),
-            inset 0 0 0 1px rgba(255,255,255,.045);
+          box-shadow: 0 12px 36px rgba(255,191,73,.25), inset 0 0 0 1px rgba(255,255,255,.045);
+        }
+        .pro-card.empty { display:flex; justify-content:center; align-items:center; min-height:96px; opacity:.7; }
 
-          color: #fff;
+        .pro-head { display:flex; gap:12px; align-items:center; }
+        .pro-ico {
+          width: 48px; height: 48px; border-radius: 12px; display:grid; place-items:center;
+          font-size: 28px; line-height: 1;
+          background: rgba(255,210,120,.22); border: 1px solid rgba(255,210,120,.34);
+        }
+        .pro-text { line-height: 1.15; }
+        .pro-title { display:block; font-weight: 800; font-size: 18px; }
+        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; }
+
+        /* Большая CTA как в crypto-cta */
+        .cta {
+          display: block; width: 100%; text-align: center; margin-top: 16px;
+          padding: 18px; border-radius: 14px; font-weight: 700; color: #fff; text-decoration: none;
+          background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
+          border: 1px solid rgba(255,191,73,.55);
+          box-shadow: 0 12px 36px rgba(255,191,73,.28);
           transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
         }
-        .gold-btn:hover {
-          transform: translateY(-1px);
-          border-color: rgba(255,210,120,.48);
-          box-shadow:
-            0 18px 48px rgba(255,191,73,.32),
-            inset 0 0 0 1px rgba(255,255,255,.06);
-          background:
-            radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.22), rgba(255,255,255,.04)),
-            linear-gradient(135deg, rgba(255,210,120,.14), rgba(255,191,73,.08));
-        }
-
-        .left { display: flex; align-items: center; gap: 14px; min-width: 0; }
-        .emoji {
-          width: 48px; height: 48px;         /* крупная пиктограмма */
-          display: grid; place-items: center;
-          font-size: 28px; line-height: 1;
-          border-radius: 12px;
-          background: rgba(255,210,120,.20);
-          border: 1px solid rgba(255,210,120,.34);
-        }
-        .label {
-          display: block;
-          font-size: 20px;                   /* крупнее текста */
-          line-height: 1.2;
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .chev { font-size: 28px; opacity: .75; }
-
-        .empty { justify-content: center; opacity: .75; }
+        .cta:active { transform: translateY(1px); box-shadow: 0 8px 24px rgba(255,191,73,.24); }
       `}</style>
     </main>
   );
