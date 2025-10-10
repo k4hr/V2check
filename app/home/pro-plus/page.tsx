@@ -22,6 +22,5 @@ export const PRO_PLUS_ROWS: Row[] = [
   },
 ];
 
-// ВАЖНО: страница продолжит работать как страница Next,
-// потому что мы ре-экспортируем UI-компонент из lib.
+// страница продолжает работать — UI берём из lib
 export { default } from '@/lib/tma/Proplus/static';
