@@ -1,8 +1,7 @@
-// app/home/pro-plus/urchatgpt/page.tsx
 'use client';
 
 import AIChatClientPro from '@/lib/tma/AIChatClientPro';
-import { SUPER_LEGAL_PROMPT } from './prompt';
+import PROMPT from './prompt';
 
 export default function ProPlusChatPage() {
   return (
@@ -10,10 +9,10 @@ export default function ProPlusChatPage() {
       title="🤖 Pro+ чат ИИ (юрид.)"
       subtitle="Опишите задачу — ассистент всё уточнит и поможет."
       initialAssistant="Это Pro+ Чат ИИ. Опишите вашу ситуацию одним сообщением: кто участники, что произошло, когда, какие суммы/документы и какого результата хотите. Я сразу дам разбор со стратегиями, планом, сроками и шаблонами. Если чего-то не будет хватать — в конце добавлю список уточнений."
-      systemPrompt={SUPER_LEGAL_PROMPT}
+      systemPrompt={PROMPT}
       mode="legal-full-one-shot"
       backHref="/home/pro-plus"
-      maxAttach={10}          // при желании можно менять
+      maxAttach={10}
       passthroughIdParam
     />
   );
