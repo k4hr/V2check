@@ -32,12 +32,6 @@ export type AIChatClientProProps = {
 const MAX_ATTACH_DEFAULT = 10;
 const norm = (s: string) => (s || '').toString().trim();
 
-// «золото» — те же тона, что на Crypto Pay
-const GOLD_BORDER = 'rgba(255,210,120,.35)';
-const GOLD_BORDER_SOFT = 'rgba(255,210,120,.22)';
-const GOLD_GLOW = '0 10px 30px rgba(255,191,73,.18)';
-const GOLD_GRAD = 'linear-gradient(135deg, rgba(255,210,120,.10), rgba(255,191,73,.06))';
-
 export default function AIChatClientPro(props: AIChatClientProProps) {
   const {
     title,
@@ -212,7 +206,6 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
   }, [attach, idSuffix, loading, mode, systemPrompt, text, uploading, messages]);
 
   const pickDisabled = attach.length >= maxAttach || uploading || loading;
-  const sendDisabled = (loading || uploading) || (!norm(text) && !attach.length);
 
   return (
     <main
@@ -224,33 +217,8 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         padding: '12px 12px calc(12px + env(safe-area-inset-bottom))',
       }}
     >
-      {/* Header */}
       <div>
         <BackBtn fallback={backHref} />
-
-        {/* Pro+ бейдж — ненавязчиво и «по-деловому» */}
-        <div
-          title="Pro+ активен"
-          style={{
-            margin: '6px auto 0',
-            width: 'fit-content',
-            padding: '6px 10px',
-            borderRadius: 999,
-            fontSize: 12,
-            letterSpacing: .2,
-            color: '#fff',
-            background: GOLD_GRAD,
-            border: `1px solid ${GOLD_BORDER}`,
-            boxShadow: GOLD_GLOW,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6
-          }}
-        >
-          <span aria-hidden>✨</span>
-          <b style={{ fontWeight: 800 }}>Pro+ активен</b>
-        </div>
-
         <h1
           style={{
             textAlign: 'center',
@@ -267,6 +235,23 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         {!!subtitle && (
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
         )}
+
+        {/* Золотой бейдж Pro+ */}
+        <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
+          <span
+            style={{
+              display:'inline-flex', alignItems:'center', gap:8,
+              padding:'6px 10px', borderRadius: 999,
+              background:'rgba(255,210,120,.16)',
+              border:'1px solid rgba(255,210,120,.35)',
+              boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
+              color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
+            }}
+          >
+            <span aria-hidden>✨</span>
+            Pro+ активен
+          </span>
+        </div>
       </div>
 
       {/* лента сообщений */}
@@ -286,8 +271,8 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
                   borderRadius: 14,
                   lineHeight: 1.5,
                   background: isUser ? '#24304a' : '#1a2132',
-                  border: isUser ? '1px solid #2b3552' : `1px solid ${GOLD_BORDER_SOFT}`, // тонкий золотой кант только у ассистента
-                  boxShadow: isUser ? undefined : 'inset 0 0 0 1px rgba(255,255,255,.03), 0 6px 18px rgba(255,191,73,.10)',
+                  border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
+                  boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
                   whiteSpace: 'pre-wrap',
                   fontSize: 16
                 }}
@@ -313,7 +298,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
             padding: '8px 4px',
             borderRadius: 14,
             background: 'rgba(9, 13, 22, 0.6)',
-            border: `1px solid ${GOLD_BORDER_SOFT}`,
+            border: '1px solid rgba(255,210,120,.28)',
             boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.04)',
             backdropFilter: 'saturate(160%) blur(8px)',
           }}
@@ -323,7 +308,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
               position: 'relative',
               width: 64, height: 64,
               borderRadius: 12,
-              border: '1px solid #2b3552',
+              border: '1px solid rgba(255,210,120,.28)',
               overflow: 'hidden',
               flex: '0 0 auto',
             }}>
@@ -336,7 +321,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
                 style={{
                   position: 'absolute', top: -6, right: -6,
                   width: 26, height: 26, borderRadius: 999,
-                  border: `1px solid ${GOLD_BORDER_SOFT}`, background: '#0e1422',
+                  border: '1px solid rgba(255,210,120,.35)', background: '#0e1422',
                   color: '#fff', fontSize: 16, lineHeight: '22px'
                 }}
               >×</button>
@@ -362,13 +347,13 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           alignItems: 'center',
           padding: 8,
           borderRadius: 16,
-          background: 'rgba(9, 13, 22, 0.7)',
+          background: 'rgba(9, 13, 22, 0.72)',
           backdropFilter: 'saturate(160%) blur(12px)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
+          border: '1px solid rgba(255,210,120,.28)',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,.04)',
         }}
       >
-        {/* «плюс» + невидимый input поверх (центр клика) */}
+        {/* «плюс» + прозрачный input поверх */}
         <div style={{ position: 'relative', width: 40, height: 40 }}>
           <button
             type="button"
@@ -377,17 +362,15 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
             title={attach.length >= maxAttach ? `Достигнут лимит ${maxAttach} фото` : 'Прикрепить изображения'}
             style={{
               width: '100%', height: '100%', borderRadius: 10,
-              border: `1px solid ${pickDisabled ? '#2b3552' : GOLD_BORDER}`,
-              background: pickDisabled ? '#121722' : '#121722',
+              border: '1px solid rgba(255,191,73,.45)', background: '#121722',
               display: 'grid', placeItems: 'center',
               fontSize: 22, lineHeight: 1,
-              boxShadow: pickDisabled ? undefined : GOLD_GLOW,
-              opacity: pickDisabled ? .55 : 1
+              boxShadow: '0 8px 24px rgba(255,191,73,.14)',
+              opacity: pickDisabled ? .5 : 1
             }}
           >
             +
           </button>
-
           <input
             ref={pickerRef}
             type="file"
@@ -421,19 +404,19 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
         <button
           onClick={send}
-          disabled={sendDisabled}
+          disabled={(loading || uploading) || (!norm(text) && !attach.length)}
           aria-label="Отправить"
           title="Отправить"
           style={{
             width: 40, height: 40, borderRadius: 10,
-            border: `1px solid ${sendDisabled ? '#2b3552' : GOLD_BORDER}`,
+            border: '1px solid rgba(255,191,73,.45)',
             background: '#121722',
             color: 'var(--fg)',
             fontSize: 20, lineHeight: 1,
             display: 'grid',
             placeItems: 'center',
-            boxShadow: sendDisabled ? undefined : GOLD_GLOW,
-            opacity: sendDisabled ? .6 : 1
+            boxShadow: '0 8px 24px rgba(255,191,73,.14)',
+            opacity: (loading || uploading) || (!norm(text) && !attach.length) ? .6 : 1
           }}
         >
           ↑
