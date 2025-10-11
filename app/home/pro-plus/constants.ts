@@ -32,4 +32,10 @@ export const PRO_PLUS_ROWS: Row[] = [
     desc: 'Создам картинки по вашему брифу: стиль, ракурс, палитра.',
     href: '/home/pro-plus/image-gen' as Route,
   },
-];
+  /* path: app/home/pro-plus/constants.ts — insert into PRO_PLUS_ROWS */
+  {
+    emoji: '📝',
+    title: 'Составить резюме',
+    desc: 'Сильное CV под вакансию: опыт, достижения, навыки, ATS.',
+    href: '/home/pro-plus/resume-builder' as Route,
+  },
