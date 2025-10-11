@@ -65,9 +65,12 @@ export default function ProPlusHub() {
               </div>
             </div>
 
+            {/* Центрированная «золотая» кнопка фиксированного размера */}
             <div className="ctaWrap">
-              <Link href={to(r.href)} className="cta" aria-label={`Открыть: ${r.title}`}>
-                {PRO_PLUS_CTA}
+              <Link href={to(r.href)} legacyBehavior>
+                <a className="cta" aria-label={`Открыть: ${r.title}`}>
+                  {PRO_PLUS_CTA}
+                </a>
               </Link>
             </div>
           </div>
@@ -112,18 +115,24 @@ export default function ProPlusHub() {
         .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; }
 
         .ctaWrap { display:flex; justify-content:center; margin-top:16px; }
-        .cta {
+
+        /* Стили для кнопки: применяем и локально, и глобально на случай глобальных правил для <a> */
+        .cta,
+        :global(a.cta) {
           display:flex; align-items:center; justify-content:center;
           width: min(420px, 100%); height: 60px;
           border-radius: 14px;
           font-weight: 700; font-size: 16px;
-          color: #fff; text-decoration: none;
+          color: #fff !important;                /* перебиваем синий */
+          text-decoration: none !important;       /* убираем подчёркивание */
           background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
           border: 1px solid rgba(255,191,73,.55);
           box-shadow: 0 12px 36px rgba(255,191,73,.28);
           transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+          cursor: pointer;
         }
-        .cta:active { transform: translateY(1px); box-shadow: 0 8px 24px rgba(255,191,73,.24); }
+        .cta:active,
+        :global(a.cta:active) { transform: translateY(1px); box-shadow: 0 8px 24px rgba(255,191,73,.24); }
       `}</style>
     </main>
   );
