@@ -93,7 +93,7 @@ export default function ProPlusHub() {
 
         /* Карточка фиксированной высоты с сеткой: контент сверху, отступ, кнопка внизу */
         .pro-card {
-          height: 220px;                               /* фиксированная высота */
+          height: 150px;                               /* фиксированная высота */
           display: grid;
           grid-template-rows: auto 1fr auto;           /* шапка, гибкий отступ, кнопка */
           padding: 20px; border-radius: 18px; color: #fff;
