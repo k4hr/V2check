@@ -7,7 +7,11 @@ import React, {
 import BackBtn from '@/components/BackBtn';
 import type { Route } from 'next';
 
-export type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
+export type Msg = {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+  images?: string[]; // изображения от ассистента (Pro+ фича)
+};
 
 type Attach = {
   id: string;
@@ -31,6 +35,25 @@ export type AIChatClientProProps = {
 
 const MAX_ATTACH_DEFAULT = 10;
 const norm = (s: string) => (s || '').toString().trim();
+
+// вытащить ссылки на изображения из текста
+function extractImageUrlsFromText(text: string): string[] {
+  const urls = new Set<string>();
+  const re = /(https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif))/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) urls.add(m[1]);
+  return Array.from(urls);
+}
+
+// корректное открытие ссылок внутри TG WebApp / браузера
+function openLink(url: string) {
+  try {
+    const tg: any = (window as any)?.Telegram?.WebApp;
+    if (tg?.openLink) { tg.openLink(url); return; }
+    if (tg?.openTelegramLink) { tg.openTelegramLink(url); return; }
+  } catch {}
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
 
 export default function AIChatClientPro(props: AIChatClientProProps) {
   const {
@@ -188,7 +211,24 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       const data = await r.json().catch(() => ({} as any));
       if (data?.ok) {
         const reply = String(data.answer || '').trim();
-        setMessages(m => [...m, { role: 'assistant', content: reply || 'Готово. Продолжим?' }]);
+
+        // собрать список картинок из ответа
+        const serverImages: string[] = Array.isArray(data.images) ? data.images.filter(Boolean) : [];
+        const fromText = extractImageUrlsFromText(reply);
+        const uniqueImages = Array.from(new Set([...(serverImages || []), ...(fromText || [])]));
+
+        // текст
+        if (reply.replace(/\s+/g, '').length) {
+          setMessages(m => [...m, { role: 'assistant', content: reply }]);
+        }
+        // «галерея» изображений отдельным сообщением
+        if (uniqueImages.length) {
+          setMessages(m => [...m, { role: 'assistant', content: '(изображения)', images: uniqueImages }]);
+        }
+
+        if (!reply && !uniqueImages.length) {
+          setMessages(m => [...m, { role: 'assistant', content: 'Готово. Продолжим?' }]);
+        }
       } else if (data?.error === 'FREE_LIMIT_REACHED') {
         const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
@@ -258,26 +298,127 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       <div ref={listRef} style={{ minHeight: 0, overflow: 'auto', padding: '4px 2px' }}>
         {messages.filter(m => m.role !== 'system').map((m, i) => {
           const isUser = m.role === 'user';
+          const hasImages = Array.isArray(m.images) && m.images.length > 0;
+
           return (
             <div key={i} style={{
               margin: '10px 0',
               display: 'flex',
               justifyContent: isUser ? 'flex-end' : 'flex-start'
             }}>
-              <div
-                style={{
-                  maxWidth: '86%',
-                  padding: '10px 12px',
-                  borderRadius: 14,
-                  lineHeight: 1.5,
-                  background: isUser ? '#24304a' : '#1a2132',
-                  border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
-                  boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
-                  whiteSpace: 'pre-wrap',
-                  fontSize: 16
-                }}
-              >
-                {m.content}
+              <div style={{ maxWidth: '86%' }}>
+                {/* текстовый пузырь */}
+                {m.content && m.content !== '(изображения)' && (
+                  <div
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 14,
+                      lineHeight: 1.5,
+                      background: isUser ? '#24304a' : '#1a2132',
+                      border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
+                      boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
+                      whiteSpace: 'pre-wrap',
+                      fontSize: 16,
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {m.content}
+                  </div>
+                )}
+
+                {/* «галерея» изображений ассистента */}
+                {hasImages && (
+                  <div
+                    style={{
+                      marginTop: m.content && m.content !== '(изображения)' ? 8 : 0,
+                      padding: 8,
+                      borderRadius: 14,
+                      background: '#101622',
+                      border: '1px solid #2b3552',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 8,
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                      }}
+                    >
+                      {m.images!.map((src, idx) => (
+                        <figure
+                          key={idx}
+                          style={{
+                            margin: 0,
+                            position: 'relative',
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            border: '1px solid #2b3552',
+                            background: '#0f1422',
+                            aspectRatio: '1 / 1',
+                          }}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={src}
+                            alt=""
+                            onClick={() => openLink(src)}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block',
+                              cursor: 'zoom-in',
+                            }}
+                          />
+
+                          {/* overlay с кнопками */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: 6,
+                              right: 6,
+                              display: 'flex',
+                              gap: 6,
+                            }}
+                          >
+                            <a
+                              href={src}
+                              download
+                              title="Скачать"
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 10,
+                                background: 'rgba(0,0,0,.45)',
+                                border: '1px solid rgba(255,255,255,.25)',
+                                color: '#fff',
+                                fontSize: 12,
+                                textDecoration: 'none',
+                                backdropFilter: 'blur(6px)',
+                              }}
+                            >
+                              Скачать
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => openLink(src)}
+                              title="Открыть"
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 10,
+                                background: 'rgba(0,0,0,.45)',
+                                border: '1px solid rgba(255,255,255,.25)',
+                                color: '#fff',
+                                fontSize: 12,
+                              }}
+                            >
+                              Открыть
+                            </button>
+                          </div>
+                        </figure>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -287,7 +428,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         )}
       </div>
 
-      {/* трей вложений */}
+      {/* трей вложений (прикреплённые пользователем) */}
       {!!attach.length && (
         <div
           ref={trayRef}
