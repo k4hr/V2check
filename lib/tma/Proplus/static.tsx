@@ -93,7 +93,7 @@ export default function ProPlusHub() {
 
         /* Карточка фиксированной высоты с сеткой: контент сверху, отступ, кнопка внизу */
         .pro-card {
-          height: 150px;                               /* фиксированная высота */
+          height: 150px;                               /* оставили прежнюю высоту */
           display: grid;
           grid-template-rows: auto 1fr auto;           /* шапка, гибкий отступ, кнопка */
           padding: 20px; border-radius: 18px; color: #fff;
@@ -115,15 +115,19 @@ export default function ProPlusHub() {
           border-radius: 14px;
         }
         .pro-text { line-height: 1.15; min-width: 0; }
+
+        /* Заголовок — в одну строку, чтобы освободить место под 3 строки описания */
         .pro-title {
           display:block; font-weight: 800; font-size: 18px;
           overflow: hidden; text-overflow: ellipsis;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; /* не раздуваем карточку */
+          display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
         }
+
+        /* Описание — максимум 3 строки, без роста карточки */
         .pro-sub {
-          display:block; opacity: .9; margin-top: 6px; font-size: 13px;
+          display:block; opacity: .9; margin-top: 6px; font-size: 13px; line-height: 1.25;
           overflow: hidden; text-overflow: ellipsis;
-          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; /* было 2 — теперь 3 */
         }
 
         .ctaWrap { display:flex; justify-content:center; align-items:flex-end; }
@@ -132,8 +136,8 @@ export default function ProPlusHub() {
         .cta,
         :global(a.cta) {
           display:flex; align-items:center; justify-content:center;
-          width: clamp(220px, 68%, 320px);             /* уже */
-          height: 48px;                                 /* ниже */
+          width: clamp(220px, 68%, 320px);
+          height: 48px;
           border-radius: 14px;
           font-weight: 700; font-size: 16px;
           color: #fff !important;
