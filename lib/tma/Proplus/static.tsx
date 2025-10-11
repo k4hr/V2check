@@ -91,11 +91,11 @@ export default function ProPlusHub() {
 
         .grid { display: grid; gap: 16px; margin-top: 16px; }
 
-        /* Карточка фиксированной высоты с сеткой: контент сверху, отступ, кнопка внизу */
+        /* Карточка фиксированной высоты с сеткой */
         .pro-card {
-          height: 150px;                               /* оставили прежнюю высоту */
+          height: 150px;
           display: grid;
-          grid-template-rows: auto 1fr auto;           /* шапка, гибкий отступ, кнопка */
+          grid-template-rows: auto 1fr auto;
           padding: 20px; border-radius: 18px; color: #fff;
           background:
             radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.18), rgba(255,255,255,.03)),
@@ -116,23 +116,31 @@ export default function ProPlusHub() {
         }
         .pro-text { line-height: 1.15; min-width: 0; }
 
-        /* Заголовок — в одну строку, чтобы освободить место под 3 строки описания */
+        /* Заголовок — меньше и максимум 2 строки (две «полные» строки гарантированно поместятся) */
         .pro-title {
-          display:block; font-weight: 800; font-size: 18px;
-          overflow: hidden; text-overflow: ellipsis;
-          display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical;
+          display:block;
+          font-weight: 800;
+          font-size: 16px;                /* было 18px */
+          line-height: 1.2;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;          /* до 2 строк */
+          -webkit-box-orient: vertical;
+        }
+        @media (max-width: 360px) {
+          .pro-title { font-size: 15px; }  /* чуть меньше на очень узких экранах */
         }
 
-        /* Описание — максимум 3 строки, без роста карточки */
+        /* Описание — до 3 строк */
         .pro-sub {
           display:block; opacity: .9; margin-top: 6px; font-size: 13px; line-height: 1.25;
           overflow: hidden; text-overflow: ellipsis;
-          display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; /* было 2 — теперь 3 */
+          display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
         }
 
         .ctaWrap { display:flex; justify-content:center; align-items:flex-end; }
 
-        /* Узкая и низкая кнопка, по центру */
         .cta,
         :global(a.cta) {
           display:flex; align-items:center; justify-content:center;
