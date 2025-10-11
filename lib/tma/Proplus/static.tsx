@@ -91,7 +91,11 @@ export default function ProPlusHub() {
 
         .grid { display: grid; gap: 16px; margin-top: 16px; }
 
+        /* Карточка фиксированной высоты с сеткой: контент сверху, отступ, кнопка внизу */
         .pro-card {
+          height: 220px;                               /* фиксированная высота */
+          display: grid;
+          grid-template-rows: auto 1fr auto;           /* шапка, гибкий отступ, кнопка */
           padding: 20px; border-radius: 18px; color: #fff;
           background:
             radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.18), rgba(255,255,255,.03)),
@@ -111,20 +115,29 @@ export default function ProPlusHub() {
           border-radius: 14px;
         }
         .pro-text { line-height: 1.15; min-width: 0; }
-        .pro-title { display:block; font-weight: 800; font-size: 18px; }
-        .pro-sub { display:block; opacity: .9; margin-top: 6px; font-size: 13px; }
+        .pro-title {
+          display:block; font-weight: 800; font-size: 18px;
+          overflow: hidden; text-overflow: ellipsis;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; /* не раздуваем карточку */
+        }
+        .pro-sub {
+          display:block; opacity: .9; margin-top: 6px; font-size: 13px;
+          overflow: hidden; text-overflow: ellipsis;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
 
-        .ctaWrap { display:flex; justify-content:center; margin-top:16px; }
+        .ctaWrap { display:flex; justify-content:center; align-items:flex-end; }
 
-        /* Стили для кнопки: применяем и локально, и глобально на случай глобальных правил для <a> */
+        /* Узкая и низкая кнопка, по центру */
         .cta,
         :global(a.cta) {
           display:flex; align-items:center; justify-content:center;
-          width: min(420px, 100%); height: 60px;
+          width: clamp(220px, 68%, 320px);             /* уже */
+          height: 48px;                                 /* ниже */
           border-radius: 14px;
           font-weight: 700; font-size: 16px;
-          color: #fff !important;                /* перебиваем синий */
-          text-decoration: none !important;       /* убираем подчёркивание */
+          color: #fff !important;
+          text-decoration: none !important;
           background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
           border: 1px solid rgba(255,191,73,.55);
           box-shadow: 0 12px 36px rgba(255,191,73,.28);
