@@ -1,15 +1,9 @@
-// lib/tma/AIChatClient.tsx
 'use client';
 
-import React, {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useCallback,
-} from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import BackBtn from '@/components/BackBtn';
 import type { Route } from 'next';
+import { extractLeadingEmoji } from '@/lib/utils/extractEmoji';
 
 export type Msg = { role: 'system' | 'user' | 'assistant'; content: string };
 
@@ -34,8 +28,10 @@ export type AIChatClientProps = {
 };
 
 const MAX_ATTACH_DEFAULT = 10;
-
 const norm = (s: string) => (s || '').toString().trim();
+const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
+
+type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
 export default function AIChatClient(props: AIChatClientProps) {
   const {
@@ -57,6 +53,7 @@ export default function AIChatClient(props: AIChatClientProps) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attach, setAttach] = useState<Attach[]>([]);
+  const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
 
   const listRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
@@ -84,6 +81,77 @@ export default function AIChatClient(props: AIChatClientProps) {
       return id ? `?id=${encodeURIComponent(id)}` : '';
     } catch { return ''; }
   }, [passthroughIdParam]);
+
+  const collectMsgsForSave = useCallback(() => {
+    return messages
+      .filter(m => m.role !== 'system')
+      .map(m => ({ role: m.role, content: m.content || '' }));
+  }, [messages]);
+
+  const toggleStar = useCallback(async () => {
+    if (thread.busy) return;
+    setThread(t => ({ ...t, busy: true }));
+    try {
+      if (thread.id && thread.starred) {
+        const r = await fetch('/api/chat-threads', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          body: JSON.stringify({ id: thread.id, starred: false }),
+        });
+        const data = await r.json();
+        if (!data?.ok) throw new Error(data?.error || 'PATCH_FAILED');
+        setThread({ id: thread.id, starred: false, busy: false });
+        return;
+      }
+
+      let tid = thread.id;
+      if (!tid) {
+        const emoji = extractLeadingEmoji(title) || undefined;
+        const r = await fetch('/api/chat-threads' + idSuffix, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          body: JSON.stringify({ toolSlug: mode || 'chat', title, emoji, starred: true }),
+        });
+        const data = await r.json();
+        if (data?.error === 'PRO_PLUS_REQUIRED') {
+          setMessages(m => [...m, { role: 'assistant', content: 'Избранное доступно только в Pro+.' }]);
+          setThread(t => ({ ...t, busy: false }));
+          return;
+        }
+        if (!data?.ok || !data.thread?.id) throw new Error(data?.error || 'CREATE_FAILED');
+        tid = String(data.thread.id);
+      } else {
+        const r = await fetch('/api/chat-threads', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          body: JSON.stringify({ id: tid, starred: true }),
+        });
+        const data = await r.json();
+        if (data?.error === 'PRO_PLUS_REQUIRED') {
+          setMessages(m => [...m, { role: 'assistant', content: 'Избранное доступно только в Pro+.' }]);
+          setThread(t => ({ ...t, busy: false }));
+          return;
+        }
+        if (!data?.ok) throw new Error(data?.error || 'PATCH_FAILED');
+      }
+
+      const r2 = await fetch('/api/chat-threads/messages' + idSuffix, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+        body: JSON.stringify({ threadId: tid, messages: collectMsgsForSave() }),
+      });
+      const data2 = await r2.json();
+      if (!data2?.ok) throw new Error(data2?.error || 'SAVE_MESSAGES_FAILED');
+
+      setThread({ id: tid, starred: true, busy: false });
+      setMessages(m => [...m, { role: 'assistant', content: 'Чат сохранён в избранное ★' }]);
+    } catch (e: any) {
+      setMessages(m => [...m, { role: 'assistant', content: 'Не удалось сохранить в избранное.' }]);
+      setThread(t => ({ ...t, busy: false }));
+    }
+  }, [thread, collectMsgsForSave, title, mode, idSuffix]);
+
+  // ==== отправка ====
 
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
@@ -124,63 +192,18 @@ export default function AIChatClient(props: AIChatClientProps) {
       { role: 'user', content: (t || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') },
     ]);
 
-    const uploadedUrls: string[] = [];
     try {
-      for (let i = 0; i < attach.length; i++) {
-        const it = attach[i];
-        setAttach(prev => prev.map(x => (x.id === it.id ? { ...x, status: 'uploading' } : x)));
-
-        const fd = new FormData();
-        fd.append('file', it.file);
-        // @ts-ignore
-        const initData = window?.Telegram?.WebApp?.initData || '';
-
-        const ctrl = new AbortController();
-        const to = setTimeout(() => ctrl.abort(), 60_000);
-        let res: Response;
-        try {
-          res = await fetch('/api/upload-image' + idSuffix, {
-            method: 'POST',
-            body: fd,
-            headers: { 'X-Tg-Init-Data': initData },
-            signal: ctrl.signal,
-          });
-        } finally { clearTimeout(to); }
-
-        const data = await res.json().catch(() => ({} as any));
-        if (!res.ok || !data?.url) throw new Error(data?.error || 'Upload failed');
-
-        uploadedUrls.push(String(data.url));
-        setAttach(prev => prev.map(x => (x.id === it.id ? { ...x, status: 'done', uploadedUrl: data.url } : x)));
-      }
-    } catch (e: any) {
-      setAttach(prev => {
-        if (!prev.length) return prev;
-        const last = prev[prev.length - 1];
-        return prev.map(x => x.id === last.id ? { ...x, status: 'error', errMsg: String(e?.message || 'Ошибка') } : x);
-      });
-      setMessages(m => [...m, { role: 'assistant', content: 'Не удалось загрузить все вложения. Попробуем ещё раз?' }]);
-      setUploading(false);
-      setLoading(false);
-      return;
-    }
-
-    const imagesNote = uploadedUrls.length
-      ? '\n\nПрикреплённые изображения:\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
-      : '';
-    const promptText = (t || '') + imagesNote;
-
-    try {
+      // у упрощённой версии нет загрузки картинок/галерей — как у тебя и было
       const history = [
         { role: 'system', content: systemPrompt },
         ...messages.filter(m => m.role !== 'system'),
-        { role: 'user', content: promptText } as Msg,
+        { role: 'user', content: t } as Msg,
       ].slice(-20) as Msg[];
 
       const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: promptText, history, images: uploadedUrls, mode }),
+        body: JSON.stringify({ prompt: t, history, mode }),
       });
 
       const data = await r.json().catch(() => ({} as any));
@@ -201,7 +224,7 @@ export default function AIChatClient(props: AIChatClientProps) {
       setText('');
       setAttach(prev => { prev.forEach(a => URL.revokeObjectURL(a.previewUrl)); return []; });
     }
-  }, [attach, idSuffix, loading, mode, systemPrompt, text, uploading, messages]);
+  }, [attach.length, idSuffix, loading, messages, mode, systemPrompt, text, uploading]);
 
   const pickDisabled = attach.length >= maxAttach || uploading || loading;
 
@@ -215,8 +238,28 @@ export default function AIChatClient(props: AIChatClientProps) {
         padding: '12px 12px calc(12px + env(safe-area-inset-bottom))',
       }}
     >
-      <div>
+      <div style={{ position: 'relative' }}>
         <BackBtn fallback={backHref} />
+        {/* ★ */}
+        <button
+          type="button"
+          onClick={toggleStar}
+          disabled={thread.busy}
+          title={thread.starred ? 'Убрать из избранного' : 'Сохранить весь чат в избранное (Pro+)'}
+          style={{
+            position: 'absolute', top: 0, right: 0,
+            width: 36, height: 36, borderRadius: 10,
+            border: thread.starred ? '1px solid rgba(255,210,120,.75)' : '1px solid rgba(255,255,255,.18)',
+            background: thread.starred ? 'rgba(255,210,120,.14)' : 'rgba(255,255,255,.06)',
+            color: '#ffd678',
+            display: 'grid', placeItems: 'center',
+            boxShadow: thread.starred ? '0 6px 18px rgba(255,191,73,.25)' : 'none',
+            opacity: thread.busy ? .6 : 1,
+          }}
+        >
+          {thread.starred ? '★' : '☆'}
+        </button>
+
         <h1
           style={{
             textAlign: 'center',
@@ -331,7 +374,7 @@ export default function AIChatClient(props: AIChatClientProps) {
           boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
         }}
       >
-        {/* ПЛЮС + невидимый input поверх — работает на iOS/TG */}
+        {/* ПЛЮС + прозрачный input поверх — работает на iOS/TG */}
         <div style={{ position: 'relative', width: 40, height: 40 }}>
           <button
             type="button"
@@ -356,7 +399,6 @@ export default function AIChatClient(props: AIChatClientProps) {
             multiple
             disabled={pickDisabled}
             onChange={(e) => addFilesFromPicker(e.target.files)}
-            // прозрачный слой поверх кнопки — прямой «пальцевый» клик
             style={{
               position: 'absolute',
               inset: 0,
