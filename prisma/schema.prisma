@@ -29,6 +29,8 @@ model User {
   cases             Case[]
   payments          Payment[]
   usageDaily        UsageDaily[]
+
+  chatThreads       ChatThread[]
 }
 
 // ============ Суточный учёт запросов ============
@@ -46,7 +48,7 @@ model UsageDaily {
   @@index([date])
 }
 
-// ============ Favorites ============
+// ============ Favorites (старые закладки, оставляем для совместимости) ============
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
@@ -59,6 +61,40 @@ model Favorite {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+// ============ Chat Threads (избранные чаты Pro+) ============
+model ChatThread {
+  id          String        @id @default(cuid())
+  userId      String
+  toolSlug    String        // например: 'urchatgpt', 'marketing', 'free-chat' и т.п.
+  title       String
+  emoji       String?
+  starred     Boolean       @default(false) // можно держать false до нажатия на ★
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  lastUsedAt  DateTime      @default(now())
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    ChatMessage[]
+
+  @@index([userId, starred])
+  @@index([lastUsedAt])
+  @@index([updatedAt])
+}
+
+// Сообщение в треде
+model ChatMessage {
+  id         String   @id @default(cuid())
+  threadId   String
+  role       String   // 'system' | 'user' | 'assistant'
+  content    String   // текст
+  imagesJson String?  // JSON-массив ссылок (для Pro+ генераций)
+  createdAt  DateTime @default(now())
+
+  thread     ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, createdAt])
 }
 
 // ============ Library docs ============
