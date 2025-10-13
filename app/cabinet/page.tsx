@@ -1,3 +1,4 @@
+// app/cabinet/page.tsx
 'use client';
 
 import Link from 'next/link';
@@ -17,7 +18,7 @@ type MeResp = {
     active?: boolean;
     expiresAt?: string | null;
     till?: string | null;
-    plan?: string | null;
+    plan?: string | null; // ожидаем 'pro', 'pro+', 'pro-plus', 'pro_plus', 'proplus'
   } | null;
 };
 
@@ -55,6 +56,19 @@ function goBackFallback() {
   if (document.referrer && window.history.length > 1) history.back();
   else window.location.href = '/home';
 }
+function formatDate(d: Date) {
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+function normalizePlan(plan?: string | null): 'pro' | 'pro+' | null {
+  if (!plan) return null;
+  const p = plan.toLowerCase().replace(/\s+/g, '').replace(/_/g, '-');
+  if (p === 'pro') return 'pro';
+  if (p === 'pro+' || p === 'pro-plus' || p === 'proplus') return 'pro+';
+  return null;
+}
 /* ---------------------------------- */
 
 export default function CabinetPage() {
@@ -76,17 +90,18 @@ export default function CabinetPage() {
   }, []);
 
   // typedRoutes-совместимые href
-  const hrefPro   = useMemo(() =>
-    (debugId ? { pathname: '/pro' as const,               query: { id: debugId } } : '/pro'), [debugId]);
-
-  const hrefCases = useMemo(() =>
-    (debugId ? { pathname: '/cabinet/cases' as const,      query: { id: debugId } } : '/cabinet/cases'), [debugId]);
-
-  const hrefFav   = useMemo(() =>
-    (debugId ? { pathname: '/cabinet/favorites' as const,  query: { id: debugId } } : '/cabinet/favorites'), [debugId]);
-
-  const hrefAdmin = useMemo(() =>
-    (debugId ? { pathname: '/cabinet/admin' as const,      query: { id: debugId } } : '/cabinet/admin'), [debugId]);
+  const hrefPro = useMemo(
+    () => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'),
+    [debugId]
+  );
+  const hrefFav = useMemo(
+    () => (debugId ? { pathname: '/cabinet/favorites' as const, query: { id: debugId } } : '/cabinet/favorites'),
+    [debugId]
+  );
+  const hrefAdmin = useMemo(
+    () => (debugId ? { pathname: '/cabinet/admin' as const, query: { id: debugId } } : '/cabinet/admin'),
+    [debugId]
+  );
 
   async function loadMe(initData?: string) {
     setLoading(true);
@@ -103,16 +118,24 @@ export default function CabinetPage() {
 
       const sub = data?.subscription;
       const isActive = Boolean(sub?.active);
-      const until = sub?.expiresAt || sub?.till;
+      const untilStr = sub?.expiresAt || sub?.till || null;
+      const planNorm = normalizePlan(sub?.plan);
 
-      if (isActive && until) {
-        const d = new Date(until);
-        const dd = String(d.getDate()).padStart(2, '0');
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const yyyy = d.getFullYear();
-        setStatusText(`Подписка активна до ${dd}.${mm}.${yyyy}`);
-      } else if (isActive) setStatusText('Подписка активна.');
-      else setStatusText('Подписка не активна.');
+      if (isActive) {
+        // если активна — формируем надпись по плану
+        const untilTxt = untilStr ? formatDate(new Date(untilStr)) : null;
+
+        if (planNorm === 'pro') {
+          setStatusText(`У вас подписка Pro.${untilTxt ? ` До ${untilTxt}` : ''}`);
+        } else if (planNorm === 'pro+') {
+          setStatusText(`У вас подписка Pro+.${untilTxt ? ` До ${untilTxt}` : ''}`);
+        } else {
+          // неизвестное имя плана — общий текст
+          setStatusText(untilTxt ? `Подписка активна до ${untilTxt}` : 'Подписка активна.');
+        }
+      } else {
+        setStatusText('Подписка не активна.');
+      }
     } catch {
       setStatusText('Подписка не активна.');
     } finally {
@@ -160,12 +183,11 @@ export default function CabinetPage() {
     const initData = WebApp?.initData || getInitDataFromCookie();
     if (initData) {
       loadMe(initData);
-      checkAdmin(initData); // ← здесь проверяем права админа
+      checkAdmin(initData);
     } else if (DEBUG) {
       loadMe();
       checkAdmin();
     } else {
-      // если ничего нет — по умолчанию скрываем
       setIsAdmin(false);
     }
   }, [debugId]);
@@ -201,7 +223,6 @@ export default function CabinetPage() {
             <span style={{ fontWeight: 600 }}>Назад</span>
           </button>
 
-          {/* Кнопка Admin рендерится ТОЛЬКО когда сервер сказал admin=true */}
           {isAdmin ? (
             <Link
               href={hrefAdmin}
@@ -239,14 +260,6 @@ export default function CabinetPage() {
                 <span className="list-btn__left">
                   <span className="list-btn__emoji">⭐</span>
                   <b>Купить/продлить подписку</b>
-                </span>
-                <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
-              </Link>
-
-              <Link href={hrefCases} className="list-btn" style={{ textDecoration: 'none' }}>
-                <span className="list-btn__left">
-                  <span className="list-btn__emoji">📁</span>
-                  <b>Моё дело (таймлайн и дедлайны)</b>
                 </span>
                 <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
               </Link>
