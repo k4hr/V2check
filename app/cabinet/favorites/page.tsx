@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import type { Route } from 'next';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
@@ -24,7 +25,6 @@ function formatDT(iso: string) {
 
 export default function FavoritesPage() {
   const [items, setItems] = useState<Fav[]>([]);
-  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [proplusLocked, setProplusLocked] = useState(false);
 
@@ -115,26 +115,13 @@ export default function FavoritesPage() {
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {items.map((it) => {
-                  const href = it.url || '#';
-                  const isExternal = /^https?:\/\//i.test(href);
-                  return (
-                    <Link
-                      key={it.id}
-                      href={href}
-                      target={isExternal ? '_blank' : undefined}
-                      rel={isExternal ? 'noreferrer' : undefined}
-                      className="list-btn"
-                      style={{
-                        textDecoration: 'none',
-                        border: '1px solid #333',
-                        borderRadius: 12,
-                        padding: '12px 14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 12,
-                      }}
-                    >
+                  const raw = (it.url || '').trim();
+                  const isExternal = /^https?:\/\//i.test(raw);
+                  const isInternal = raw.startsWith('/');
+                  const created = formatDT(it.createdAt);
+
+                  const CardInner = (
+                    <>
                       <span className="list-btn__left" style={{ minWidth: 0 }}>
                         <span className="list-btn__emoji">⭐</span>
                         <b
@@ -148,9 +135,44 @@ export default function FavoritesPage() {
                         </b>
                       </span>
                       <span className="list-btn__right" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span style={{ opacity: .75, fontSize: 12 }}>{formatDT(it.createdAt)}</span>
+                        <span style={{ opacity: .75, fontSize: 12 }}>{created}</span>
                         <span className="list-btn__chev">›</span>
                       </span>
+                    </>
+                  );
+
+                  const commonStyle = {
+                    textDecoration: 'none',
+                    border: '1px solid #333',
+                    borderRadius: 12,
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 12,
+                  } as const;
+
+                  if (isExternal) {
+                    return (
+                      <a
+                        key={it.id}
+                        href={raw}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="list-btn"
+                        style={commonStyle}
+                      >
+                        {CardInner}
+                      </a>
+                    );
+                  }
+
+                  // внутренние ссылки через <Link>; если нет валидного пути — ведём в кабинет
+                  const safeInternal: Route = (isInternal ? raw : '/cabinet') as Route;
+
+                  return (
+                    <Link key={it.id} href={safeInternal} className="list-btn" style={commonStyle}>
+                      {CardInner}
                     </Link>
                   );
                 })}
