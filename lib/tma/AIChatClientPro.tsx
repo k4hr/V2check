@@ -1,11 +1,9 @@
-// lib/tma/AIChatClientPro.tsx
 'use client';
 
-import React, {
-  useEffect, useMemo, useRef, useState, useCallback,
-} from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import BackBtn from '@/components/BackBtn';
 import type { Route } from 'next';
+import { extractLeadingEmoji } from '@/lib/utils/extractEmoji';
 
 export type Msg = {
   role: 'system' | 'user' | 'assistant';
@@ -35,6 +33,7 @@ export type AIChatClientProProps = {
 
 const MAX_ATTACH_DEFAULT = 10;
 const norm = (s: string) => (s || '').toString().trim();
+const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
 
 // вытащить ссылки на изображения из текста
 function extractImageUrlsFromText(text: string): string[] {
@@ -54,6 +53,8 @@ function openLink(url: string) {
   } catch {}
   window.open(url, '_blank', 'noopener,noreferrer');
 }
+
+type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
 export default function AIChatClientPro(props: AIChatClientProProps) {
   const {
@@ -75,6 +76,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attach, setAttach] = useState<Attach[]>([]);
+  const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
 
   const listRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
@@ -97,7 +99,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     trayRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
   }, [attach.length]);
 
-  // ?id= пробрасываем в API
+  // ?id= и ?thread=
   const idSuffix = useMemo(() => {
     if (!passthroughIdParam) return '';
     try {
@@ -107,7 +109,116 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     } catch { return ''; }
   }, [passthroughIdParam]);
 
-  // добавить вложения
+  useEffect(() => {
+    // автозагрузка сохранённого треда: /chat?thread=xxx
+    try {
+      const u = new URL(window.location.href);
+      const tid = u.searchParams.get('thread');
+      if (!tid) return;
+      (async () => {
+        try {
+          const r = await fetch(`/api/chat-threads?id=${encodeURIComponent(tid)}`, {
+            headers: { 'X-Tg-Init-Data': TG_INIT() }
+          });
+          const data = await r.json();
+          if (data?.ok) {
+            const loaded = (data?.messages || []) as Msg[];
+            setMessages([{ role: 'system', content: systemPrompt }, ...loaded]);
+            setThread({ id: data.thread.id, starred: !!data.thread.starred, busy: false });
+          }
+        } catch {}
+      })();
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // собрать сообщения для сохранения
+  const collectMsgsForSave = useCallback(() => {
+    return messages
+      .filter(m => m.role !== 'system')
+      .map(m => ({
+        role: m.role,
+        content: m.content === '(изображения)' ? '' : (m.content || ''),
+        images: Array.isArray(m.images) ? m.images : undefined,
+      }));
+  }, [messages]);
+
+  // создать тред и/или переключить звезду
+  const toggleStar = useCallback(async () => {
+    if (thread.busy) return;
+    setThread(t => ({ ...t, busy: true }));
+
+    try {
+      // если выключаем — просто PATCH
+      if (thread.id && thread.starred) {
+        const r = await fetch('/api/chat-threads', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          body: JSON.stringify({ id: thread.id, starred: false }),
+        });
+        const data = await r.json();
+        if (!data?.ok) throw new Error(data?.error || 'PATCH_FAILED');
+        setThread({ id: thread.id, starred: false, busy: false });
+        return;
+      }
+
+      // включаем — если треда нет, создаём
+      let tid = thread.id;
+      if (!tid) {
+        const emoji = extractLeadingEmoji(title) || undefined;
+        const r = await fetch('/api/chat-threads' + idSuffix, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          body: JSON.stringify({ toolSlug: mode || 'chat', title, emoji, starred: true }),
+        });
+        const data = await r.json();
+        if (data?.error === 'PRO_PLUS_REQUIRED') {
+          setMessages(m => [...m, { role: 'assistant', content: 'Избранное доступно только в Pro+.' }]);
+          setThread(t => ({ ...t, busy: false }));
+          return;
+        }
+        if (!data?.ok || !data.thread?.id) throw new Error(data?.error || 'CREATE_FAILED');
+        tid = String(data.thread.id);
+      } else {
+        // есть тред — дожмём звезду
+        const r = await fetch('/api/chat-threads', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          body: JSON.stringify({ id: tid, starred: true }),
+        });
+        const data = await r.json();
+        if (data?.error === 'PRO_PLUS_REQUIRED') {
+          setMessages(m => [...m, { role: 'assistant', content: 'Избранное доступно только в Pro+.' }]);
+          setThread(t => ({ ...t, busy: false }));
+          return;
+        }
+        if (!data?.ok) throw new Error(data?.error || 'PATCH_FAILED');
+      }
+
+      // залить весь текущий чат
+      const payload = { threadId: tid, messages: collectMsgsForSave() };
+      const r2 = await fetch('/api/chat-threads/messages' + idSuffix, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+        body: JSON.stringify(payload),
+      });
+      const data2 = await r2.json();
+      if (!data2?.ok) throw new Error(data2?.error || 'SAVE_MESSAGES_FAILED');
+
+      setThread({ id: tid, starred: true, busy: false });
+      // тихий тост в ленту
+      setMessages(m => [...m, { role: 'assistant', content: 'Чат сохранён в избранное ★' }]);
+    } catch (e: any) {
+      setMessages(m => [...m, { role: 'assistant', content: 'Не удалось сохранить в избранное.' }]);
+      setThread(t => ({ ...t, busy: false }));
+    }
+  }, [thread, collectMsgsForSave, title, mode, idSuffix]);
+
+  // ==== остальной код отправки ====
+
+  const listRefLocal = listRef; // (ничего не менял ниже)
+  const [/* state above */] = [];
+
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
     if (!files.length) return;
@@ -127,7 +238,6 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     if (pickerRef.current) pickerRef.current.value = '';
   }, [maxAttach]);
 
-  // убрать вложение
   const removeAttach = useCallback((id: string) => {
     setAttach(prev => {
       const a = prev.find(x => x.id === id);
@@ -136,7 +246,6 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     });
   }, []);
 
-  // отправка
   const send = useCallback(async () => {
     const t = norm(text);
     if ((!t && attach.length === 0) || loading || uploading) return;
@@ -157,8 +266,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
         const fd = new FormData();
         fd.append('file', it.file);
-        // @ts-ignore
-        const initData = window?.Telegram?.WebApp?.initData || '';
+        const initData = TG_INIT();
 
         const ctrl = new AbortController();
         const to = setTimeout(() => ctrl.abort(), 60_000);
@@ -217,15 +325,12 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         const fromText = extractImageUrlsFromText(reply);
         const uniqueImages = Array.from(new Set([...(serverImages || []), ...(fromText || [])]));
 
-        // текст
         if (reply.replace(/\s+/g, '').length) {
           setMessages(m => [...m, { role: 'assistant', content: reply }]);
         }
-        // «галерея» изображений отдельным сообщением
         if (uniqueImages.length) {
           setMessages(m => [...m, { role: 'assistant', content: '(изображения)', images: uniqueImages }]);
         }
-
         if (!reply && !uniqueImages.length) {
           setMessages(m => [...m, { role: 'assistant', content: 'Готово. Продолжим?' }]);
         }
@@ -257,8 +362,28 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         padding: '12px 12px calc(12px + env(safe-area-inset-bottom))',
       }}
     >
-      <div>
+      <div style={{ position: 'relative' }}>
         <BackBtn fallback={backHref} />
+        {/* ★ в правом верхнем углу */}
+        <button
+          type="button"
+          onClick={toggleStar}
+          disabled={thread.busy}
+          title={thread.starred ? 'Убрать из избранного' : 'Сохранить весь чат в избранное (Pro+)'}
+          style={{
+            position: 'absolute', top: 0, right: 0,
+            width: 36, height: 36, borderRadius: 10,
+            border: thread.starred ? '1px solid rgba(255,210,120,.75)' : '1px solid rgba(255,255,255,.18)',
+            background: thread.starred ? 'rgba(255,210,120,.14)' : 'rgba(255,255,255,.06)',
+            color: '#ffd678',
+            display: 'grid', placeItems: 'center',
+            boxShadow: thread.starred ? '0 6px 18px rgba(255,191,73,.25)' : 'none',
+            opacity: thread.busy ? .6 : 1,
+          }}
+        >
+          {thread.starred ? '★' : '☆'}
+        </button>
+
         <h1
           style={{
             textAlign: 'center',
