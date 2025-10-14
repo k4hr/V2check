@@ -1,4 +1,4 @@
-// app/home/pro-plus/constants.ts
+/* path: app/home/pro-plus/constants.ts */
 import type { Route } from 'next';
 
 export type Row = { emoji: string; title: string; desc: string; href: Route };
@@ -25,6 +25,12 @@ export const PRO_PLUS_ROWS: Row[] = [
     title: 'Личный маркетолог',
     desc: 'Стратегия продвижения, контент-план, воронки, KPI.',
     href: '/home/pro-plus/marketing' as Route,
+  },
+  {
+    emoji: '🧲',
+    title: 'Удержание клиентов',
+    desc: 'Снижение оттока и рост LTV: сегменты риска, win-back, метрики и план на 90 дней.',
+    href: '/home/pro-plus/uderzhanie-klientov' as Route,
   },
   {
     emoji: '📺',
