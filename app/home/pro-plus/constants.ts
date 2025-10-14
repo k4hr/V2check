@@ -33,6 +33,12 @@ export const PRO_PLUS_ROWS: Row[] = [
     href: '/home/pro-plus/uderzhanie-klientov' as Route,
   },
   {
+    emoji: '🧑‍💼',
+    title: 'Помощник руководителя',
+    desc: 'Организация дня, приоритеты, письма, встречи и контроль задач.',
+    href: '/home/pro-plus/pomoshchnik-rukovoditelya' as Route,
+  },
+  {
     emoji: '📺',
     title: 'SEO/каналы роста',
     desc: 'YouTube/Shorts/TG: тайтлы, описания, теги и тумбы под CTR.',
