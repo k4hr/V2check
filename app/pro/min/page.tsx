@@ -17,31 +17,12 @@ const TITLES: Record<Plan, string> = {
 function Star({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden focusable="false">
-      <path d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z" fill="currentColor" />
+      <path
+        d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z"
+        fill="currentColor"
+      />
     </svg>
   );
-}
-
-// безопасное открытие ton:// deeplink внутри TWA/WebView
-function openTonDeepLink(url: string): boolean {
-  let opened = false;
-  try {
-    const a = document.createElement('a');
-    a.href = url;
-    a.rel = 'noopener';
-    a.style.display = 'none';
-    document.body.appendChild(a);
-    a.click();
-    opened = true;
-    setTimeout(() => document.body.removeChild(a), 0);
-  } catch {}
-  if (!opened) {
-    try { window.location.assign(url); opened = true; } catch {}
-  }
-  if (!opened) {
-    try { window.open(url, '_blank', 'noopener,noreferrer'); opened = true; } catch {}
-  }
-  return opened;
 }
 
 export default function ProMinPage() {
@@ -49,8 +30,8 @@ export default function ProMinPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // TON
-  const [planTon, setPlanTon] = useState<Plan>('MONTH');
+  // TON-блок
+  const [planTon, setPlanTon] = useState<Plan>('WEEK');
   const [busyTon, setBusyTon] = useState(false);
 
   const prices = useMemo(() => getPrices(tier), []);
@@ -62,24 +43,10 @@ export default function ProMinPage() {
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
-
-      // это для Stars-инвойсов; к TON не относится, но оставим
-      const onClosed = (d: any) => {
-        if (d?.status === 'paid') {
-          try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
-          setInfo('Оплата подтверждена. Обновляем статус…');
-          setTimeout(() => { window.location.href = '/cabinet'; }, 400);
-        } else {
-          setInfo('Окно оплаты закрыто. Если оплата прошла — проверьте статус в кабинете.');
-        }
-        setBusy(null);
-      };
-      tg?.onEvent?.('invoiceClosed', onClosed);
-      return () => { tg?.BackButton?.hide?.(); tg?.offEvent?.('invoiceClosed', onClosed); };
+      return () => { tg?.BackButton?.hide?.(); tg?.BackButton?.offClick?.(back); };
     } catch {}
   }, []);
 
-  // Stars (без изменений)
   async function buyStars(plan: Plan) {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
@@ -99,21 +66,43 @@ export default function ProMinPage() {
     }
   }
 
-  // TON: берём deeplink и открываем без SDK (важно!)
+  // Главная кнопка «Оплатить TON»
   async function buyTon() {
     if (busyTon) return;
     setBusyTon(true); setMsg(null); setInfo(null);
     try {
       const res = await fetch(`/api/pay/ton/create?tier=${tier}&plan=${planTon}`, { method: 'POST' });
-      const data = await res.json().catch(() => ({}));
-      const url: string = data?.payton || data?.deeplink || data?.link || '';
-      if (!url || !/^ton:\/\//i.test(url)) throw new Error('TON_LINK_EMPTY');
+      const { ok, payton, universal, error } = await res.json();
+      if (!ok || (!payton && !universal)) throw new Error(error || 'TON_DEEPLINK_FAILED');
 
-      const ok = openTonDeepLink(url);
-      if (!ok) setMsg('Не удалось открыть ton:// ссылку. Попробуйте ещё раз.');
+      const tg: any = (window as any)?.Telegram?.WebApp;
+
+      // 1) пробуем системную ton:// схему (если Telegram позволит)
+      if (typeof payton === 'string' && payton.startsWith('ton://')) {
+        try {
+          // прямой переход
+          window.location.href = payton;
+          // 2) через 400мс — безопасный https-fallback, чтобы точно сработало
+          setTimeout(() => {
+            if (universal) {
+              if (tg?.openLink) tg.openLink(universal);
+              else window.location.href = universal;
+            }
+          }, 400);
+          return;
+        } catch {}
+      }
+
+      // fallback сразу на https-универсальную ссылку
+      if (universal) {
+        if (tg?.openLink) tg.openLink(universal);
+        else window.location.href = universal;
+        return;
+      }
+
+      throw new Error('NO_LINK_TO_OPEN');
     } catch (e: any) {
-      // Больше не прокидываем SDK-сообщение «The string did not match the expected pattern.»
-      setMsg('Ошибка при подготовке TON-ссылки.');
+      setMsg(String(e?.message || 'Ошибка при подготовке TON-ссылки.'));
     } finally {
       setBusyTon(false);
     }
@@ -124,6 +113,7 @@ export default function ProMinPage() {
   return (
     <main>
       <div className="safe">
+        {/* Назад */}
         <button
           type="button"
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
@@ -162,7 +152,7 @@ export default function ProMinPage() {
           })}
         </div>
 
-        {/* Оплата TON */}
+        {/* Оплата TON (прямой перевод) */}
         <div className="crypto-card">
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
@@ -201,9 +191,17 @@ export default function ProMinPage() {
         .title { text-align: center; margin: 6px 0 2px; }
         .err { color: #ff4d6d; text-align: center; }
         .info { opacity: .7; text-align: center; }
-        .back { width: 120px; padding: 10px 14px; border-radius: 12px; background:#171a21; border:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+        .back {
+          width: 120px; padding: 10px 14px; border-radius: 12px;
+          background:#171a21; border:1px solid var(--border);
+          display:flex; align-items:center; gap:8px;
+        }
         .list { display: grid; gap: 12px; }
-        .row { width: 100%; border: 1px solid #333; border-radius: 14px; padding: 14px 18px; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; background: #121621; }
+        .row {
+          width: 100%; border: 1px solid #333; border-radius: 14px;
+          padding: 14px 18px; display: grid; grid-template-columns: 1fr auto;
+          align-items: center; column-gap: 12px; background: #121621;
+        }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
         .dot { font-size: 18px; }
         .name { white-space: nowrap; }
@@ -211,23 +209,41 @@ export default function ProMinPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        .crypto-card { margin-top: 6px; padding: 14px; border-radius: 16px;
+        /* TON card */
+        .crypto-card {
+          margin-top: 6px;
+          padding: 14px;
+          border-radius: 16px;
           background: radial-gradient(120% 140% at 10% 0%, rgba(76,130,255,.12), rgba(255,255,255,.03));
           border: 1px solid rgba(120,170,255,.18);
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
-          display:flex; flex-direction:column; gap:12px; color: #fff; }
+          display:flex; flex-direction:column; gap:12px;
+          color: #fff;
+        }
         .crypto-header { display:flex; gap:10px; align-items:center; }
-        .crypto-icon { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22); color:#fff; }
+        .crypto-icon {
+          width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
+          background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
+          color:#fff;
+        }
         .crypto-text { line-height: 1.15; }
         .crypto-title { display:block; white-space: nowrap; color:#fff; font-weight: 800; letter-spacing: .2px; }
         .crypto-sub { display:block; margin-top: 4px; color: rgba(255,255,255,.85); font-size: 13px; }
 
         .seg { display:flex; gap:8px; flex-wrap:wrap; }
-        .seg__btn { padding:8px 12px; border-radius:12px; background:#121722; border:1px solid rgba(255,255,255,.08); color:#fff; }
+        .seg__btn {
+          padding:8px 12px; border-radius:12px; background:#121722; border:1px solid rgba(255,255,255,.08);
+          color:#fff;
+        }
         .seg__btn.is-active { border-color: rgba(120,170,255,.5); box-shadow: inset 0 0 0 1px rgba(120,170,255,.25); }
-        .crypto-cta { width: 100%; padding: 14px 16px; border-radius: 14px;
+        .crypto-cta {
+          width: 100%; padding: 14px 16px; border-radius: 14px;
           background: linear-gradient(135deg, rgba(120,170,255,.35), rgba(90,140,255,.18));
-          border: 1px solid rgba(120,170,255,.45); box-shadow: 0 12px 36px rgba(90,140,255,.28); font-weight: 700; color:#fff; }
+          border: 1px solid rgba(120,170,255,.45);
+          box-shadow: 0 12px 36px rgba(90,140,255,.28);
+          font-weight: 700;
+          color:#fff;
+        }
       `}</style>
     </main>
   );
