@@ -22,21 +22,14 @@ function pickInitData(h: Headers) {
     ''
   );
 }
-function addDays(d: Date, days: number) {
-  const x = new Date(d);
-  x.setUTCDate(x.getUTCDate() + days);
-  return x;
-}
 
 async function ensureAdmin(req: NextRequest) {
   const url = new URL(req.url);
-  // 1) initData из заголовка
   const initData = pickInitData(req.headers) || '';
   if (initData && BOT_TOKEN && verifyInitData(initData, BOT_TOKEN)) {
-    const adminId = getTelegramId(initData);
-    return adminId && ADMIN_TG_IDS.includes(String(adminId)) ? String(adminId) : null;
+    const id = getTelegramId(initData);
+    return id && ADMIN_TG_IDS.includes(String(id)) ? String(id) : null;
   }
-  // 2) debug режим (только если разрешён)
   if (ALLOW_BROWSER_DEBUG) {
     const debugId = url.searchParams.get('id');
     if (debugId && /^\d{3,15}$/.test(debugId) && ADMIN_TG_IDS.includes(String(debugId))) {
@@ -44,6 +37,12 @@ async function ensureAdmin(req: NextRequest) {
     }
   }
   return null;
+}
+
+function addDays(d: Date, n: number) {
+  const x = new Date(d);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x;
 }
 
 export async function POST(req: NextRequest) {
@@ -54,22 +53,25 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const rawTgId = String(body?.telegramId || '').trim();
+
+    // ✅ Терпимо читаем ID: telegramId | tgId | id, чистим всё кроме цифр
+    const rawAny = String(body?.telegramId ?? body?.tgId ?? body?.id ?? '').trim();
+    const cleanId = rawAny.replace(/[^\d]/g, '');
+    if (!/^\d{3,15}$/.test(cleanId)) {
+      return NextResponse.json({ ok: false, error: 'BAD_TELEGRAM_ID' }, { status: 400 });
+    }
+
     const tier: Tier = resolveTier(body?.tier || 'PRO');
     const plan: Plan = resolvePlan(body?.plan || 'MONTH');
     const extraDays = Math.max(0, Number(body?.extraDays || 0) || 0);
 
-    if (!/^\d{3,15}$/.test(rawTgId)) {
-      return NextResponse.json({ ok: false, error: 'BAD_TELEGRAM_ID' }, { status: 400 });
-    }
-
     const baseDays = getPrices(tier)[plan].days;
     const totalDays = baseDays + extraDays;
 
-    // создать/обновить пользователя
+    // создаём/обновляем пользователя
     const user = await prisma.user.upsert({
-      where: { telegramId: rawTgId },
-      create: { telegramId: rawTgId, plan: tier },
+      where: { telegramId: cleanId },
+      create: { telegramId: cleanId, plan: tier },
       update: { plan: tier },
       select: { id: true, subscriptionUntil: true },
     });
@@ -83,11 +85,11 @@ export async function POST(req: NextRequest) {
       data: { subscriptionUntil: until, plan: tier },
     });
 
-    // лог «платежа» как подарочного
+    // логируем как подарочный платёж
     await prisma.payment.create({
       data: {
         userId: user.id,
-        telegramId: rawTgId,
+        telegramId: cleanId,
         providerPaymentChargeId: `ADMIN-${adminId}-${Date.now()}`,
         payload: `admin_grant:${tier}:${plan}:${totalDays}`,
         tier, plan,
