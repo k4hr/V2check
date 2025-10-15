@@ -1,3 +1,4 @@
+/* path: app/pro/min/page.tsx */
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -29,7 +30,7 @@ export default function ProMinPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // для Crypto Pay
+  // Блок «крипта» (теперь TON deep-link, без CryptoPay)
   const [planCrypto, setPlanCrypto] = useState<Plan>('MONTH');
   const [busyCrypto, setBusyCrypto] = useState(false);
 
@@ -43,6 +44,7 @@ export default function ProMinPage() {
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
 
+      // это событие только для Telegram Stars-инвойсов (верхние кнопки)
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
@@ -58,6 +60,7 @@ export default function ProMinPage() {
     } catch {}
   }, []);
 
+  // Покупка через Stars (как было)
   async function buyStars(plan: Plan) {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
@@ -77,19 +80,24 @@ export default function ProMinPage() {
     }
   }
 
+  // Оплата «криптой» → теперь TON deep-link вместо CryptoPay
   async function buyCrypto() {
     if (busyCrypto) return;
     setBusyCrypto(true); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/pay/cryptopay/createInvoice?tier=${tier}&plan=${planCrypto}`, { method: 'POST' });
-      const { ok, link, error, detail } = await res.json();
-      if (!ok || !link) throw new Error(error || detail || 'cryptopay:createInvoice failed');
+      const res = await fetch(`/api/pay/ton/createLink?tier=${tier}&plan=${planCrypto}`, { method: 'POST' });
+      const { ok, link, error, note } = await res.json();
+      if (!ok || !link) throw new Error(error || 'ton:createLink failed');
 
       const tg: any = (window as any).Telegram?.WebApp;
-      if (tg?.openTelegramLink) tg.openTelegramLink(link);
+      // открываем тон-линк (кошелёк Ton Space/Wallet сам перехватит)
+      if (tg?.openLink) tg.openLink(link);
+      else if (tg?.openTelegramLink) tg.openTelegramLink(link);
       else window.location.href = link;
+
+      if (note) setInfo(String(note));
     } catch (e: any) {
-      setMsg(String(e?.message || 'Crypto Pay error'));
+      setMsg(String(e?.message || 'TON payment error'));
     } finally {
       setBusyCrypto(false);
     }
@@ -139,13 +147,13 @@ export default function ProMinPage() {
           })}
         </div>
 
-        {/* Оплата Crypto Pay */}
+        {/* Оплата TON (бывший блок CryptoPay) */}
         <div className="crypto-card">
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
             <div className="crypto-text">
-              <b className="crypto-title">Оплатить через Crypto&nbsp;Pay</b>
-              <small className="crypto-sub">TON/USDT — безопасно и быстро</small>
+              <b className="crypto-title">Оплатить TON</b>
+              <small className="crypto-sub">Прямой перевод в кошелёк через ton:// ссылку</small>
             </div>
           </div>
 
@@ -168,7 +176,7 @@ export default function ProMinPage() {
             disabled={busyCrypto}
             className="crypto-cta"
           >
-            {busyCrypto ? 'Создаём счёт…' : `Оплатить (${TITLES[planCrypto].split('— ')[1]})`}
+            {busyCrypto ? 'Открываем кошелёк…' : `Оплатить (${TITLES[planCrypto].split('— ')[1]})`}
           </button>
         </div>
       </div>
@@ -196,7 +204,7 @@ export default function ProMinPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* Crypto card */
+        /* TON card */
         .crypto-card {
           margin-top: 6px;
           padding: 14px;
@@ -205,7 +213,7 @@ export default function ProMinPage() {
           border: 1px solid rgba(120,170,255,.18);
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
           display:flex; flex-direction:column; gap:12px;
-          color: #fff; /* базовый белый внутри карточки */
+          color: #fff;
         }
         .crypto-header { display:flex; gap:10px; align-items:center; }
         .crypto-icon {
@@ -214,19 +222,8 @@ export default function ProMinPage() {
           color:#fff;
         }
         .crypto-text { line-height: 1.15; }
-        .crypto-title {
-          display:block;
-          white-space: nowrap; /* в одну строку */
-          color:#fff;
-          font-weight: 800;
-          letter-spacing: .2px;
-        }
-        .crypto-sub {
-          display:block;
-          margin-top: 4px;
-          color: rgba(255,255,255,.85); /* белый, но чуть мягче */
-          font-size: 13px;
-        }
+        .crypto-title { display:block; white-space: nowrap; color:#fff; font-weight: 800; letter-spacing: .2px; }
+        .crypto-sub { display:block; margin-top: 4px; color: rgba(255,255,255,.85); font-size: 13px; }
 
         .seg { display:flex; gap:8px; flex-wrap:wrap; }
         .seg__btn {
