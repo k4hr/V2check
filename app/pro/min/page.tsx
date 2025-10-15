@@ -17,10 +17,7 @@ const TITLES: Record<Plan, string> = {
 function Star({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden focusable="false">
-      <path
-        d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z"
-        fill="currentColor"
-      />
+      <path d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z" fill="currentColor" />
     </svg>
   );
 }
@@ -30,9 +27,9 @@ export default function ProMinPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // Блок «крипта» (теперь TON deep-link, без CryptoPay)
-  const [planCrypto, setPlanCrypto] = useState<Plan>('MONTH');
-  const [busyCrypto, setBusyCrypto] = useState(false);
+  // TON
+  const [planTon, setPlanTon] = useState<Plan>('MONTH');
+  const [busyTon, setBusyTon] = useState(false);
 
   const prices = useMemo(() => getPrices(tier), []);
 
@@ -44,7 +41,7 @@ export default function ProMinPage() {
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
 
-      // это событие только для Telegram Stars-инвойсов (верхние кнопки)
+      // это актуально только для Stars, но оставим на всякий
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
@@ -60,7 +57,7 @@ export default function ProMinPage() {
     } catch {}
   }, []);
 
-  // Покупка через Stars (как было)
+  // Stars (как было)
   async function buyStars(plan: Plan) {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
@@ -80,26 +77,31 @@ export default function ProMinPage() {
     }
   }
 
-  // Оплата «криптой» → теперь TON deep-link вместо CryptoPay
-  async function buyCrypto() {
-    if (busyCrypto) return;
-    setBusyCrypto(true); setMsg(null); setInfo(null);
+  // TON (новое): создаём deeplink и открываем его напрямую
+  async function buyTon() {
+    if (busyTon) return;
+    setBusyTon(true); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/pay/ton/createLink?tier=${tier}&plan=${planCrypto}`, { method: 'POST' });
-      const { ok, link, error, note } = await res.json();
-      if (!ok || !link) throw new Error(error || 'ton:createLink failed');
+      const res = await fetch(`/api/pay/ton/create?tier=${tier}&plan=${planTon}`, { method: 'POST' });
+      const data = await res.json();
+      const url: string = data?.payton || data?.deeplink || data?.link || '';
 
-      const tg: any = (window as any).Telegram?.WebApp;
-      // открываем тон-линк (кошелёк Ton Space/Wallet сам перехватит)
-      if (tg?.openLink) tg.openLink(link);
-      else if (tg?.openTelegramLink) tg.openTelegramLink(link);
-      else window.location.href = link;
+      if (!url) throw new Error('TON_LINK_EMPTY');
 
-      if (note) setInfo(String(note));
+      // Важно: НЕ используем Telegram.WebApp.openLink для ton:// — он допускает только http/https.
+      try {
+        // Пытаемся открыть через смену location — это корректно для deeplink-схем.
+        window.location.href = url;
+      } catch {
+        // Фолбек — в новое окно (на всякий случай)
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     } catch (e: any) {
-      setMsg(String(e?.message || 'TON payment error'));
+      // Ранее тут «проскакивало» системное сообщение «The string did not match the expected pattern.»
+      // Теперь мы не вызываем openLink, поэтому ошибки SDK не будет.
+      setMsg(String(e?.message || 'TON: не удалось открыть ссылку'));
     } finally {
-      setBusyCrypto(false);
+      setBusyTon(false);
     }
   }
 
@@ -108,7 +110,6 @@ export default function ProMinPage() {
   return (
     <main>
       <div className="safe">
-        {/* Назад */}
         <button
           type="button"
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
@@ -147,13 +148,13 @@ export default function ProMinPage() {
           })}
         </div>
 
-        {/* Оплата TON (бывший блок CryptoPay) */}
+        {/* Оплата TON */}
         <div className="crypto-card">
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
             <div className="crypto-text">
               <b className="crypto-title">Оплатить TON</b>
-              <small className="crypto-sub">Прямой перевод в кошелёк через ton:// ссылку</small>
+              <small className="crypto-sub">Прямой перевод в кошелёк по ton:// ссылке</small>
             </div>
           </div>
 
@@ -161,8 +162,8 @@ export default function ProMinPage() {
             {(['WEEK','MONTH','HALF_YEAR','YEAR'] as Plan[]).map(p => (
               <button
                 key={p}
-                className={`seg__btn ${planCrypto === p ? 'is-active' : ''}`}
-                onClick={() => setPlanCrypto(p)}
+                className={`seg__btn ${planTon === p ? 'is-active' : ''}`}
+                onClick={() => setPlanTon(p)}
                 type="button"
               >
                 {TITLES[p].split('— ')[1]}
@@ -172,11 +173,11 @@ export default function ProMinPage() {
 
           <button
             type="button"
-            onClick={buyCrypto}
-            disabled={busyCrypto}
+            onClick={buyTon}
+            disabled={busyTon}
             className="crypto-cta"
           >
-            {busyCrypto ? 'Открываем кошелёк…' : `Оплатить (${TITLES[planCrypto].split('— ')[1]})`}
+            {busyTon ? 'Готовим ссылку…' : `Оплатить (${TITLES[planTon].split('— ')[1]})`}
           </button>
         </div>
       </div>
@@ -186,17 +187,9 @@ export default function ProMinPage() {
         .title { text-align: center; margin: 6px 0 2px; }
         .err { color: #ff4d6d; text-align: center; }
         .info { opacity: .7; text-align: center; }
-        .back {
-          width: 120px; padding: 10px 14px; border-radius: 12px;
-          background:#171a21; border:1px solid var(--border);
-          display:flex; align-items:center; gap:8px;
-        }
+        .back { width: 120px; padding: 10px 14px; border-radius: 12px; background:#171a21; border:1px solid var(--border); display:flex; align-items:center; gap:8px; }
         .list { display: grid; gap: 12px; }
-        .row {
-          width: 100%; border: 1px solid #333; border-radius: 14px;
-          padding: 14px 18px; display: grid; grid-template-columns: 1fr auto;
-          align-items: center; column-gap: 12px; background: #121621;
-        }
+        .row { width: 100%; border: 1px solid #333; border-radius: 14px; padding: 14px 18px; display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 12px; background: #121621; }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
         .dot { font-size: 18px; }
         .name { white-space: nowrap; }
@@ -204,41 +197,23 @@ export default function ProMinPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* TON card */
-        .crypto-card {
-          margin-top: 6px;
-          padding: 14px;
-          border-radius: 16px;
+        .crypto-card { margin-top: 6px; padding: 14px; border-radius: 16px;
           background: radial-gradient(120% 140% at 10% 0%, rgba(76,130,255,.12), rgba(255,255,255,.03));
           border: 1px solid rgba(120,170,255,.18);
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
-          display:flex; flex-direction:column; gap:12px;
-          color: #fff;
-        }
+          display:flex; flex-direction:column; gap:12px; color: #fff; }
         .crypto-header { display:flex; gap:10px; align-items:center; }
-        .crypto-icon {
-          width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
-          background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
-          color:#fff;
-        }
+        .crypto-icon { width:34px; height:34px; border-radius:10px; display:grid; place-items:center; background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22); color:#fff; }
         .crypto-text { line-height: 1.15; }
         .crypto-title { display:block; white-space: nowrap; color:#fff; font-weight: 800; letter-spacing: .2px; }
         .crypto-sub { display:block; margin-top: 4px; color: rgba(255,255,255,.85); font-size: 13px; }
 
         .seg { display:flex; gap:8px; flex-wrap:wrap; }
-        .seg__btn {
-          padding:8px 12px; border-radius:12px; background:#121722; border:1px solid rgba(255,255,255,.08);
-          color:#fff;
-        }
+        .seg__btn { padding:8px 12px; border-radius:12px; background:#121722; border:1px solid rgba(255,255,255,.08); color:#fff; }
         .seg__btn.is-active { border-color: rgba(120,170,255,.5); box-shadow: inset 0 0 0 1px rgba(120,170,255,.25); }
-        .crypto-cta {
-          width: 100%; padding: 14px 16px; border-radius: 14px;
+        .crypto-cta { width: 100%; padding: 14px 16px; border-radius: 14px;
           background: linear-gradient(135deg, rgba(120,170,255,.35), rgba(90,140,255,.18));
-          border: 1px solid rgba(120,170,255,.45);
-          box-shadow: 0 12px 36px rgba(90,140,255,.28);
-          font-weight: 700;
-          color:#fff;
-        }
+          border: 1px solid rgba(120,170,255,.45); box-shadow: 0 12px 36px rgba(90,140,255,.28); font-weight: 700; color:#fff; }
       `}</style>
     </main>
   );
