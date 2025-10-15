@@ -1,75 +1,84 @@
-// app/api/pay/cryptopay/createInvoice/route.ts
+/* path: app/api/pay/cryptopay/createInvoice/route.ts */
 import { NextResponse, type NextRequest } from 'next/server';
 import { getPrices, resolvePlan, resolveTier, type Tier, type Plan } from '@/lib/pricing';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-// ENV
-const CP_TOKEN   = process.env.CRYPTO_PAY_TOKEN || '';                  // из @CryptoBot → Crypto Pay → Create App
-const CP_API     = process.env.CRYPTO_PAY_API_BASE || 'https://pay.crypt.bot/api';
-const CP_ASSET   = (process.env.CRYPTO_PAY_ASSET || 'TON').toUpperCase(); // TON | USDT | USDC | BTC | ETH
-// во что конвертируем “звёзды”: amount = stars * MULTIPLIER (пример: 0.01 → 399⭐ = 3.99 TON)
-const MULTIPLIER = Number(process.env.CRYPTO_PAY_AMOUNT_PER_STAR || '0.01');
+/**
+ * ⚠️ Теперь без CryptoPay.
+ * Этот endpoint генерирует deep-link для прямого перевода на TON-кошелёк
+ * с предзаполненной суммой и комментарием (для сопоставления платежа).
+ */
 
-function toFixedAmount(n: number) {
-  // TON/USDT спокойно принимают 2 знака; ограничим до 2-х.
+// ENV / настройки
+const TON_ADDRESS = (process.env.TON_WALLET_ADDRESS || 'UQD3cPQVrdaPdHE0Ez6b6Z8e3eLw8Pu8YPu1AKAlRdYq7dIs').trim();
+// Во что конвертируем “звёзды”: amountTON = stars * MULTIPLIER  (пример: 0.01 → 399⭐ = 3.99 TON)
+const MULTIPLIER = Number(process.env.TON_AMOUNT_PER_STAR || '0.01');
+
+function toFixedAmountTON(n: number) {
+  // для TON обычно достаточно 2-х знаков после запятой (кошельки округлят точнее при необходимости)
   return n.toFixed(2);
+}
+function toNano(ton: string) {
+  // amount (nanotons) — целое число
+  const n = Math.round(Number(ton) * 1e9);
+  return n.toString();
+}
+
+function buildTonUri(address: string, amountTON: string, text: string) {
+  const amountNano = toNano(amountTON);
+  const query = new URLSearchParams({ amount: amountNano, text }).toString();
+  return `ton://transfer/${address}?${query}`;
+}
+function buildTonkeeper(address: string, amountTON: string, text: string) {
+  const query = new URLSearchParams({ amount: amountTON, text }).toString();
+  return `https://app.tonkeeper.com/transfer/${address}?${query}`;
+}
+function buildTonhub(address: string, amountTON: string, text: string) {
+  const query = new URLSearchParams({ amount: amountTON, text }).toString();
+  return `https://tonhub.com/transfer/${address}?${query}`;
 }
 
 export async function POST(req: NextRequest) {
   try {
-    if (!CP_TOKEN) {
-      return NextResponse.json({ ok: false, error: 'CRYPTO_PAY_TOKEN_MISSING' }, { status: 500 });
-    }
-
     let body: any = null;
     try { body = await req.json(); } catch {}
     const url = new URL(req.url);
 
-    const tier: Tier  = resolveTier(body?.tier || url.searchParams.get('tier') || 'PRO');
-    const plan: Plan  = resolvePlan(body?.plan || url.searchParams.get('plan') || 'MONTH');
-    const price       = getPrices(tier)[plan];
+    // тариф и период
+    const tier: Tier = resolveTier(body?.tier || url.searchParams.get('tier') || 'PRO');
+    const plan: Plan = resolvePlan(body?.plan || url.searchParams.get('plan') || 'MONTH');
+    const price     = getPrices(tier)[plan];
 
-    // Конвертация “звёзд” → крипто-сумма по вашему правилу
-    const amountStr = toFixedAmount(price.stars * MULTIPLIER);
-    const payload   = `subs2:${tier}:${plan}`;
+    // сумма в TON
+    const amountTON = toFixedAmountTON(price.stars * MULTIPLIER);
 
-    const res = await fetch(`${CP_API}/createInvoice`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Crypto-Pay-API-Token': CP_TOKEN,     // <-- правильный заголовок
-      },
-      body: JSON.stringify({
-        asset: CP_ASSET,                      // TON/USDT/…
-        amount: amountStr,                    // строкой, например "3.99"
-        description: price.title,
-        payload,                              // вернётся в webhook
-        allow_anonymous: true,
-        allow_comments: false,
-        // paid_btn_name: 'callback',         // опционально
-        // paid_btn_url:  'https://…',        // опционально
-      }),
-    });
+    // payload/комментарий для сопоставления платежа
+    const orderId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+    const payload = `subs2:${tier}:${plan}:${orderId}`;
+    const comment = `${price.title} • ${payload}`;
 
-    const data: any = await res.json().catch(() => null);
-
-    if (!data?.ok || !data?.result?.pay_url) {
-      const detail = data?.error || data?.description || `HTTP_${res.status}`;
-      return NextResponse.json(
-        { ok: false, error: `cryptopay:createInvoice failed`, detail, request: { asset: CP_ASSET, amount: amountStr, tier, plan } },
-        { status: 502 },
-      );
-    }
+    // deep links
+    const tonUri      = buildTonUri(TON_ADDRESS, amountTON, comment);
+    const tonkeeper   = buildTonkeeper(TON_ADDRESS, amountTON, comment);
+    const tonhub      = buildTonhub(TON_ADDRESS, amountTON, comment);
 
     return NextResponse.json({
       ok: true,
-      link: data.result.pay_url,             // это то, что надо открывать
-      invoice_id: data.result.invoice_id,
+      asset: 'TON',
+      address: TON_ADDRESS,
+      amountTon: amountTON,
+      amountNanoTon: toNano(amountTON),
+      comment,
+      orderId,
       tier, plan,
-      asset: CP_ASSET,
-      amount: amountStr,
+      links: {
+        ton: tonUri,          // системный ton://transfer/… (многие кошельки подхватят)
+        tonkeeper,            // web+app deeplink для Tonkeeper
+        tonhub,               // web deeplink для Tonhub
+      },
+      // можно отрисовать QR на основе `ton` или просто адреса
     });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
