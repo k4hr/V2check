@@ -11,11 +11,11 @@ const STRINGS: Record<Locale, any> = {
   ru: { appTitle:'LiveManager', subtitle:'Умные инструменты на каждый день',
         cabinet:'Личный кабинет', buy:'Купить подписку', daily:'Ежедневные задачи',
         expert:'Эксперт центр', changeLang:'Сменить язык', chooseLang:'Выберите язык интерфейса',
-        cancel:'Отмена', save:'Сохранить', pro:'Pro', proplus:'Pro+' },
+        cancel:'Отмена', save:'Сохранить', pro:'Pro', proplus:'Pro+', free:'Бесплатно' },
   en: { appTitle:'LiveManager', subtitle:'Smart tools for every day',
         cabinet:'Account', buy:'Buy subscription', daily:'Daily tasks',
         expert:'Expert Center', changeLang:'Change language', chooseLang:'Choose interface language',
-        cancel:'Cancel', save:'Save', pro:'Pro', proplus:'Pro+' },
+        cancel:'Cancel', save:'Save', pro:'Pro', proplus:'Pro+', free:'Free' },
 };
 
 const LOCALES = [
@@ -62,7 +62,7 @@ export default function HomePage(){
           className="card"
           style={{
             textDecoration:'none',
-            background:'linear-gradient(135deg,#2f2411 0%, #3b2c12 50%, #4b3513 100%)',
+            background:'linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%)',
             border:'1px solid #ffd278',
             boxShadow:'0 14px 36px rgba(255,191,73,.28), inset 0 0 0 1px rgba(255,255,255,.06)'
           }}
@@ -100,7 +100,7 @@ export default function HomePage(){
       </div>
 
       <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
-        <button type="button" onClick={()=>{setOpen(v=>!v);haptic('light');}} className="ghost-link" style={{textDecoration:'none' as any}} aria-expanded={open}}>
+        <button type="button" onClick={()=>{setOpen(v=>!v);haptic('light');}} className="ghost-link" style={{textDecoration:'none'}} aria-expanded={open}>
           🌐 {L.changeLang}
         </button>
       </div>
@@ -127,7 +127,7 @@ export default function HomePage(){
               {STRINGS[currentLocale].cancel}
             </button>
             <button type="button" onClick={onSave} disabled={saving || pendingLocale===currentLocale} className="list-btn"
-              style={{padding:'10px 14px',borderRadius:12,background:saving?'#2a3150':'#2e3560',border:'1px solid #4b57b3',opacity:saving?0.7:1}}>
+              style={{padding:'10px 14px',borderRadius:12,background:saving?'#2a3150':'#2e3560',border:'1px solid #4b57b3',opacity: saving ? 0.7 : 1}}>
               {STRINGS[currentLocale].save}
             </button>
           </div>
