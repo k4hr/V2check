@@ -1,8 +1,9 @@
-// app/cabinet/page.tsx
+/* path: app/cabinet/page.tsx */
 'use client';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { readLocale, type Locale } from '@/lib/i18n';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
@@ -72,8 +73,35 @@ function normalizePlan(plan?: string | null): 'pro' | 'pro+' | null {
 /* ---------------------------------- */
 
 export default function CabinetPage() {
+  const locale: Locale = readLocale();
+
+  // локализованные строки (минимально самодостаточные для страницы)
+  const T = {
+    back: locale === 'en' ? 'Back' : 'Назад',
+    title: locale === 'en' ? 'Account' : 'Личный кабинет',
+    hi: locale === 'en' ? 'Hello,' : 'Здравствуйте,',
+    welcome: locale === 'en' ? 'Welcome!' : 'Добро пожаловать!',
+    subTitle: locale === 'en' ? 'Subscription status' : 'Статус подписки',
+    checking: locale === 'en' ? 'Checking subscription…' : 'Проверяем подписку…',
+    buyBtn: locale === 'en' ? 'Buy / extend subscription' : 'Купить/продлить подписку',
+    favBtn: locale === 'en' ? 'Favorites' : 'Избранное',
+    notActive: locale === 'en' ? 'No active subscription.' : 'Подписка не активна.',
+    proActive: (until?: string | null) =>
+      locale === 'en'
+        ? `Your Pro plan is active.${until ? ` Until ${until}` : ''}`
+        : `У вас подписка Pro.${until ? ` До ${until}` : ''}`,
+    proPlusActive: (until?: string | null) =>
+      locale === 'en'
+        ? `Your Pro+ plan is active.${until ? ` Until ${until}` : ''}`
+        : `У вас подписка Pro+.${until ? ` До ${until}` : ''}`,
+    activeGeneric: (until?: string | null) =>
+      locale === 'en'
+        ? `Subscription is active.${until ? ` Until ${until}` : ''}`
+        : `Подписка активна.${until ? ` До ${until}` : ''}`,
+  };
+
   const [user, setUser] = useState<MeResp['user']>(null);
-  const [statusText, setStatusText] = useState('Подписка не активна.');
+  const [statusText, setStatusText] = useState(T.notActive);
   const [loading, setLoading] = useState(false);
 
   // admin visibility
@@ -103,6 +131,11 @@ export default function CabinetPage() {
     [debugId]
   );
 
+  useEffect(() => {
+    // синхронизируем <html lang> на всякий случай
+    try { document.documentElement.lang = locale; } catch {}
+  }, [locale]);
+
   async function loadMe(initData?: string) {
     setLoading(true);
     try {
@@ -122,22 +155,20 @@ export default function CabinetPage() {
       const planNorm = normalizePlan(sub?.plan);
 
       if (isActive) {
-        // если активна — формируем надпись по плану
         const untilTxt = untilStr ? formatDate(new Date(untilStr)) : null;
 
         if (planNorm === 'pro') {
-          setStatusText(`У вас подписка Pro.${untilTxt ? ` До ${untilTxt}` : ''}`);
+          setStatusText(T.proActive(untilTxt));
         } else if (planNorm === 'pro+') {
-          setStatusText(`У вас подписка Pro+.${untilTxt ? ` До ${untilTxt}` : ''}`);
+          setStatusText(T.proPlusActive(untilTxt));
         } else {
-          // неизвестное имя плана — общий текст
-          setStatusText(untilTxt ? `Подписка активна до ${untilTxt}` : 'Подписка активна.');
+          setStatusText(T.activeGeneric(untilTxt));
         }
       } else {
-        setStatusText('Подписка не активна.');
+        setStatusText(T.notActive);
       }
     } catch {
-      setStatusText('Подписка не активна.');
+      setStatusText(T.notActive);
     } finally {
       setLoading(false);
     }
@@ -190,7 +221,8 @@ export default function CabinetPage() {
     } else {
       setIsAdmin(false);
     }
-  }, [debugId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debugId, locale]);
 
   const hello =
     (user?.first_name || '') +
@@ -220,7 +252,7 @@ export default function CabinetPage() {
             }}
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
-            <span style={{ fontWeight: 600 }}>Назад</span>
+            <span style={{ fontWeight: 600 }}>{T.back}</span>
           </button>
 
           {isAdmin ? (
@@ -245,21 +277,21 @@ export default function CabinetPage() {
           <div style={{ fontSize: 12, opacity: .5, marginTop: -6 }}>{adminInfo}</div>
         )}
 
-        <h1 style={{ textAlign: 'center' }}>Личный кабинет</h1>
+        <h1 style={{ textAlign: 'center' }}>{T.title}</h1>
         <p style={{ textAlign: 'center', opacity: .85 }}>
-          {hello ? <>Здравствуйте, <b>{hello}</b></> : 'Добро пожаловать!'}
+          {hello ? <>{T.hi} <b>{hello}</b></> : T.welcome}
         </p>
 
         <div style={{ marginTop: 2 }}>
           <div style={{ margin: '0 auto', maxWidth: 680, padding: 12, border: '1px solid #333', borderRadius: 12 }}>
-            <h3 style={{ marginTop: 0, textAlign: 'center' }}>Статус подписки</h3>
-            <p style={{ textAlign: 'center' }}>{loading ? 'Проверяем подписку…' : statusText}</p>
+            <h3 style={{ marginTop: 0, textAlign: 'center' }}>{T.subTitle}</h3>
+            <p style={{ textAlign: 'center' }}>{loading ? T.checking : statusText}</p>
 
             <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
               <Link href={hrefPro} className="list-btn" style={{ textDecoration: 'none' }}>
                 <span className="list-btn__left">
                   <span className="list-btn__emoji">⭐</span>
-                  <b>Купить/продлить подписку</b>
+                  <b>{T.buyBtn}</b>
                 </span>
                 <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
               </Link>
@@ -267,7 +299,7 @@ export default function CabinetPage() {
               <Link href={hrefFav} className="list-btn" style={{ textDecoration: 'none' }}>
                 <span className="list-btn__left">
                   <span className="list-btn__emoji">🌟</span>
-                  <b>Избранное</b>
+                  <b>{T.favBtn}</b>
                 </span>
                 <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
               </Link>
