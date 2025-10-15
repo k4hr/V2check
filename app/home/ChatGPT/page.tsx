@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import BackBtn from '@/components/BackBtn';
 import type { Route } from 'next';
+import { readLocale } from '@/lib/i18n';
 
 export type Msg = {
   role: 'system' | 'user' | 'assistant';
@@ -46,17 +47,40 @@ function openLink(url: string) {
 type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
 export default function ChatGPTPage() {
+  const locale = readLocale();
   const title = 'CHATGPT 5';
-  const subtitle = 'Свободное общение. Спросите что угодно.';
-  const systemPrompt = 'Ты дружелюбный ассистент. Пиши по делу и без Markdown.';
+  const subtitle = locale === 'en' ? 'Free-form chat. Ask anything.' : 'Свободное общение. Спросите что угодно.';
+  const systemPrompt = locale === 'en'
+    ? 'You are a friendly assistant. Be concise and do not use Markdown.'
+    : 'Ты дружелюбный ассистент. Пиши по делу и без Markdown.';
   const mode = 'chat';
   const backHref = '/home' as Route;
   const maxAttach = MAX_ATTACH_DEFAULT;
   const passthroughIdParam = true;
 
+  const t = {
+    proBadge: locale === 'en' ? 'Pro+ active' : 'Pro+ активен',
+    uploadingFail: locale === 'en' ? 'Failed to upload all attachments. Try again?' : 'Не удалось загрузить все вложения. Попробуем ещё раз?',
+    svcDown: locale === 'en' ? 'Service is temporarily unavailable. Try again?' : 'Сервис временно недоступен. Попробуем ещё раз?',
+    gotIt: locale === 'en' ? 'Done. Continue?' : 'Готово. Продолжим?',
+    limit: (n:number)=> locale === 'en'
+      ? `Daily free limit reached (${n}). Get Pro or try again tomorrow.` 
+      : `Исчерпан дневной бесплатный лимит (${n}). Оформите Pro или попробуйте завтра.`,
+    starAddOnlyPro: locale === 'en' ? 'Favorites are available in Pro+ only.' : 'Избранное доступно только в Pro+.',
+    saved: locale === 'en' ? 'Chat saved to favorites ★' : 'Чат сохранён в избранное ★',
+    saveFail: locale === 'en' ? 'Failed to save to favorites.' : 'Не удалось сохранить в избранное.',
+    starOnTitle: locale === 'en' ? 'Remove from favorites' : 'Убрать из избранного',
+    starOffTitle: locale === 'en' ? 'Save chat to favorites (Pro+)' : 'Сохранить весь чат в избранное (Pro+)',
+    placeholder: locale === 'en' ? "I'm listening..." : 'Я вас слушаю...',
+    download: locale === 'en' ? 'Download' : 'Скачать',
+    open: locale === 'en' ? 'Open' : 'Открыть',
+    thinking: locale === 'en' ? 'Thinking…' : 'Думаю…',
+    hello: locale === 'en' ? 'Hi! How can I help?' : 'Привет! Чем помочь?',
+  };
+
   const [messages, setMessages] = useState<Msg[]>([
     { role: 'system', content: systemPrompt },
-    { role: 'assistant', content: 'Привет! Чем помочь?' },
+    { role: 'assistant', content: t.hello },
   ]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -158,8 +182,8 @@ export default function ChatGPTPage() {
         });
         const data = await r.json();
         if (data?.error === 'PRO_PLUS_REQUIRED') {
-          setMessages(m => [...m, { role: 'assistant', content: 'Избранное доступно только в Pro+.' }]);
-          setThread(t => ({ ...t, busy: false }));
+          setMessages(m => [...m, { role: 'assistant', content: t.starAddOnlyPro }]);
+          setThread(s => ({ ...s, busy: false }));
           return;
         }
         if (!data?.ok || !data.thread?.id) throw new Error(data?.error || 'CREATE_FAILED');
@@ -173,8 +197,8 @@ export default function ChatGPTPage() {
         });
         const data = await r.json();
         if (data?.error === 'PRO_PLUS_REQUIRED') {
-          setMessages(m => [...m, { role: 'assistant', content: 'Избранное доступно только в Pro+.' }]);
-          setThread(t => ({ ...t, busy: false }));
+          setMessages(m => [...m, { role: 'assistant', content: t.starAddOnlyPro }]);
+          setThread(s => ({ ...s, busy: false }));
           return;
         }
         if (!data?.ok) throw new Error(data?.error || 'PATCH_FAILED');
@@ -191,14 +215,16 @@ export default function ChatGPTPage() {
       if (!data2?.ok) throw new Error(data2?.error || 'SAVE_MESSAGES_FAILED');
 
       setThread({ id: tid, starred: true, busy: false });
-      setMessages(m => [...m, { role: 'assistant', content: 'Чат сохранён в избранное ★' }]);
+      setMessages(m => [...m, { role: 'assistant', content: t.saved }]);
     } catch {
-      setMessages(m => [...m, { role: 'assistant', content: 'Не удалось сохранить в избранное.' }]);
-      setThread(t => ({ ...t, busy: false }));
+      setMessages(m => [...m, { role: 'assistant', content: t.saveFail }]);
+      setThread(s => ({ ...s, busy: false }));
     }
-  }, [thread, collectMsgsForSave, idSuffix, mode, title]);
+  }, [thread, collectMsgsForSave, idSuffix, mode, title, t]);
 
   // ==== отправка ====
+
+  const [loadingRef] = [loading];
 
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
@@ -228,15 +254,15 @@ export default function ChatGPTPage() {
   }, []);
 
   const send = useCallback(async () => {
-    const t = norm(text);
-    if ((!t && attach.length === 0) || loading || uploading) return;
+    const tText = norm(text);
+    if ((!tText && attach.length === 0) || loading || uploading) return;
 
     setLoading(true);
     setUploading(true);
 
     setMessages(m => [
       ...m,
-      { role: 'user', content: (t || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') },
+      { role: 'user', content: (tText || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') },
     ]);
 
     const uploadedUrls: string[] = [];
@@ -273,7 +299,7 @@ export default function ChatGPTPage() {
         const last = prev[prev.length - 1];
         return prev.map(x => x.id === last.id ? { ...x, status: 'error', errMsg: 'Ошибка' } : x);
       });
-      setMessages(m => [...m, { role: 'assistant', content: 'Не удалось загрузить все вложения. Попробуем ещё раз?' }]);
+      setMessages(m => [...m, { role: 'assistant', content: t.uploadingFail }]);
       setUploading(false);
       setLoading(false);
       return;
@@ -282,7 +308,7 @@ export default function ChatGPTPage() {
     const imagesNote = uploadedUrls.length
       ? '\n\nПрикреплённые изображения:\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
       : '';
-    const promptText = (t || '') + imagesNote;
+    const promptText = (tText || '') + imagesNote;
 
     try {
       const history = [
@@ -312,23 +338,23 @@ export default function ChatGPTPage() {
           setMessages(m => [...m, { role: 'assistant', content: '(изображения)', images: uniqueImages }]);
         }
         if (!reply && !uniqueImages.length) {
-          setMessages(m => [...m, { role: 'assistant', content: 'Готово. Продолжим?' }]);
+          setMessages(m => [...m, { role: 'assistant', content: t.gotIt }]);
         }
       } else if (data?.error === 'FREE_LIMIT_REACHED') {
-        const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
+        const msg = t.limit(Number(data?.freeLimit ?? 0));
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
       } else {
-        setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
+        setMessages(m => [...m, { role: 'assistant', content: t.svcDown }]);
       }
     } catch {
-      setMessages(m => [...m, { role: 'assistant', content: 'Не получилось получить ответ. Попробуем ещё раз?' }]);
+      setMessages(m => [...m, { role: 'assistant', content: t.svcDown }]);
     } finally {
       setLoading(false);
       setUploading(false);
       setText('');
       setAttach(prev => { prev.forEach(a => URL.revokeObjectURL(a.previewUrl)); return []; });
     }
-  }, [attach, idSuffix, loading, mode, systemPrompt, text, uploading, messages]);
+  }, [attach, idSuffix, loading, mode, systemPrompt, text, uploading, messages, t]);
 
   const pickDisabled = attach.length >= maxAttach || uploading || loading;
 
@@ -349,7 +375,7 @@ export default function ChatGPTPage() {
           type="button"
           onClick={toggleStar}
           disabled={thread.busy}
-          title={thread.starred ? 'Убрать из избранного' : 'Сохранить весь чат в избранное (Pro+)'}
+          title={thread.starred ? t.starOnTitle : t.starOffTitle}
           style={{
             position: 'absolute', top: 0, right: 0,
             width: 36, height: 36, borderRadius: 10,
@@ -394,7 +420,7 @@ export default function ChatGPTPage() {
             }}
           >
             <span aria-hidden>✨</span>
-            Pro+ активен
+            {t.proBadge}
           </span>
         </div>
       </div>
@@ -489,7 +515,7 @@ export default function ChatGPTPage() {
                             <a
                               href={src}
                               download
-                              title="Скачать"
+                              title={t.download}
                               style={{
                                 padding: '6px 8px',
                                 borderRadius: 10,
@@ -501,12 +527,12 @@ export default function ChatGPTPage() {
                                 backdropFilter: 'blur(6px)',
                               }}
                             >
-                              Скачать
+                              {t.download}
                             </a>
                             <button
                               type="button"
                               onClick={() => openLink(src)}
-                              title="Открыть"
+                              title={t.open}
                               style={{
                                 padding: '6px 8px',
                                 borderRadius: 10,
@@ -516,7 +542,7 @@ export default function ChatGPTPage() {
                                 fontSize: 12,
                               }}
                             >
-                              Открыть
+                              {t.open}
                             </button>
                           </div>
                         </figure>
@@ -529,7 +555,7 @@ export default function ChatGPTPage() {
           );
         })}
         {(loading || uploading) && (
-          <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>Думаю…</div>
+          <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>{t.thinking}</div>
         )}
       </div>
 
@@ -631,7 +657,7 @@ export default function ChatGPTPage() {
           value={text}
           onChange={e => setText(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-          placeholder="Я вас слушаю..."
+          placeholder={t.placeholder}
           style={{
             height: 40,
             padding: '0 12px',
