@@ -4,30 +4,14 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { useEffect, useMemo, useState } from 'react';
-
-type Locale = 'ru' | 'en';
-
-const STRINGS: Record<Locale, any> = {
-  ru: { appTitle:'LiveManager', subtitle:'Умные инструменты на каждый день',
-        cabinet:'Личный кабинет', buy:'Купить подписку', daily:'Ежедневные задачи',
-        expert:'Эксперт центр', changeLang:'Сменить язык', chooseLang:'Выберите язык интерфейса',
-        cancel:'Отмена', save:'Сохранить', pro:'Pro', proplus:'Pro+', free:'Бесплатно' },
-  en: { appTitle:'LiveManager', subtitle:'Smart tools for every day',
-        cabinet:'Account', buy:'Buy subscription', daily:'Daily tasks',
-        expert:'Expert Center', changeLang:'Change language', chooseLang:'Choose interface language',
-        cancel:'Cancel', save:'Save', pro:'Pro', proplus:'Pro+', free:'Free' },
-};
+import { STRINGS, readLocale, setLocaleEverywhere, type Locale } from '@/lib/i18n';
 
 const LOCALES = [
   { code: 'ru' as const, label: 'Русский', flag: '🇷🇺' },
   { code: 'en' as const, label: 'English', flag: '🇬🇧' },
 ];
 
-function getCookie(n: string) { try { const p=(document.cookie||'').split('; ').find(r=>r.startsWith(n+'=')); return p?decodeURIComponent(p.split('=').slice(1).join('=')):''; } catch { return ''; } }
-function setCookie(k: string,v: string){ try{ document.cookie=`${k}=${encodeURIComponent(v)}; Max-Age=${60*60*24*365}; Path=/; SameSite=Lax`; }catch{} }
 function haptic(type:'light'|'medium'='light'){ try{(window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);}catch{} }
-function readLocale():Locale{ const v=(getCookie('NEXT_LOCALE')||getCookie('locale')||'ru').toLowerCase(); return v==='en'?'en':'ru'; }
-function setLocaleEverywhere(c:Locale){ setCookie('locale',c); setCookie('NEXT_LOCALE',c); try{document.documentElement.lang=c;}catch{} }
 
 export default function HomePage(){
   const [open,setOpen]=useState(false);
