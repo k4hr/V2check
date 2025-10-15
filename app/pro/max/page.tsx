@@ -1,3 +1,4 @@
+/* path: app/pro/max/page.tsx */
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -26,9 +27,9 @@ export default function ProMaxPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // Crypto Pay
-  const [planCrypto, setPlanCrypto] = useState<Plan>('MONTH');
-  const [busyCrypto, setBusyCrypto] = useState(false);
+  // TON
+  const [planTon, setPlanTon] = useState<Plan>('WEEK');
+  const [busyTon, setBusyTon] = useState(false);
 
   const prices = useMemo(() => getPrices(tier), []);
 
@@ -40,6 +41,7 @@ export default function ProMaxPage() {
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
 
+      // для Stars инвойса (верхние кнопки)
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
@@ -74,21 +76,44 @@ export default function ProMaxPage() {
     }
   }
 
-  async function buyCrypto() {
-    if (busyCrypto) return;
-    setBusyCrypto(true); setMsg(null); setInfo(null);
+  // Оплата TON (deeplink + https-fallback)
+  async function buyTon() {
+    if (busyTon) return;
+    setBusyTon(true); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/pay/cryptopay/createInvoice?tier=${tier}&plan=${planCrypto}`, { method: 'POST' });
-      const { ok, link, error, detail } = await res.json();
-      if (!ok || !link) throw new Error(error || detail || 'cryptopay:createInvoice failed');
+      const res = await fetch(`/api/pay/ton/create?tier=${tier}&plan=${planTon}`, { method: 'POST' });
+      const { ok, payton, universal, error } = await res.json();
+      if (!ok || (!payton && !universal)) throw new Error(error || 'TON_DEEPLINK_FAILED');
 
-      const tg: any = (window as any).Telegram?.WebApp;
-      if (tg?.openTelegramLink) tg.openTelegramLink(link);
-      else window.location.href = link;
+      const tg: any = (window as any)?.Telegram?.WebApp;
+
+      if (typeof payton === 'string' && payton.startsWith('ton://')) {
+        try {
+          // пробуем системную схему
+          window.location.href = payton;
+          // fallback через 400 мс — откроет Tonkeeper в браузере
+          setTimeout(() => {
+            if (universal) {
+              if (tg?.openLink) tg.openLink(universal);
+              else window.location.href = universal;
+            }
+          }, 400);
+          return;
+        } catch {}
+      }
+
+      // если ton:// не доступен, сразу https
+      if (universal) {
+        if (tg?.openLink) tg.openLink(universal);
+        else window.location.href = universal;
+        return;
+      }
+
+      throw new Error('NO_LINK_TO_OPEN');
     } catch (e: any) {
-      setMsg(String(e?.message || 'Crypto Pay error'));
+      setMsg(String(e?.message || 'Ошибка при подготовке TON-ссылки.'));
     } finally {
-      setBusyCrypto(false);
+      setBusyTon(false);
     }
   }
 
@@ -136,13 +161,13 @@ export default function ProMaxPage() {
           })}
         </div>
 
-        {/* Crypto Pay */}
+        {/* Оплата TON (прямой перевод) */}
         <div className="crypto-card">
           <div className="crypto-header">
-            <span className="crypto-icon">✨</span>
+            <span className="crypto-icon">💠</span>
             <div className="crypto-text">
-              <b className="crypto-title">Оплатить через Crypto&nbsp;Pay</b>
-              <small className="crypto-sub">TON/USDT — безопасно и быстро</small>
+              <b className="crypto-title">Оплатить TON</b>
+              <small className="crypto-sub">Прямой перевод в кошелёк по ton:// ссылке</small>
             </div>
           </div>
 
@@ -150,8 +175,8 @@ export default function ProMaxPage() {
             {(['WEEK','MONTH','HALF_YEAR','YEAR'] as Plan[]).map(p => (
               <button
                 key={p}
-                className={`seg__btn ${planCrypto === p ? 'is-active' : ''}`}
-                onClick={() => setPlanCrypto(p)}
+                className={`seg__btn ${planTon === p ? 'is-active' : ''}`}
+                onClick={() => setPlanTon(p)}
                 type="button"
               >
                 {TITLES[p].split('— ')[1]}
@@ -161,11 +186,11 @@ export default function ProMaxPage() {
 
           <button
             type="button"
-            onClick={buyCrypto}
-            disabled={busyCrypto}
+            onClick={buyTon}
+            disabled={busyTon}
             className="crypto-cta"
           >
-            {busyCrypto ? 'Создаём счёт…' : `Оплатить (${TITLES[planCrypto].split('— ')[1]})`}
+            {busyTon ? 'Готовим ссылку…' : `Оплатить (${TITLES[planTon].split('— ')[1]})`}
           </button>
         </div>
       </div>
@@ -192,7 +217,7 @@ export default function ProMaxPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* Crypto card (золото, но весь текст белый) */
+        /* Карточка TON (золото, но текст белый) */
         .crypto-card {
           margin-top: 6px;
           padding: 14px;
@@ -210,19 +235,8 @@ export default function ProMaxPage() {
           color:#fff;
         }
         .crypto-text { line-height: 1.15; }
-        .crypto-title {
-          display:block;
-          white-space: nowrap;
-          color:#fff;
-          font-weight: 800;
-          letter-spacing: .2px;
-        }
-        .crypto-sub {
-          display:block;
-          margin-top: 4px;
-          color: rgba(255,255,255,.85);
-          font-size: 13px;
-        }
+        .crypto-title { display:block; white-space: nowrap; color:#fff; font-weight: 800; letter-spacing: .2px; }
+        .crypto-sub { display:block; margin-top: 4px; color: rgba(255,255,255,.85); font-size: 13px; }
 
         .seg { display:flex; gap:8px; flex-wrap:wrap; }
         .seg__btn {
