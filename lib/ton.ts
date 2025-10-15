@@ -34,9 +34,14 @@ type Tx = {
   utime?: number;
   hash?: string;
   in_msg?: {
-    value?: string|number;
-    msg_data?: { text?: string } | { type?: string; text?: string } | any;
+    value?: string | number;
+    amount?: string | number;
+    msg_data?: { text?: string; comment?: string; body?: { text?: string; comment?: string } } | any;
+    message_data?: { text?: string; comment?: string; body?: { text?: string; comment?: string } } | any;
   } | any;
+  // Некоторые провайдеры кладут поля на верхний уровень
+  msg_data?: { text?: string; comment?: string; body?: { text?: string; comment?: string } } | any;
+  message_data?: { text?: string; comment?: string; body?: { text?: string; comment?: string } } | any;
 };
 
 export async function fetchIncomingTx(address: string): Promise<Tx[]> {
@@ -50,9 +55,23 @@ export async function fetchIncomingTx(address: string): Promise<Tx[]> {
   return arr as Tx[];
 }
 
-export function txComment(tx: Tx): string {
-  const md = tx?.in_msg?.msg_data || tx?.in_msg?.message_data || tx?.message || {};
-  return String(md?.text || md?.comment || '').trim();
+export function txComment(tx: any): string {
+  // Возможные места, где встречается комментарий к транзакции
+  const md =
+    tx?.in_msg?.msg_data ??
+    tx?.in_msg?.message_data ??
+    tx?.msg_data ??
+    tx?.message_data ??
+    {};
+
+  const text =
+    md?.text ??
+    md?.comment ??
+    md?.body?.text ??
+    md?.body?.comment ??
+    '';
+
+  return String(text || '').trim();
 }
 
 export function txAmountTon(tx: Tx): number {
@@ -71,6 +90,6 @@ export function isAmountOk(got: number, need: number) {
   return got + got * tol >= need; // got >= need - tol%
 }
 
-export function payloadFor(tier: Tier, plan: Plan, tgId?: string|null) {
+export function payloadFor(tier: Tier, plan: Plan, tgId?: string | null) {
   return `subs2:${tier}:${plan}${tgId ? `:${tgId}` : ''}`;
 }
