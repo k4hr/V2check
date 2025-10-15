@@ -4,12 +4,11 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import BackBtn from '@/components/BackBtn';
 import type { Route } from 'next';
-import { extractLeadingEmoji } from '@/lib/utils/extractEmoji';
 
 export type Msg = {
   role: 'system' | 'user' | 'assistant';
   content: string;
-  images?: string[]; // изображения от ассистента (Pro+ фича)
+  images?: string[];
 };
 
 type Attach = {
@@ -21,22 +20,11 @@ type Attach = {
   errMsg?: string;
 };
 
-export type AIChatClientProProps = {
-  title: string;
-  subtitle?: string;
-  initialAssistant: string;
-  systemPrompt: string;
-  mode: string;
-  backHref?: Route;
-  maxAttach?: number;              // default 10
-  passthroughIdParam?: boolean;    // default true
-};
-
 const MAX_ATTACH_DEFAULT = 10;
 const norm = (s: string) => (s || '').toString().trim();
 const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
 
-// вытащить ссылки на изображения из текста
+// ссылки на изображения, которые могли прийти в тексте
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
   const re = /(https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif))/gi;
@@ -57,21 +45,18 @@ function openLink(url: string) {
 
 type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
-function ChatClientWithStar(props: AIChatClientProProps) {
-  const {
-    title,
-    subtitle = 'Свободный чат. Задайте вопрос или прикрепите фото.',
-    initialAssistant,
-    systemPrompt,
-    mode,
-    backHref = '/home' as Route,
-    maxAttach = MAX_ATTACH_DEFAULT,
-    passthroughIdParam = true,
-  } = props;
+export default function ChatGPTPage() {
+  const title = 'CHATGPT 5';
+  const subtitle = 'Свободное общение. Спросите что угодно.';
+  const systemPrompt = 'Ты дружелюбный ассистент. Пиши по делу и без Markdown.';
+  const mode = 'chat';
+  const backHref = '/home' as Route;
+  const maxAttach = MAX_ATTACH_DEFAULT;
+  const passthroughIdParam = true;
 
   const [messages, setMessages] = useState<Msg[]>([
     { role: 'system', content: systemPrompt },
-    { role: 'assistant', content: initialAssistant },
+    { role: 'assistant', content: 'Привет! Чем помочь?' },
   ]);
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -111,7 +96,7 @@ function ChatClientWithStar(props: AIChatClientProProps) {
   }, [passthroughIdParam]);
 
   useEffect(() => {
-    // автозагрузка сохранённого треда: /chat?thread=xxx
+    // автозагрузка сохранённого треда: /home/ChatGPT?thread=xxx
     try {
       const u = new URL(window.location.href);
       const tid = u.searchParams.get('thread');
@@ -166,11 +151,10 @@ function ChatClientWithStar(props: AIChatClientProProps) {
       // включаем — если треда нет, создаём
       let tid = thread.id;
       if (!tid) {
-        const emoji = extractLeadingEmoji(title) || undefined;
         const r = await fetch('/api/chat-threads' + idSuffix, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
-          body: JSON.stringify({ toolSlug: mode || 'chat', title, emoji, starred: true }),
+          body: JSON.stringify({ toolSlug: mode || 'chat', title, starred: true }),
         });
         const data = await r.json();
         if (data?.error === 'PRO_PLUS_REQUIRED') {
@@ -208,11 +192,13 @@ function ChatClientWithStar(props: AIChatClientProProps) {
 
       setThread({ id: tid, starred: true, busy: false });
       setMessages(m => [...m, { role: 'assistant', content: 'Чат сохранён в избранное ★' }]);
-    } catch (e: any) {
+    } catch {
       setMessages(m => [...m, { role: 'assistant', content: 'Не удалось сохранить в избранное.' }]);
       setThread(t => ({ ...t, busy: false }));
     }
-  }, [thread, collectMsgsForSave, title, mode, idSuffix]);
+  }, [thread, collectMsgsForSave, idSuffix, mode, title]);
+
+  // ==== отправка ====
 
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
@@ -281,11 +267,11 @@ function ChatClientWithStar(props: AIChatClientProProps) {
         uploadedUrls.push(String(data.url));
         setAttach(prev => prev.map(x => (x.id === it.id ? { ...x, status: 'done', uploadedUrl: data.url } : x)));
       }
-    } catch (e: any) {
+    } catch {
       setAttach(prev => {
         if (!prev.length) return prev;
         const last = prev[prev.length - 1];
-        return prev.map(x => x.id === last.id ? { ...x, status: 'error', errMsg: String(e?.message || 'Ошибка') } : x);
+        return prev.map(x => x.id === last.id ? { ...x, status: 'error', errMsg: 'Ошибка' } : x);
       });
       setMessages(m => [...m, { role: 'assistant', content: 'Не удалось загрузить все вложения. Попробуем ещё раз?' }]);
       setUploading(false);
@@ -315,7 +301,6 @@ function ChatClientWithStar(props: AIChatClientProProps) {
       if (data?.ok) {
         const reply = String(data.answer || '').trim();
 
-        // собрать список картинок из ответа
         const serverImages: string[] = Array.isArray(data.images) ? data.images.filter(Boolean) : [];
         const fromText = extractImageUrlsFromText(reply);
         const uniqueImages = Array.from(new Set([...(serverImages || []), ...(fromText || [])]));
@@ -395,6 +380,23 @@ function ChatClientWithStar(props: AIChatClientProProps) {
         {!!subtitle && (
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
         )}
+
+        {/* Золотой бейдж Pro+ */}
+        <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
+          <span
+            style={{
+              display:'inline-flex', alignItems:'center', gap:8,
+              padding:'6px 10px', borderRadius: 999,
+              background:'rgba(255,210,120,.16)',
+              border:'1px solid rgba(255,210,120,.35)',
+              boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
+              color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
+            }}
+          >
+            <span aria-hidden>✨</span>
+            Pro+ активен
+          </span>
+        </div>
       </div>
 
       {/* лента сообщений */}
@@ -437,7 +439,7 @@ function ChatClientWithStar(props: AIChatClientProProps) {
                       padding: 8,
                       borderRadius: 14,
                       background: '#101622',
-                      border: '1px solid '#2b3552',
+                      border: '1px solid #2b3552',
                     }}
                   >
                     <div
@@ -531,7 +533,7 @@ function ChatClientWithStar(props: AIChatClientProProps) {
         )}
       </div>
 
-      {/* трей вложений (прикреплённые пользователем) */}
+      {/* трей вложений */}
       {!!attach.length && (
         <div
           ref={trayRef}
@@ -597,7 +599,6 @@ function ChatClientWithStar(props: AIChatClientProProps) {
           boxShadow: '0 10px 30px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,.04)',
         }}
       >
-        {/* «плюс» + прозрачный input поверх */}
         <div style={{ position: 'relative', width: 40, height: 40 }}>
           <button
             type="button"
@@ -667,20 +668,5 @@ function ChatClientWithStar(props: AIChatClientProProps) {
         </button>
       </div>
     </main>
-  );
-}
-
-export default function Page() {
-  return (
-    <ChatClientWithStar
-      title="CHATGPT 5"
-      subtitle="Свободный чат: задавайте вопросы, прикрепляйте изображения."
-      initialAssistant="Привет! Я здесь для свободного общения и быстрых ответов. О чём поговорим?"
-      systemPrompt="Ты дружелюбный ассистент. Отвечай просто, по делу и на языке собеседника. Если есть вложенные изображения/ссылки — учитывай их в ответе."
-      mode="chatgpt-5"
-      backHref={'/home' as Route}
-      maxAttach={10}
-      passthroughIdParam
-    />
   );
 }
