@@ -58,7 +58,7 @@ export default function HomePage(){
       <div className="lm-grid" style={{marginTop:16}}>
         {/* CHATGPT 5 — золотая, по центру, без иконки и бейджа */}
         <Link
-          href={href('/home/chat')}
+          href={href('/home/ChatGPT')}
           className="card"
           style={{
             textDecoration:'none',
@@ -100,7 +100,7 @@ export default function HomePage(){
       </div>
 
       <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
-        <button type="button" onClick={()=>{setOpen(v=>!v);haptic('light');}} className="ghost-link" style={{textDecoration:'none' as any}} aria-expanded={open}>
+        <button type="button" onClick={()=>{setOpen(v=>!v);haptic('light');}} className="ghost-link" style={{textDecoration:'none' as any}} aria-expanded={open}}>
           🌐 {L.changeLang}
         </button>
       </div>
