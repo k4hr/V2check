@@ -22,6 +22,28 @@ function Star({ size = 16 }: { size?: number }) {
   );
 }
 
+// безопасное открытие ton:// deeplink внутри TWA/WebView
+function openTonDeepLink(url: string): boolean {
+  let opened = false;
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    opened = true;
+    setTimeout(() => document.body.removeChild(a), 0);
+  } catch {}
+  if (!opened) {
+    try { window.location.assign(url); opened = true; } catch {}
+  }
+  if (!opened) {
+    try { window.open(url, '_blank', 'noopener,noreferrer'); opened = true; } catch {}
+  }
+  return opened;
+}
+
 export default function ProMinPage() {
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -41,7 +63,7 @@ export default function ProMinPage() {
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
 
-      // это актуально только для Stars, но оставим на всякий
+      // это для Stars-инвойсов; к TON не относится, но оставим
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
@@ -57,7 +79,7 @@ export default function ProMinPage() {
     } catch {}
   }, []);
 
-  // Stars (как было)
+  // Stars (без изменений)
   async function buyStars(plan: Plan) {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
@@ -77,29 +99,21 @@ export default function ProMinPage() {
     }
   }
 
-  // TON (новое): создаём deeplink и открываем его напрямую
+  // TON: берём deeplink и открываем без SDK (важно!)
   async function buyTon() {
     if (busyTon) return;
     setBusyTon(true); setMsg(null); setInfo(null);
     try {
       const res = await fetch(`/api/pay/ton/create?tier=${tier}&plan=${planTon}`, { method: 'POST' });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       const url: string = data?.payton || data?.deeplink || data?.link || '';
+      if (!url || !/^ton:\/\//i.test(url)) throw new Error('TON_LINK_EMPTY');
 
-      if (!url) throw new Error('TON_LINK_EMPTY');
-
-      // Важно: НЕ используем Telegram.WebApp.openLink для ton:// — он допускает только http/https.
-      try {
-        // Пытаемся открыть через смену location — это корректно для deeplink-схем.
-        window.location.href = url;
-      } catch {
-        // Фолбек — в новое окно (на всякий случай)
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
+      const ok = openTonDeepLink(url);
+      if (!ok) setMsg('Не удалось открыть ton:// ссылку. Попробуйте ещё раз.');
     } catch (e: any) {
-      // Ранее тут «проскакивало» системное сообщение «The string did not match the expected pattern.»
-      // Теперь мы не вызываем openLink, поэтому ошибки SDK не будет.
-      setMsg(String(e?.message || 'TON: не удалось открыть ссылку'));
+      // Больше не прокидываем SDK-сообщение «The string did not match the expected pattern.»
+      setMsg('Ошибка при подготовке TON-ссылки.');
     } finally {
       setBusyTon(false);
     }
