@@ -1,20 +1,25 @@
-// lib/i18n.ts
-export type Locale =
-  | 'ru' | 'en' | 'uk' | 'kk' | 'tr' | 'az' | 'ka' | 'hy'
-  | 'be' | 'uz' | 'ky' | 'ro'
-  | 'ar' | 'he'
-  | 'hi' | 'id' | 'ms' | 'fil' | 'vi' | 'th'
-  | 'pl' | 'cs' | 'sk' | 'hu' | 'bg' | 'sr';
+/* path: lib/i18n.ts */
+'use client';
 
-const FALLBACK: Locale = 'ru';
+export type Locale = 'ru' | 'en';
 
-export const KNOWN: Locale[] = [
-  'ru','en','uk','kk','tr','az','ka','hy',
-  'be','uz','ky','ro',
-  'ar','he',
-  'hi','id','ms','fil','vi','th',
-  'pl','cs','sk','hu','bg','sr',
-];
+export const FALLBACK: Locale = 'ru';
+export const KNOWN: Locale[] = ['ru', 'en'];
+
+export const STRINGS: Record<Locale, any> = {
+  ru: {
+    appTitle:'LiveManager', subtitle:'Умные инструменты на каждый день',
+    cabinet:'Личный кабинет', buy:'Купить подписку', daily:'Ежедневные задачи',
+    expert:'Эксперт центр', changeLang:'Сменить язык', chooseLang:'Выберите язык интерфейса',
+    cancel:'Отмена', save:'Сохранить', pro:'Pro', proplus:'Pro+', free:'Бесплатно',
+  },
+  en: {
+    appTitle:'LiveManager', subtitle:'Smart tools for every day',
+    cabinet:'Account', buy:'Buy subscription', daily:'Daily tasks',
+    expert:'Expert Center', changeLang:'Change language', chooseLang:'Choose interface language',
+    cancel:'Cancel', save:'Save', pro:'Pro', proplus:'Pro+', free:'Free',
+  },
+};
 
 function readCookie(name: string): string {
   try {
@@ -23,68 +28,20 @@ function readCookie(name: string): string {
   } catch { return ''; }
 }
 
-/** Маппинг страны -> дефолтный язык интерфейса */
-export function localeForCountry(cc: string | null | undefined): Locale {
-  const code = String(cc || '').toUpperCase();
-
-  // СНГ и рядом
-  if (['RU'].includes(code)) return 'ru';
-  if (['BY'].includes(code)) return 'be';       // можно переключить на 'ru', если надо
-  if (['UA'].includes(code)) return 'uk';
-  if (['KZ'].includes(code)) return 'kk';
-  if (['UZ'].includes(code)) return 'uz';
-  if (['KG'].includes(code)) return 'ky';
-  if (['AM'].includes(code)) return 'hy';
-  if (['AZ'].includes(code)) return 'az';
-  if (['GE'].includes(code)) return 'ka';
-  if (['MD'].includes(code)) return 'ro';
-  if (['TR'].includes(code)) return 'tr';
-
-  // MENA
-  if (['AE','SA','QA','KW','BH','OM','JO','EG'].includes(code)) return 'ar';
-  if (['IL'].includes(code)) return 'he';
-
-  // Южная/ЮВ Азия
-  if (['IN'].includes(code)) return 'hi';
-  if (['ID'].includes(code)) return 'id';
-  if (['MY'].includes(code)) return 'ms';
-  if (['PH'].includes(code)) return 'fil';
-  if (['VN'].includes(code)) return 'vi';
-  if (['TH'].includes(code)) return 'th';
-  if (['SG'].includes(code)) return 'en';
-
-  // ЦВЕ Европа
-  if (['PL'].includes(code)) return 'pl';
-  if (['CZ'].includes(code)) return 'cs';
-  if (['SK'].includes(code)) return 'sk';
-  if (['HU'].includes(code)) return 'hu';
-  if (['RO'].includes(code)) return 'ro';
-  if (['BG'].includes(code)) return 'bg';
-  if (['RS'].includes(code)) return 'sr';
-
-  // Северная Америка
-  if (['US'].includes(code)) return 'en';
-
-  return FALLBACK;
-}
-
-/** Читаем язык: 1) locale/NEXT_LOCALE cookie, 2) страна -> язык, 3) fallback */
+/** Читаем язык: 1) locale/NEXT_LOCALE cookie, 2) fallback */
 export function readLocale(): Locale {
   const raw = (readCookie('NEXT_LOCALE') || readCookie('locale') || '').toLowerCase();
-  if (KNOWN.includes(raw as Locale)) return raw as Locale;
-  const byCountry = localeForCountry(readCookie('country'));
-  return KNOWN.includes(byCountry) ? byCountry : FALLBACK;
+  return KNOWN.includes(raw as Locale) ? (raw as Locale) : FALLBACK;
 }
 
-/** Пишем язык сразу в две куки + html@lang + localStorage */
+/** Пишем язык сразу в две куки + html@lang */
 export function setLocaleEverywhere(code: Locale) {
   const maxAge = 60 * 60 * 24 * 365;
+  const safe = KNOWN.includes(code) ? code : FALLBACK;
   const put = (k: string, v: string) =>
     document.cookie = `${k}=${encodeURIComponent(v)}; Max-Age=${maxAge}; Path=/; SameSite=Lax`;
 
-  const safe = KNOWN.includes(code) ? code : FALLBACK;
   put('locale', safe);
   put('NEXT_LOCALE', safe);
-  try { localStorage.setItem('locale', safe); } catch {}
   try { document.documentElement.lang = safe; } catch {}
 }
