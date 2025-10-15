@@ -56,21 +56,20 @@ export default function HomePage(){
       <p className="lm-subtitle" style={{textAlign:'center'}}>{L.subtitle}</p>
 
       <div className="lm-grid" style={{marginTop:16}}>
-        {/* CHATGPT 5 — свободное общение */}
+        {/* CHATGPT 5 — золотая, по центру, без иконки и бейджа */}
         <Link
           href={href('/home/chat')}
           className="card"
           style={{
             textDecoration:'none',
-            background:'linear-gradient(135deg,#2a1f49 0%, #2c3c77 55%, #462a72 100%)',
-            border:'1px solid #8a6cff',
-            boxShadow:'0 12px 34px rgba(138,108,255,.28), inset 0 0 0 1px rgba(255,255,255,.05)'
+            background:'linear-gradient(135deg,#2f2411 0%, #3b2c12 50%, #4b3513 100%)',
+            border:'1px solid #ffd278',
+            boxShadow:'0 14px 36px rgba(255,191,73,.28), inset 0 0 0 1px rgba(255,255,255,.06)'
           }}
         >
-          <span className="card__left">
-            <span className="card__icon">🤖</span>
-            <span className="card__title">
-              CHATGPT&nbsp;5 <span className="badge" style={{background:'#8a6cff',color:'#fff'}}>FREE CHAT</span>
+          <span style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
+            <span className="card__title" style={{fontWeight:800,letterSpacing:.4}}>
+              CHATGPT 5
             </span>
           </span>
           <span className="card__chev">›</span>
