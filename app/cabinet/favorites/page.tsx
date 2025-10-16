@@ -78,18 +78,6 @@ export default function FavoritesPage() {
 
       {proplusLocked ? (
         <div
-          role="alert"
-          style={{
-            margin: '16px auto',
-            maxWidth: 680,
-            border: '1px solid rgba(255,210,120,.35)',
-            background: 'rgba(255,210,120,.12)',
-            color: '#fff',
-            borderRadius: 12,
-            padding: '14px 16px',
-            boxShadow: '0 10px 26px rgba(255,191,73,.18), inset 0 0 0 1px rgba(255,255,255,.04)',
-            textAlign: 'center',
-            fontWeight: 600,
           }}
         >
           <div style={{ fontSize: 16, marginBottom: 6 }}>✨ Доступно в Pro+</div>
