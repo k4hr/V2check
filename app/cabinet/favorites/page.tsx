@@ -1,7 +1,7 @@
-// app/cabinet/favorites/page.tsx
+/* path: app/cabinet/favorites/page.tsx */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 
@@ -12,50 +12,65 @@ type Fav = {
   title: string;
   url?: string | null;
   note?: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: string; // ISO
+  updatedAt: string; // ISO
 };
 
 function formatDT(iso: string) {
   const d = new Date(iso);
   const date = d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
   const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-  return `${date} ${time}`;
+  return { date, time };
 }
 
 export default function FavoritesPage() {
   const [items, setItems] = useState<Fav[]>([]);
   const [err, setErr] = useState<string | null>(null);
-  const [proplusLocked, setProplusLocked] = useState(false);
 
-  function apiBase() {
-    const tgInit = (window as any)?.Telegram?.WebApp?.initData || '';
-    if (tgInit) return { endpoint: '/api/favorites', headers: { 'x-init-data': tgInit } as Record<string, string> };
-    if (DEBUG) {
-      const u = new URL(window.location.href);
-      const id = u.searchParams.get('id');
-      const qs = id && /^\d{3,15}$/.test(id) ? `?id=${encodeURIComponent(id)}` : '';
-      return { endpoint: `/api/favorites${qs}`, headers: {} as Record<string, string> };
-    }
-    return { endpoint: '/api/favorites', headers: {} as Record<string, string> };
-  }
+  const emptyText = useMemo(
+    () => 'Здесь будут сохраняться ваши чаты, при активной подписке Pro+',
+    []
+  );
 
   async function load() {
     try {
       setErr(null);
-      const { endpoint, headers } = apiBase();
-      const res = await fetch(endpoint, { method: 'GET', headers });
-      const data = await res.json();
-      if (res.status === 402 && data?.error === 'PROPLUS_REQUIRED') {
-        setProplusLocked(true);
-        setItems([]);
-        return;
+
+      // заголовок с initData или debug-id
+      const headers: Record<string, string> = {};
+      const tgInit = (window as any)?.Telegram?.WebApp?.initData || '';
+      if (tgInit) headers['x-init-data'] = tgInit;
+
+      let qs = '';
+      if (!tgInit && DEBUG) {
+        const u = new URL(window.location.href);
+        const id = u.searchParams.get('id');
+        if (id && /^\d{3,15}$/.test(id)) qs = `?id=${encodeURIComponent(id)}`;
       }
+
+      // берём избранные треды
+      const res = await fetch(`/api/favorites/threads${qs}`, { method: 'GET', headers, cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok) throw new Error(data?.error || 'LOAD_FAILED');
-      setProplusLocked(false);
-      setItems((data.items || []) as Fav[]);
+
+      const threads = Array.isArray(data.threads) ? data.threads : [];
+      const mapped: Fav[] = threads.map((t: any) => {
+        const idSuffix = qs ? `&${qs.slice(1)}` : '';
+        const when = String(t.updatedAt || t.lastUsedAt || new Date().toISOString());
+        return {
+          id: String(t.id),
+          title: String(t.title || 'Без названия'),
+          url: `/home/ChatGPT?thread=${encodeURIComponent(t.id)}${idSuffix}`,
+          note: null,
+          createdAt: when,
+          updatedAt: when,
+        };
+      });
+
+      setItems(mapped);
     } catch (e: any) {
       setErr(e?.message || 'Ошибка загрузки');
+      setItems([]);
     }
   }
 
@@ -67,107 +82,86 @@ export default function FavoritesPage() {
     load();
   }, []);
 
-  const emptyText = useMemo(
-    () => 'Здесь будут сохраняться ваши чаты, при активной подписке Pro+',
-    []
-  );
-
   return (
     <div style={{ padding: 20 }}>
       <h1 style={{ textAlign: 'center' }}>Избранное</h1>
 
-      {proplusLocked ? (
-        <div
-          }}
-        >
-          <div style={{ fontSize: 16, marginBottom: 6 }}>✨ Доступно в Pro+</div>
-          <div style={{ opacity: .85, fontWeight: 400 }}>
-            Оформите подписку, чтобы сохранять чаты в избранное.
-          </div>
-        </div>
-      ) : (
-        <>
-          {err && <p style={{ color: 'crimson', textAlign: 'center' }}>{err}</p>}
+      {err && <p style={{ color: 'crimson', textAlign: 'center' }}>{err}</p>}
 
-          <div
-            style={{
-              margin: '0 auto',
-              maxWidth: 680,
-              padding: 12,
+      {items.length === 0 ? (
+        // ПУСТОЕ СОСТОЯНИЕ БЕЗ РАМКИ (просто текст)
+        <p style={{ textAlign: 'center', opacity: .75, margin: '16px auto', maxWidth: 680 }}>
+          {emptyText}
+        </p>
+      ) : (
+        // Список избранных с правым столбцом даты/времени
+        <div style={{ margin: '0 auto', maxWidth: 680, display: 'grid', gap: 8 }}>
+          {items.map((it) => {
+            const raw = (it.url || '').trim();
+            const isExternal = /^https?:\/\//i.test(raw);
+            const isInternal = raw.startsWith('/');
+            const { date, time } = formatDT(it.updatedAt || it.createdAt);
+
+            const CardInner = (
+              <>
+                <span className="list-btn__left" style={{ minWidth: 0, display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span className="list-btn__emoji">⭐</span>
+                  <b
+                    style={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      display: 'block',
+                      maxWidth: '100%',
+                    }}
+                    title={it.title || 'Без названия'}
+                  >
+                    {it.title || 'Без названия'}
+                  </b>
+                </span>
+
+                <span
+                  className="list-btn__right"
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
+                >
+                  <span style={{ opacity: .75, fontSize: 12, lineHeight: 1.05, textAlign: 'right' }}>
+                    <div>{date}</div>
+                    <div>{time}</div>
+                  </span>
+                  <span className="list-btn__chev">›</span>
+                </span>
+              </>
+            );
+
+            const commonStyle = {
+              textDecoration: 'none',
               border: '1px solid #333',
               borderRadius: 12,
-            }}
-          >
-            {items.length === 0 ? (
-              <p style={{ textAlign: 'center', opacity: .75 }}>{emptyText}</p>
-            ) : (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {items.map((it) => {
-                  const raw = (it.url || '').trim();
-                  const isExternal = /^https?:\/\//i.test(raw);
-                  const isInternal = raw.startsWith('/');
-                  const created = formatDT(it.createdAt);
+              padding: '12px 14px',
+              display: 'grid',
+              gridTemplateColumns: '1fr auto',
+              alignItems: 'center',
+              gap: 12,
+              overflow: 'hidden',
+              background: '#121621',
+            } as const;
 
-                  const CardInner = (
-                    <>
-                      <span className="list-btn__left" style={{ minWidth: 0 }}>
-                        <span className="list-btn__emoji">⭐</span>
-                        <b
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          {it.title || 'Без названия'}
-                        </b>
-                      </span>
-                      <span className="list-btn__right" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span style={{ opacity: .75, fontSize: 12 }}>{created}</span>
-                        <span className="list-btn__chev">›</span>
-                      </span>
-                    </>
-                  );
+            if (isExternal) {
+              return (
+                <a key={it.id} href={raw} target="_blank" rel="noreferrer" className="list-btn" style={commonStyle}>
+                  {CardInner}
+                </a>
+              );
+            }
 
-                  const commonStyle = {
-                    textDecoration: 'none',
-                    border: '1px solid #333',
-                    borderRadius: 12,
-                    padding: '12px 14px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 12,
-                  } as const;
-
-                  if (isExternal) {
-                    return (
-                      <a
-                        key={it.id}
-                        href={raw}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="list-btn"
-                        style={commonStyle}
-                      >
-                        {CardInner}
-                      </a>
-                    );
-                  }
-
-                  // внутренние ссылки через <Link>; если нет валидного пути — ведём в кабинет
-                  const safeInternal: Route = (isInternal ? raw : '/cabinet') as Route;
-
-                  return (
-                    <Link key={it.id} href={safeInternal} className="list-btn" style={commonStyle}>
-                      {CardInner}
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </>
+            const safeInternal: Route = (isInternal ? raw : '/cabinet') as Route;
+            return (
+              <Link key={it.id} href={safeInternal} className="list-btn" style={commonStyle}>
+                {CardInner}
+              </Link>
+            );
+          })}
+        </div>
       )}
 
       <div style={{ height: 16 }} />
