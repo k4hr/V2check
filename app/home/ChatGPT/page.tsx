@@ -22,10 +22,11 @@ type Attach = {
 };
 
 const MAX_ATTACH_DEFAULT = 10;
+const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 const norm = (s: string) => (s || '').toString().trim();
 const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
 
-// ссылки на изображения, которые могли прийти в тексте
+// --- helpers ---
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
   const re = /(https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif))/gi;
@@ -33,8 +34,6 @@ function extractImageUrlsFromText(text: string): string[] {
   while ((m = re.exec(text)) !== null) urls.add(m[1]);
   return Array.from(urls);
 }
-
-// корректное открытие ссылок внутри TG WebApp / браузера
 function openLink(url: string) {
   try {
     const tg: any = (window as any)?.Telegram?.WebApp;
@@ -42,6 +41,12 @@ function openLink(url: string) {
     if (tg?.openTelegramLink) { tg.openTelegramLink(url); return; }
   } catch {}
   window.open(url, '_blank', 'noopener,noreferrer');
+}
+function isProPlusActiveFromResp(data: any): boolean {
+  const sub = data?.subscription || null;
+  if (!sub?.active) return false;
+  const raw = String(sub?.plan || '').toUpperCase().replace(/\s+|[_-]/g, '');
+  return raw === 'PROPLUS' || raw === 'PRO+' || raw.includes('PROPLUS');
 }
 
 type ThreadState = { id?: string; starred: boolean; busy: boolean };
@@ -64,7 +69,7 @@ export default function ChatGPTPage() {
     svcDown: locale === 'en' ? 'Service is temporarily unavailable. Try again?' : 'Сервис временно недоступен. Попробуем ещё раз?',
     gotIt: locale === 'en' ? 'Done. Continue?' : 'Готово. Продолжим?',
     limit: (n:number)=> locale === 'en'
-      ? `Daily free limit reached (${n}). Get Pro or try again tomorrow.` 
+      ? `Daily free limit reached (${n}). Get Pro or try again tomorrow.`
       : `Исчерпан дневной бесплатный лимит (${n}). Оформите Pro или попробуйте завтра.`,
     starAddOnlyPro: locale === 'en' ? 'Favorites are available in Pro+ only.' : 'Избранное доступно только в Pro+.',
     saved: locale === 'en' ? 'Chat saved to favorites ★' : 'Чат сохранён в избранное ★',
@@ -88,6 +93,9 @@ export default function ChatGPTPage() {
   const [attach, setAttach] = useState<Attach[]>([]);
   const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
 
+  // NEW: состояние для мини-плашки Pro+
+  const [proPlusActive, setProPlusActive] = useState<boolean>(false);
+
   const listRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
@@ -98,12 +106,10 @@ export default function ChatGPTPage() {
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // авто-скролл ленты
+  // авто-скролл
   useEffect(() => {
     listRef.current?.scrollTo({ top: 9e9, behavior: 'smooth' });
   }, [messages, loading, uploading]);
-
-  // авто-скролл трейа вложений
   useEffect(() => {
     if (!attach.length) return;
     trayRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
@@ -119,8 +125,27 @@ export default function ChatGPTPage() {
     } catch { return ''; }
   }, [passthroughIdParam]);
 
+  // NEW: подтянуть статус подписки для показа бейджа
   useEffect(() => {
-    // автозагрузка сохранённого треда: /home/ChatGPT?thread=xxx
+    (async () => {
+      try {
+        let endpoint = '/api/me';
+        const headers: Record<string, string> = {};
+        const init = TG_INIT();
+        if (init) headers['x-init-data'] = init;
+        else if (DEBUG && idSuffix) endpoint += idSuffix;
+
+        const r = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
+        const data = await r.json().catch(() => ({}));
+        setProPlusActive(isProPlusActiveFromResp(data));
+      } catch {
+        setProPlusActive(false);
+      }
+    })();
+  }, [idSuffix]);
+
+  // автозагрузка треда
+  useEffect(() => {
     try {
       const u = new URL(window.location.href);
       const tid = u.searchParams.get('thread');
@@ -153,13 +178,12 @@ export default function ChatGPTPage() {
       }));
   }, [messages]);
 
-  // создать тред и/или переключить звезду
+  // избранное
   const toggleStar = useCallback(async () => {
     if (thread.busy) return;
     setThread(t => ({ ...t, busy: true }));
 
     try {
-      // если выключаем — просто PATCH
       if (thread.id && thread.starred) {
         const r = await fetch('/api/chat-threads', {
           method: 'PATCH',
@@ -172,7 +196,6 @@ export default function ChatGPTPage() {
         return;
       }
 
-      // включаем — если треда нет, создаём
       let tid = thread.id;
       if (!tid) {
         const r = await fetch('/api/chat-threads' + idSuffix, {
@@ -189,7 +212,6 @@ export default function ChatGPTPage() {
         if (!data?.ok || !data.thread?.id) throw new Error(data?.error || 'CREATE_FAILED');
         tid = String(data.thread.id);
       } else {
-        // есть тред — дожмём звезду
         const r = await fetch('/api/chat-threads', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
@@ -204,7 +226,6 @@ export default function ChatGPTPage() {
         if (!data?.ok) throw new Error(data?.error || 'PATCH_FAILED');
       }
 
-      // залить весь текущий чат
       const payload = { threadId: tid, messages: collectMsgsForSave() };
       const r2 = await fetch('/api/chat-threads/messages' + idSuffix, {
         method: 'POST',
@@ -407,22 +428,24 @@ export default function ChatGPTPage() {
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
         )}
 
-        {/* Золотой бейдж Pro+ */}
-        <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
-          <span
-            style={{
-              display:'inline-flex', alignItems:'center', gap:8,
-              padding:'6px 10px', borderRadius: 999,
-              background:'rgba(255,210,120,.16)',
-              border:'1px solid rgba(255,210,120,.35)',
-              boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
-              color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
-            }}
-          >
-            <span aria-hidden>✨</span>
-            {t.proBadge}
-          </span>
-        </div>
+        {/* Мини-плашка Pro+ — ТОЛЬКО при активной подписке */}
+        {proPlusActive && (
+          <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
+            <span
+              style={{
+                display:'inline-flex', alignItems:'center', gap:8,
+                padding:'6px 10px', borderRadius: 999,
+                background:'rgba(255,210,120,.16)',
+                border:'1px solid rgba(255,210,120,.35)',
+                boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
+                color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
+              }}
+            >
+              <span aria-hidden>✨</span>
+              {t.proBadge}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* лента сообщений */}
@@ -438,7 +461,6 @@ export default function ChatGPTPage() {
               justifyContent: isUser ? 'flex-end' : 'flex-start'
             }}>
               <div style={{ maxWidth: '86%' }}>
-                {/* текстовый пузырь */}
                 {m.content && m.content !== '(изображения)' && (
                   <div
                     style={{
@@ -457,7 +479,6 @@ export default function ChatGPTPage() {
                   </div>
                 )}
 
-                {/* «галерея» изображений ассистента */}
                 {hasImages && (
                   <div
                     style={{
@@ -501,8 +522,6 @@ export default function ChatGPTPage() {
                               cursor: 'zoom-in',
                             }}
                           />
-
-                          {/* overlay с кнопками */}
                           <div
                             style={{
                               position: 'absolute',
