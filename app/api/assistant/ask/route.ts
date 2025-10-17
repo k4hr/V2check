@@ -180,3 +180,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
 }
+} catch (e: any) {
+  const msg = String(e?.message || 'SERVER_ERROR');
+
+  // Пробуем распарсить наши ошибки из lib/ai.ts вида: "AI_HTTP_429: ...".
+  const m = /^AI_HTTP_(\d+):\s*(.*)$/.exec(msg);
+  if (m) {
+    const status = Number(m[1]);
+    return NextResponse.json(
+      { ok: false, error: 'AI_ERROR', status, detail: m[2] },
+      { status }
+    );
+  }
+
+  if (msg === 'AI_API_KEY_MISSING') {
+    return NextResponse.json(
+      { ok: false, error: 'AI_API_KEY_MISSING', detail: 'Set AI_API_KEY (or OPENAI_API_KEY) on the server' },
+      { status: 500 }
+    );
+  }
+
+  if (/aborted|timeout/i.test(msg)) {
+    return NextResponse.json(
+      { ok: false, error: 'AI_TIMEOUT', detail: msg },
+      { status: 504 }
+    );
+  }
+
+  return NextResponse.json(
+    { ok: false, error: 'SERVER_ERROR', detail: msg },
+    { status: 500 }
+  );
+}
