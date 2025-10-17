@@ -3,16 +3,17 @@ import { NextResponse, NextRequest } from 'next/server';
 import { askAI, type ChatMessage } from '@/lib/ai';
 import { prisma } from '@/lib/prisma';
 import cleanAssistantText from '@/lib/cleanText';
+import { verifyInitData, getTelegramId, getInitDataFrom } from '@/lib/auth/verifyInitData';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** Дневные лимиты */
-const FREE_QA_PER_DAY    = Number(process.env.FREE_QA_PER_DAY    ?? 2);
-const PRO_QA_PER_DAY     = Number(process.env.PRO_QA_PER_DAY     ?? 100);
-const PROPLUS_QA_PER_DAY = Number(process.env.PROPLUS_QA_PER_DAY ?? 200);
+const FREE_QA_PER_DAY     = Number(process.env.FREE_QA_PER_DAY     ?? 2);
+const PRO_QA_PER_DAY      = Number(process.env.PRO_QA_PER_DAY      ?? 100);
+const PROPLUS_QA_PER_DAY  = Number(process.env.PROPLUS_QA_PER_DAY  ?? 200);
 
-/** Модели (с фолбэками) */
+/** Модели (как было, с фолбэками) */
 const MODEL_DEFAULT =
   process.env.AI_MODEL ||
   process.env.OPENAI_MODEL ||
@@ -28,6 +29,8 @@ const MODEL_PRO_PLUS =
   process.env.AI_MODEL_PRO_PLUS ||
   process.env.OPENAI_MODEL_PRO_PLUS ||
   MODEL_PRO;
+
+const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
 function pickModelByMode(mode?: string): string {
   if (!mode) return MODEL_DEFAULT;
@@ -61,11 +64,31 @@ async function incUsedToday(userId: string, date: string) {
   });
 }
 
+/** Определяем Telegram ID:
+ *  1) пробуем валидировать x-init-data (из Телеграма)
+ *  2) если нет — берём ?id=
+ */
+function resolveTelegramId(req: NextRequest): string | null {
+  // из заголовка (Телеграм WebApp)
+  const initData =
+    req.headers.get('x-init-data') ||
+    req.headers.get('x-tg-init-data') ||
+    getInitDataFrom(req as any) || // на всякий случай
+    '';
+  if (initData && BOT_TOKEN && verifyInitData(initData, BOT_TOKEN)) {
+    const id = getTelegramId(initData);
+    if (id) return String(id);
+  }
+  // из query (?id=)
+  const { searchParams } = new URL(req.url);
+  const qsId = searchParams.get('id');
+  if (qsId && /^\d{3,15}$/.test(qsId)) return qsId;
+  return null;
+}
+
 /** Определение уровня подписки */
 type TierLevel = 'FREE'|'PRO'|'PROPLUS';
-async function resolveTierByTgId(
-  tgId?: string|null
-): Promise<{ tier: TierLevel; userId?: string }> {
+async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel; userId?: string }> {
   if (!tgId) return { tier: 'FREE' };
   const user = await prisma.user.findFirst({
     where: { telegramId: String(tgId) },
@@ -77,7 +100,7 @@ async function resolveTierByTgId(
   const plan = String(user.plan || '').toUpperCase();
   if (plan === 'PROPLUS') return { tier: 'PROPLUS', userId: user.id };
   if (plan === 'PRO')     return { tier: 'PRO',     userId: user.id };
-  return { tier: 'PRO', userId: user.id }; // неизвестный план — как PRO
+  return { tier: 'PRO', userId: user.id };
 }
 
 /** Основной хэндлер */
@@ -93,10 +116,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
     }
 
-    // Telegram ID берём из query (?id=...)
-    const { searchParams } = new URL(req.url);
-    const tgId = searchParams.get('id');
-
+    const tgId = resolveTelegramId(req);
     const { tier, userId } = await resolveTierByTgId(tgId);
     const today = todayStr();
 
@@ -143,7 +163,7 @@ export async function POST(req: NextRequest) {
 
     // ===== PRO / PROPLUS: считаем в БД =====
     const limit = tier === 'PROPLUS' ? PROPLUS_QA_PER_DAY : PRO_QA_PER_DAY;
-    const used = await getUsedToday(userId!, today); // userId гарантирован для Pro/Pro+
+    const used = await getUsedToday(userId!, today);
 
     if (used >= limit) {
       return NextResponse.json(
@@ -180,7 +200,7 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     const msg = String(e?.message || 'SERVER_ERROR');
 
-    // Ошибки из lib/ai.ts вида: "AI_HTTP_429: ...".
+    // Парсим ошибки из lib/ai.ts вида "AI_HTTP_429: …"
     const m = /^AI_HTTP_(\d+):\s*(.*)$/.exec(msg);
     if (m) {
       const status = Number(m[1]);
