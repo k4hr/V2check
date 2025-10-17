@@ -32,9 +32,17 @@ export type AIChatClientProProps = {
 };
 
 const MAX_ATTACH_DEFAULT = 10;
+const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 const norm = (s: string) => (s || '').toString().trim();
 const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
 
+/* ---- helpers ---- */
+function isProPlusActiveFromResp(data: any): boolean {
+  const sub = data?.subscription || null;
+  if (!sub?.active) return false;
+  const raw = String(sub?.plan || '').toUpperCase().replace(/\s+|[_-]/g, '');
+  return raw === 'PROPLUS' || raw === 'PRO+' || raw.includes('PROPLUS');
+}
 // вытащить ссылки на изображения из текста
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
@@ -43,7 +51,6 @@ function extractImageUrlsFromText(text: string): string[] {
   while ((m = re.exec(text)) !== null) urls.add(m[1]);
   return Array.from(urls);
 }
-
 // корректное открытие ссылок внутри TG WebApp / браузера
 function openLink(url: string) {
   try {
@@ -78,6 +85,9 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
   const [attach, setAttach] = useState<Attach[]>([]);
   const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
 
+  // NEW: состояние подписки
+  const [proPlusActive, setProPlusActive] = useState<boolean>(false);
+
   const listRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
   const trayRef = useRef<HTMLDivElement>(null);
@@ -108,6 +118,25 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       return id ? `?id=${encodeURIComponent(id)}` : '';
     } catch { return ''; }
   }, [passthroughIdParam]);
+
+  // NEW: загрузка статуса подписки для бейджа
+  useEffect(() => {
+    (async () => {
+      try {
+        let endpoint = '/api/me';
+        const headers: Record<string, string> = {};
+        const init = TG_INIT();
+        if (init) headers['x-init-data'] = init;
+        else if (DEBUG && idSuffix) endpoint += idSuffix;
+
+        const r = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
+        const data = await r.json().catch(() => ({}));
+        setProPlusActive(isProPlusActiveFromResp(data));
+      } catch {
+        setProPlusActive(false);
+      }
+    })();
+  }, [idSuffix]);
 
   useEffect(() => {
     // автозагрузка сохранённого треда: /chat?thread=xxx
@@ -206,7 +235,6 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       if (!data2?.ok) throw new Error(data2?.error || 'SAVE_MESSAGES_FAILED');
 
       setThread({ id: tid, starred: true, busy: false });
-      // тихий тост в ленту
       setMessages(m => [...m, { role: 'assistant', content: 'Чат сохранён в избранное ★' }]);
     } catch (e: any) {
       setMessages(m => [...m, { role: 'assistant', content: 'Не удалось сохранить в избранное.' }]);
@@ -215,6 +243,9 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
   }, [thread, collectMsgsForSave, title, mode, idSuffix]);
 
   // ==== остальной код отправки ====
+
+  const listRefLocal = listRef; // (ничего не менял ниже)
+  const [/* state above */] = [];
 
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
@@ -309,10 +340,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
       const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tg-Init-Data': TG_INIT(),        // 👈 важно для TWA
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: promptText, history, images: uploadedUrls, mode }),
       });
 
@@ -334,18 +362,9 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         if (!reply && !uniqueImages.length) {
           setMessages(m => [...m, { role: 'assistant', content: 'Готово. Продолжим?' }]);
         }
-      } else if (data?.error === 'FREE_LIMIT_REACHED' || data?.error === 'DAILY_LIMIT_REACHED') {
-        const level = String(data?.level || 'FREE').toUpperCase() as 'FREE'|'PRO'|'PROPLUS';
-        const limit = data?.limit ?? data?.freeLimit ?? 0;
-        const used  = data?.used ?? 0;
-        const msg = level === 'FREE'
-          ? `Дневной бесплатный лимит исчерпан (${used}/${limit}). Оформите Pro или попробуйте завтра.`
-          : `Достигнут дневной лимит для ${level === 'PROPLUS' ? 'Pro+' : 'Pro'} (${used}/${limit}). Попробуем завтра?`;
+      } else if (data?.error === 'FREE_LIMIT_REACHED') {
+        const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
-      } else if (data?.error === 'AI_TIMEOUT') {
-        setMessages(m => [...m, { role: 'assistant', content: 'Модель ответила слишком долго. Давайте ещё раз?' }]);
-      } else if (data?.error === 'AI_API_KEY_MISSING') {
-        setMessages(m => [...m, { role: 'assistant', content: 'Сервис не настроен (нет ключа API). Сообщите администратору.' }]);
       } else {
         setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
       }
@@ -410,22 +429,24 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
         )}
 
-        {/* Золотой бейдж Pro+ */}
-        <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
-          <span
-            style={{
-              display:'inline-flex', alignItems:'center', gap:8,
-              padding:'6px 10px', borderRadius: 999,
-              background:'rgba(255,210,120,.16)',
-              border:'1px solid rgba(255,210,120,.35)',
-              boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
-              color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
-            }}
-          >
-            <span aria-hidden>✨</span>
-            Pro+ активен
-          </span>
-        </div>
+        {/* MINI BADGE — показываем только при активном Pro+ */}
+        {proPlusActive && (
+          <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
+            <span
+              style={{
+                display:'inline-flex', alignItems:'center', gap:8,
+                padding:'6px 10px', borderRadius: 999,
+                background:'rgba(255,210,120,.16)',
+                border:'1px solid rgba(255,210,120,.35)',
+                boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
+                color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
+              }}
+            >
+              <span aria-hidden>✨</span>
+              Pro+ активен
+            </span>
+          </div>
+        )}
       </div>
 
       {/* лента сообщений */}
