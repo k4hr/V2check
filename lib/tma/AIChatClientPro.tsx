@@ -216,9 +216,6 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
   // ==== остальной код отправки ====
 
-  const listRefLocal = listRef; // (ничего не менял ниже)
-  const [/* state above */] = [];
-
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
     if (!files.length) return;
@@ -312,7 +309,10 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
       const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Tg-Init-Data': TG_INIT(),        // 👈 важно для TWA
+        },
         body: JSON.stringify({ prompt: promptText, history, images: uploadedUrls, mode }),
       });
 
@@ -334,9 +334,18 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         if (!reply && !uniqueImages.length) {
           setMessages(m => [...m, { role: 'assistant', content: 'Готово. Продолжим?' }]);
         }
-      } else if (data?.error === 'FREE_LIMIT_REACHED') {
-        const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
+      } else if (data?.error === 'FREE_LIMIT_REACHED' || data?.error === 'DAILY_LIMIT_REACHED') {
+        const level = String(data?.level || 'FREE').toUpperCase() as 'FREE'|'PRO'|'PROPLUS';
+        const limit = data?.limit ?? data?.freeLimit ?? 0;
+        const used  = data?.used ?? 0;
+        const msg = level === 'FREE'
+          ? `Дневной бесплатный лимит исчерпан (${used}/${limit}). Оформите Pro или попробуйте завтра.`
+          : `Достигнут дневной лимит для ${level === 'PROPLUS' ? 'Pro+' : 'Pro'} (${used}/${limit}). Попробуем завтра?`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
+      } else if (data?.error === 'AI_TIMEOUT') {
+        setMessages(m => [...m, { role: 'assistant', content: 'Модель ответила слишком долго. Давайте ещё раз?' }]);
+      } else if (data?.error === 'AI_API_KEY_MISSING') {
+        setMessages(m => [...m, { role: 'assistant', content: 'Сервис не настроен (нет ключа API). Сообщите администратору.' }]);
       } else {
         setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
       }
