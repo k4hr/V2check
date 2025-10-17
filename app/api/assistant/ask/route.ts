@@ -8,11 +8,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 /** Дневные лимиты */
-const FREE_QA_PER_DAY     = Number(process.env.FREE_QA_PER_DAY     ?? 2);
-const PRO_QA_PER_DAY      = Number(process.env.PRO_QA_PER_DAY      ?? 100);
-const PROPLUS_QA_PER_DAY  = Number(process.env.PROPLUS_QA_PER_DAY  ?? 200);
+const FREE_QA_PER_DAY    = Number(process.env.FREE_QA_PER_DAY    ?? 2);
+const PRO_QA_PER_DAY     = Number(process.env.PRO_QA_PER_DAY     ?? 100);
+const PROPLUS_QA_PER_DAY = Number(process.env.PROPLUS_QA_PER_DAY ?? 200);
 
-/** Модели (как было, с фолбэками) */
+/** Модели (с фолбэками) */
 const MODEL_DEFAULT =
   process.env.AI_MODEL ||
   process.env.OPENAI_MODEL ||
@@ -31,8 +31,8 @@ const MODEL_PRO_PLUS =
 
 function pickModelByMode(mode?: string): string {
   if (!mode) return MODEL_DEFAULT;
-  if (mode.startsWith('proplus-')) return MODEL_PRO_PLUS; // Бизнес/усиленные режимы для Pro+
-  if (mode.startsWith('legal-'))   return MODEL_PRO;      // Юр-режимы для Pro
+  if (mode.startsWith('proplus-')) return MODEL_PRO_PLUS; // усиленные режимы для Pro+
+  if (mode.startsWith('legal-'))   return MODEL_PRO;      // юр-режимы для Pro
   return MODEL_DEFAULT;
 }
 
@@ -63,7 +63,9 @@ async function incUsedToday(userId: string, date: string) {
 
 /** Определение уровня подписки */
 type TierLevel = 'FREE'|'PRO'|'PROPLUS';
-async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel; userId?: string }> {
+async function resolveTierByTgId(
+  tgId?: string|null
+): Promise<{ tier: TierLevel; userId?: string }> {
   if (!tgId) return { tier: 'FREE' };
   const user = await prisma.user.findFirst({
     where: { telegramId: String(tgId) },
@@ -75,8 +77,7 @@ async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel;
   const plan = String(user.plan || '').toUpperCase();
   if (plan === 'PROPLUS') return { tier: 'PROPLUS', userId: user.id };
   if (plan === 'PRO')     return { tier: 'PRO',     userId: user.id };
-  // на всякий случай — неизвестный план считаем как PRO
-  return { tier: 'PRO', userId: user.id };
+  return { tier: 'PRO', userId: user.id }; // неизвестный план — как PRO
 }
 
 /** Основной хэндлер */
@@ -92,14 +93,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
     }
 
-    // Telegram ID берём из query (?id=...) — как у тебя уже сделано в фронте
+    // Telegram ID берём из query (?id=...)
     const { searchParams } = new URL(req.url);
     const tgId = searchParams.get('id');
 
     const { tier, userId } = await resolveTierByTgId(tgId);
     const today = todayStr();
 
-    // ===== FREE: считаем лимит куками (как раньше) =====
+    // ===== FREE: считаем лимит куками =====
     if (tier === 'FREE') {
       const usedStr = req.cookies.get('ai_free_used')?.value || '0';
       const dateStr = req.cookies.get('ai_free_date')?.value || '';
@@ -177,38 +178,35 @@ export async function POST(req: NextRequest) {
       remaining: Math.max(limit - usedNew, 0),
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
-  }
-}
-} catch (e: any) {
-  const msg = String(e?.message || 'SERVER_ERROR');
+    const msg = String(e?.message || 'SERVER_ERROR');
 
-  // Пробуем распарсить наши ошибки из lib/ai.ts вида: "AI_HTTP_429: ...".
-  const m = /^AI_HTTP_(\d+):\s*(.*)$/.exec(msg);
-  if (m) {
-    const status = Number(m[1]);
-    return NextResponse.json(
-      { ok: false, error: 'AI_ERROR', status, detail: m[2] },
-      { status }
-    );
-  }
+    // Ошибки из lib/ai.ts вида: "AI_HTTP_429: ...".
+    const m = /^AI_HTTP_(\d+):\s*(.*)$/.exec(msg);
+    if (m) {
+      const status = Number(m[1]);
+      return NextResponse.json(
+        { ok: false, error: 'AI_ERROR', status, detail: m[2] },
+        { status }
+      );
+    }
 
-  if (msg === 'AI_API_KEY_MISSING') {
+    if (msg === 'AI_API_KEY_MISSING') {
+      return NextResponse.json(
+        { ok: false, error: 'AI_API_KEY_MISSING', detail: 'Set AI_API_KEY (or OPENAI_API_KEY) on the server' },
+        { status: 500 }
+      );
+    }
+
+    if (/aborted|timeout/i.test(msg)) {
+      return NextResponse.json(
+        { ok: false, error: 'AI_TIMEOUT', detail: msg },
+        { status: 504 }
+      );
+    }
+
     return NextResponse.json(
-      { ok: false, error: 'AI_API_KEY_MISSING', detail: 'Set AI_API_KEY (or OPENAI_API_KEY) on the server' },
+      { ok: false, error: 'SERVER_ERROR', detail: msg },
       { status: 500 }
     );
   }
-
-  if (/aborted|timeout/i.test(msg)) {
-    return NextResponse.json(
-      { ok: false, error: 'AI_TIMEOUT', detail: msg },
-      { status: 504 }
-    );
-  }
-
-  return NextResponse.json(
-    { ok: false, error: 'SERVER_ERROR', detail: msg },
-    { status: 500 }
-  );
 }
