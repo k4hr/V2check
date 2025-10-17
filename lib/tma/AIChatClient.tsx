@@ -28,8 +28,16 @@ export type AIChatClientProps = {
 };
 
 const MAX_ATTACH_DEFAULT = 10;
+const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 const norm = (s: string) => (s || '').toString().trim();
 const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
+
+function isProPlusActiveFromResp(data: any): boolean {
+  const sub = data?.subscription || null;
+  if (!sub?.active) return false;
+  const raw = String(sub?.plan || '').toUpperCase().replace(/\s+|[_-]/g, '');
+  return raw === 'PROPLUS' || raw === 'PRO+' || raw.includes('PROPLUS');
+}
 
 type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
@@ -54,6 +62,9 @@ export default function AIChatClient(props: AIChatClientProps) {
   const [uploading, setUploading] = useState(false);
   const [attach, setAttach] = useState<Attach[]>([]);
   const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
+
+  // NEW: статус для бейджа
+  const [proPlusActive, setProPlusActive] = useState<boolean>(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
@@ -81,6 +92,23 @@ export default function AIChatClient(props: AIChatClientProps) {
       return id ? `?id=${encodeURIComponent(id)}` : '';
     } catch { return ''; }
   }, [passthroughIdParam]);
+
+  // NEW: загрузка статуса подписки
+  useEffect(() => {
+    (async () => {
+      try {
+        let endpoint = '/api/me';
+        const headers: Record<string, string> = {};
+        const init = TG_INIT();
+        if (init) headers['x-init-data'] = init;
+        else if (DEBUG && idSuffix) endpoint += idSuffix;
+
+        const r = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
+        const data = await r.json().catch(() => ({}));
+        setProPlusActive(isProPlusActiveFromResp(data));
+      } catch { setProPlusActive(false); }
+    })();
+  }, [idSuffix]);
 
   const collectMsgsForSave = useCallback(() => {
     return messages
@@ -193,7 +221,6 @@ export default function AIChatClient(props: AIChatClientProps) {
     ]);
 
     try {
-      // у упрощённой версии нет загрузки картинок/галерей
       const history = [
         { role: 'system', content: systemPrompt },
         ...messages.filter(m => m.role !== 'system'),
@@ -202,10 +229,7 @@ export default function AIChatClient(props: AIChatClientProps) {
 
       const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tg-Init-Data': TG_INIT(),    // 👈 добавили, чтобы сервер видел пользователя в TWA
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: t, history, mode }),
       });
 
@@ -213,18 +237,9 @@ export default function AIChatClient(props: AIChatClientProps) {
       if (data?.ok) {
         const reply = String(data.answer || '').trim();
         setMessages(m => [...m, { role: 'assistant', content: reply || 'Готово. Продолжим?' }]);
-      } else if (data?.error === 'FREE_LIMIT_REACHED' || data?.error === 'DAILY_LIMIT_REACHED') {
-        const level = String(data?.level || 'FREE').toUpperCase() as 'FREE'|'PRO'|'PROPLUS';
-        const limit = data?.limit ?? data?.freeLimit ?? 0;
-        const used  = data?.used ?? 0;
-        const msg = level === 'FREE'
-          ? `Дневной бесплатный лимит исчерпан (${used}/${limit}). Оформите Pro или попробуйте завтра.`
-          : `Достигнут дневной лимит для ${level === 'PROPLUS' ? 'Pro+' : 'Pro'} (${used}/${limit}). Продолжим завтра?`;
+      } else if (data?.error === 'FREE_LIMIT_REACHED') {
+        const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
-      } else if (data?.error === 'AI_TIMEOUT') {
-        setMessages(m => [...m, { role: 'assistant', content: 'Модель долго думала. Попробуем ещё раз?' }]);
-      } else if (data?.error === 'AI_API_KEY_MISSING') {
-        setMessages(m => [...m, { role: 'assistant', content: 'Сервис не настроен (нет ключа API).' }]);
       } else {
         setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
       }
@@ -287,6 +302,25 @@ export default function AIChatClient(props: AIChatClientProps) {
         </h1>
         {!!subtitle && (
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
+        )}
+
+        {/* MINI BADGE — только при активном Pro+ */}
+        {proPlusActive && (
+          <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
+            <span
+              style={{
+                display:'inline-flex', alignItems:'center', gap:8,
+                padding:'6px 10px', borderRadius: 999,
+                background:'rgba(255,210,120,.16)',
+                border:'1px solid rgba(255,210,120,.35)',
+                boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
+                color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
+              }}
+            >
+              <span aria-hidden>✨</span>
+              Pro+ активен
+            </span>
+          </div>
         )}
       </div>
 
@@ -388,36 +422,36 @@ export default function AIChatClient(props: AIChatClientProps) {
       >
         {/* ПЛЮС + прозрачный input поверх — работает на iOS/TG */}
         <div style={{ position: 'relative', width: 40, height: 40 }}>
-          <button
-            type="button"
-            aria-label="Прикрепить"
-            disabled={pickDisabled}
-            title={attach.length >= maxAttach ? `Достигнут лимит ${maxAttach} фото` : 'Прикрепить изображения'}
-            style={{
-              width: '100%', height: '100%', borderRadius: 10,
-              border: '1px solid #2b3552', background: '#121722',
-              display: 'grid', placeItems: 'center',
-              fontSize: 22, lineHeight: 1,
-              opacity: pickDisabled ? .5 : 1
-            }}
-          >
-            +
-          </button>
+            <button
+              type="button"
+              aria-label="Прикрепить"
+              disabled={pickDisabled}
+              title={attach.length >= maxAttach ? `Достигнут лимит ${maxAttach} фото` : 'Прикрепить изображения'}
+              style={{
+                width: '100%', height: '100%', borderRadius: 10,
+                border: '1px solid #2b3552', background: '#121722',
+                display: 'grid', placeItems: 'center',
+                fontSize: 22, lineHeight: 1,
+                opacity: pickDisabled ? .5 : 1
+              }}
+            >
+              +
+            </button>
 
-          <input
-            ref={pickerRef}
-            type="file"
-            accept="image/*"
-            multiple
-            disabled={pickDisabled}
-            onChange={(e) => addFilesFromPicker(e.target.files)}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              opacity: 0,
-              cursor: pickDisabled ? 'default' : 'pointer',
-            }}
-          />
+            <input
+              ref={pickerRef}
+              type="file"
+              accept="image/*"
+              multiple
+              disabled={pickDisabled}
+              onChange={(e) => addFilesFromPicker(e.target.files)}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                opacity: 0,
+                cursor: pickDisabled ? 'default' : 'pointer',
+              }}
+            />
         </div>
 
         <input
