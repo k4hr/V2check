@@ -1,6 +1,8 @@
 /* path: lib/i18n.ts */
 'use client';
 
+/* ========= Типы и константы ========= */
+
 export type Locale =
   | 'ru'  // Русский
   | 'en'  // English
@@ -14,6 +16,23 @@ export type Locale =
 
 export const FALLBACK: Locale = 'ru';
 export const KNOWN: Locale[] = ['ru','en','uk','be','kk','uz','ky','fa','hi'];
+
+/** Языки для селектора в UI (флаги/ярлыки) */
+export const UI_LOCALES: Array<{ code: Locale; label: string; flag: string; native?: string }> = [
+  { code: 'ru', label: 'Русский',     flag: '🇷🇺', native: 'Русский' },
+  { code: 'en', label: 'English',     flag: '🇬🇧', native: 'English' },
+  { code: 'uk', label: 'Українська',  flag: '🇺🇦', native: 'Українська' },
+  { code: 'be', label: 'Беларуская',  flag: '🇧🇾', native: 'Беларуская' },
+  { code: 'kk', label: 'Қазақша',     flag: '🇰🇿', native: 'Қазақша' },
+  { code: 'uz', label: 'Oʻzbekcha',   flag: '🇺🇿', native: 'Oʻzbekcha' },
+  { code: 'ky', label: 'Кыргызча',    flag: '🇰🇬', native: 'Кыргызча' },
+  { code: 'fa', label: 'فارسی',       flag: '🇮🇷', native: 'فارسی' },
+  { code: 'hi', label: 'हिन्दी',      flag: '🇮🇳', native: 'हिन्दी' },
+];
+
+/** Языки с письмом RTL */
+const RTL_LANGS: Locale[] = ['fa'];
+export const isRTL = (l: Locale) => RTL_LANGS.includes(l);
 
 /* ================== СЛОВАРЬ ================== */
 /** Короткие ключи, переиспользуются по всему приложению. */
@@ -88,7 +107,7 @@ export const STRINGS: Record<Locale, Record<string, any>> = {
     activeGeneric:(u?:string)=>`Підписка активна.${u?` До ${u}`:''}`,
 
     favoritesEmpty:'Тут зберігатимуться ваші чати за активної підписки Pro+',
-    backToCabinet:'Назад до кабінету',
+    backToCabінet:'Назад до кабінету',
     untitled:'Без назви',
     loadError:'Помилка завантаження',
   },
@@ -238,6 +257,10 @@ export const STRINGS: Record<Locale, Record<string, any>> = {
   },
 };
 
+/* Небольшой помощник для безопасного доступа к строкам */
+export const t = (locale: Locale, key: string, fallback?: string): any =>
+  STRINGS[locale]?.[key] ?? STRINGS[FALLBACK][key] ?? fallback ?? key;
+
 /* ================== КУКИ и ДЕТЕКТ ================== */
 
 function readCookie(name: string): string {
@@ -290,12 +313,20 @@ export function readLocale(): Locale {
   return FALLBACK;
 }
 
-/** Сохраняем язык сразу в две куки + html@lang */
+/** Применяем язык к документу (lang + dir) */
+export function applyLocaleToDocument(locale: Locale) {
+  try {
+    document.documentElement.lang = locale;
+    document.documentElement.dir = isRTL(locale) ? 'rtl' : 'ltr';
+  } catch {}
+}
+
+/** Сохраняем язык в куки + html@lang/dir */
 export function setLocaleEverywhere(code: Locale) {
   const safe = KNOWN.includes(code) ? code : FALLBACK;
   writeCookie('locale', safe);
   writeCookie('NEXT_LOCALE', safe);
-  try { document.documentElement.lang = safe; } catch {}
+  applyLocaleToDocument(safe);
 }
 
 /** Одноразовый авто-сейв: если куки нет — определяем и записываем */
@@ -304,5 +335,8 @@ export function ensureLocaleCookie() {
   if (!cur) {
     const guess = readLocale();
     setLocaleEverywhere(guess);
+  } else {
+    // синхронизируем dir на случай ручной правки или миграции
+    applyLocaleToDocument(normalizeToKnown(cur) || FALLBACK);
   }
 }
