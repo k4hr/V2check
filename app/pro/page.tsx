@@ -36,7 +36,7 @@ export default function ProSelectPage() {
       </p>
 
       <div className="lm-grid" style={{ marginTop: 16 }}>
-        {/* Pro (фиолетовая подсветка) */}
+        {/* Pro */}
         <Link
           href={`/pro/min${linkSuffix}` as Route}
           className="card card--pro"
@@ -52,7 +52,7 @@ export default function ProSelectPage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Pro+ (акцент без перекрытия текста) */}
+        {/* Pro+ */}
         <Link
           href={`/pro/max${linkSuffix}` as Route}
           className="card card--proplus"
@@ -109,8 +109,6 @@ export default function ProSelectPage() {
           <div className="cell"><span className="chip chip--no">⛔</span></div>
           <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
         </div>
-
-        <p className="cmp__note">† «без ограничений» — без жёстких квот, действует fair-use: при аномальной нагрузке доступ может временно переключаться на Mini.</p>
       </section>
 
       <style jsx>{`
@@ -135,7 +133,7 @@ export default function ProSelectPage() {
         .card__subtitle { opacity: .78; font-size: 13px; margin-top: 2px; }
         .card__chev { opacity: .6; font-size: 22px; }
 
-        /* Фиолетовая подсветка (Pro) */
+        /* Фиолетовая карточка */
         .card--pro {
           border-color: rgba(91, 140, 255, .45);
           box-shadow:
@@ -146,7 +144,7 @@ export default function ProSelectPage() {
           background: radial-gradient(120% 120% at 20% 20%, rgba(120,150,255,.45), rgba(120,150,255,.08) 60%, rgba(255,255,255,.05));
         }
 
-        /* Золотой акцент (Pro+) — без перекрытия текста */
+        /* Золотой акцент (как на кнопке), только для карточки Pro+ */
         .card--proplus {
           border-color: rgba(255, 191, 73, .45);
           box-shadow:
@@ -171,36 +169,47 @@ export default function ProSelectPage() {
           border-radius: 14px;
           overflow: hidden;
           background: #111624;
+          display: grid;
+          grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
         }
 
-        /* каждая строка — три соседние ячейки */
+        /* базовая ячейка — всё по центру */
         .cell {
           padding: 12px;
           font-size: 14px;
           border-bottom: 1px solid rgba(255,255,255,.06);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          min-height: 54px;
+          position: relative; /* нужно, чтобы ::before работал в Pro+ */
+          z-index: 1; /* контент над любым фоном */
         }
         .cell--label { background: rgba(255,255,255,.02); font-weight: 600; }
-        .cell--head { font-weight: 800; background: rgba(255,255,255,.04); }
+        .cell--head  { font-weight: 800; background: rgba(255,255,255,.04); }
 
-        /* Акцент для колонки Pro+ без заливки поверх текста */
-        .cell--proplus {
-          background: transparent;                 /* убрали золотую подложку */
-          border-left: 1px solid rgba(255,191,73,.28);
-          box-shadow: inset 0 0 0 1px rgba(255,191,73,.12);
-        }
-
-        /* грид для таблицы */
-        .cmp-grid {
-          display: grid;
-          grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
-        }
-        /* вертикальные разделители для первых двух колонок */
+        /* вертикальные разделители между колонками 1 и 2 */
         .cmp-grid .cell:nth-child(3n+1),
         .cmp-grid .cell:nth-child(3n+2) {
           border-right: 1px solid rgba(255,255,255,.06);
         }
         /* убрать низ у последних трёх ячеек */
         .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
+
+        /* --- Pro+ колонка: фон как у золотой кнопки, контент поверх --- */
+        .cell--proplus {
+          color: #fff;
+        }
+        .cell--proplus::before {
+          content: "";
+          position: absolute;
+          inset: 0;                /* закрываем всю ячейку */
+          background: linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%);
+          opacity: .95;            /* можно подкрутить интенсивность */
+          z-index: 0;              /* фон НАД задником таблицы, НО под контентом */
+          pointer-events: none;    /* не перекрывает клики */
+        }
 
         /* Чипы */
         .chip {
@@ -212,15 +221,8 @@ export default function ProSelectPage() {
         .chip--ok { background: rgba(80,200,120,.15); border-color: rgba(80,200,120,.35); }
         .chip--no { background: rgba(255,90,90,.15); border-color: rgba(255,90,90,.35); }
 
-        .cmp__note {
-          opacity: .6;
-          font-size: 12px;
-          margin-top: 8px;
-          text-align: center;
-        }
-
         @media (max-width: 420px) {
-          .cell { padding: 10px; font-size: 13px; }
+          .cell { padding: 10px; font-size: 13px; min-height: 48px; }
           .cmp-grid { grid-template-columns: minmax(120px, 1.2fr) 1fr 1fr; }
         }
       `}</style>
