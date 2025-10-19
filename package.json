@@ -2,6 +2,9 @@
   "name": "juristum-tma",
   "version": "0.9.5",
   "private": true,
+  "engines": {
+    "node": ">=18.18.0"
+  },
   "scripts": {
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "build": "next build",
@@ -9,19 +12,21 @@
     "migrate": "prisma db push --schema=prisma/schema.prisma"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.679.0",
+    "@mozilla/readability": "^0.5.0",
+    "@prisma/client": "^5.22.0",
+    "@twa-dev/sdk": "^7.10.1",
+    "jsdom": "^24.1.3",
     "next": "15.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "@prisma/client": "^5.22.0",
-    "@twa-dev/sdk": "^7.0.0",
-    "jsdom": "^24.0.0",
-    "sanitize-html": "^2.12.1",
-    "@mozilla/readability": "^0.5.0"
+    "sanitize-html": "^2.17.0",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
+    "@types/node": "^24.8.1",
+    "@types/react": "^19.2.2",
     "prisma": "^5.22.0",
-    "typescript": "^5.5.4",
-    "@types/react": "^18.3.3",
-    "@types/node": "^20.14.9"
+    "typescript": "^5.9.3"
   }
 }
