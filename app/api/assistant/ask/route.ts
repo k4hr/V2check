@@ -86,6 +86,23 @@ function resolveTelegramId(req: NextRequest): string | null {
   return null;
 }
 
+/** Определение уровня подписки — ВЕРНУЛИ ЭТУ ФУНКЦИЮ */
+type TierLevel = 'FREE'|'PRO'|'PROPLUS';
+async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel; userId?: string }> {
+  if (!tgId) return { tier: 'FREE' };
+  const user = await prisma.user.findFirst({
+    where: { telegramId: String(tgId) },
+    select: { id: true, plan: true, subscriptionUntil: true },
+  });
+  const active = !!user?.subscriptionUntil && user.subscriptionUntil > new Date();
+  if (!active || !user?.id) return { tier: 'FREE' };
+
+  const plan = String(user.plan || '').toUpperCase();
+  if (plan === 'PROPLUS') return { tier: 'PROPLUS', userId: user.id };
+  if (plan === 'PRO')     return { tier: 'PRO',     userId: user.id };
+  return { tier: 'PRO', userId: user.id };
+}
+
 /* ==================== Vision helpers ==================== */
 
 /** Разрешаем и публичный https, и data:image/*;base64 */
