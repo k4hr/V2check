@@ -107,9 +107,9 @@ export const STRINGS: Record<Locale, Record<string, any>> = {
     back:'Назад', accountTitle:'Асабісты кабінет', hello:'Вітаем,', welcome:'Сардэчна запрашаем!',
     subStatus:'Статус падпіскі', checking:'Правяраем падпіску…', buyExtend:'Купіць/падаўжыць падпіску',
     favorites:'Абранае', notActive:'Падпіска не актыўная.',
-    proActive:(u?:string)=>`У вас падпіска Pro.${u?` Да ${у}`:''}`,
-    proPlusActive:(u?:string)=>`У вас падпіска Pro+.${u?` Да ${у}`:''}`,
-    activeGeneric:(u?:string)=>`Падпіска актыўная.${u?` Да ${у}`:''}`,
+    proActive:(u?:string)=>`У вас падпіска Pro.${u?` Да ${u}`:''}`,
+    proPlusActive:(u?:string)=>`У вас падпіска Pro+.${u?` Да ${u}`:''}`,
+    activeGeneric:(u?:string)=>`Падпіска актыўная.${u?` Да ${u}`:''}`,
 
     favoritesEmpty:'Тут будуць захоўвацца вашыя чаты пры актыўнай падпісцы Pro+',
     backToCabinet:'Назад у кабінет',
