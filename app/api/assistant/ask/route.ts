@@ -103,10 +103,7 @@ async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel;
 /** Разрешаем https:// и data:image/*;base64, */
 function isSupportedImageUrl(u?: string): boolean {
   if (!u) return false;
-  if (u.startsWith('data:image/')) {
-    // можно ввести ограничение на размер (например, < 20MB), если нужно
-    return true;
-  }
+  if (u.startsWith('data:image/')) return true;
   try {
     const url = new URL(u);
     return url.protocol === 'https:' && !!url.hostname;
@@ -121,7 +118,6 @@ function buildUserContent(prompt: string, images?: string[]) {
 
   const arr = Array.isArray(images) ? images.filter(isSupportedImageUrl) : [];
   for (const url of arr) {
-    // ВАЖНО: для OpenAI нужен type: "image_url"
     content.push({ type: 'image_url', image_url: { url } });
   }
 
