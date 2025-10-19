@@ -38,7 +38,6 @@ export default function ProMinPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // TON
   const [planTon, setPlanTon] = useState<Plan>('WEEK');
   const [busyTon, setBusyTon] = useState(false);
 
@@ -126,7 +125,6 @@ export default function ProMinPage() {
   return (
     <main>
       <div className="safe">
-        {/* Назад */}
         <button
           type="button"
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
@@ -139,7 +137,6 @@ export default function ProMinPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Stars */}
         <div className="list">
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
@@ -165,7 +162,6 @@ export default function ProMinPage() {
           })}
         </div>
 
-        {/* TON */}
         <div className="crypto-card">
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
@@ -222,7 +218,6 @@ export default function ProMinPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* TON */
         .crypto-card {
           margin-top: 6px;
           padding: 14px;
