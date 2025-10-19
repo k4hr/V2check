@@ -4,33 +4,41 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Plan, Tier } from '@/lib/pricing';
 import { getPrices } from '@/lib/pricing';
+import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
 
 const tier: Tier = 'PRO';
 
-const TITLES: Record<Plan, string> = {
+const TITLES_RU: Record<Plan, string> = {
   WEEK: 'Pro — Неделя',
   MONTH: 'Pro — Месяц',
   HALF_YEAR: 'Pro — Полгода',
   YEAR: 'Pro — Год',
 };
+const TITLES_EN: Record<Plan, string> = {
+  WEEK: 'Pro — Week',
+  MONTH: 'Pro — Month',
+  HALF_YEAR: 'Pro — 6 months',
+  YEAR: 'Pro — Year',
+};
 
 function Star({ size = 16 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden focusable="false">
-      <path
-        d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z"
-        fill="currentColor"
-      />
+      <path d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z" fill="currentColor" />
     </svg>
   );
 }
 
 export default function ProMinPage() {
+  const locale: Locale = readLocale();
+  const S = STRINGS[locale];
+  const TITLES = locale === 'en' ? TITLES_EN : TITLES_RU;
+
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // TON-блок
+  // TON
   const [planTon, setPlanTon] = useState<Plan>('WEEK');
   const [busyTon, setBusyTon] = useState(false);
 
@@ -45,7 +53,8 @@ export default function ProMinPage() {
       tg?.BackButton?.onClick?.(back);
       return () => { tg?.BackButton?.hide?.(); tg?.BackButton?.offClick?.(back); };
     } catch {}
-  }, []);
+    try { document.documentElement.lang = locale; } catch {}
+  }, [locale]);
 
   async function buyStars(plan: Plan) {
     if (busy) return;
@@ -66,7 +75,6 @@ export default function ProMinPage() {
     }
   }
 
-  // Главная кнопка «Оплатить TON»
   async function buyTon() {
     if (busyTon) return;
     setBusyTon(true); setMsg(null); setInfo(null);
@@ -77,12 +85,9 @@ export default function ProMinPage() {
 
       const tg: any = (window as any)?.Telegram?.WebApp;
 
-      // 1) пробуем системную ton:// схему (если Telegram позволит)
       if (typeof payton === 'string' && payton.startsWith('ton://')) {
         try {
-          // прямой переход
           window.location.href = payton;
-          // 2) через 400мс — безопасный https-fallback, чтобы точно сработало
           setTimeout(() => {
             if (universal) {
               if (tg?.openLink) tg.openLink(universal);
@@ -93,7 +98,6 @@ export default function ProMinPage() {
         } catch {}
       }
 
-      // fallback сразу на https-универсальную ссылку
       if (universal) {
         if (tg?.openLink) tg.openLink(universal);
         else window.location.href = universal;
@@ -110,6 +114,15 @@ export default function ProMinPage() {
 
   const entries = Object.entries(prices) as [Plan, typeof prices[Plan]][];
 
+  const T = {
+    back: S.back || 'Назад',
+    title: locale === 'en' ? 'LiveManager Pro — payment' : 'LiveManager Pro — оплата',
+    tonTitle: locale === 'en' ? 'Pay with TON' : 'Оплатить TON',
+    tonSub: locale === 'en' ? 'Direct transfer via ton:// link' : 'Прямой перевод в кошелёк по ton:// ссылке',
+    tonBtnBusy: locale === 'en' ? 'Preparing link…' : 'Готовим ссылку…',
+    tonBtn: (suffix: string) => (locale === 'en' ? `Pay (${suffix})` : `Оплатить (${suffix})`),
+  };
+
   return (
     <main>
       <div className="safe">
@@ -119,14 +132,14 @@ export default function ProMinPage() {
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
           className="back"
         >
-          <span>←</span><b>Назад</b>
+          <span>←</span><b>{T.back}</b>
         </button>
 
-        <h1 className="title">LiveManager Pro — оплата</h1>
+        <h1 className="title">{T.title}</h1>
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Оплата Stars */}
+        {/* Stars */}
         <div className="list">
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
@@ -136,7 +149,7 @@ export default function ProMinPage() {
                 disabled={!can}
                 onClick={() => buyStars(key)}
                 className="row"
-                aria-label={`${TITLES[key]} — ${cfg.amount} звёзд`}
+                aria-label={`${TITLES[key]} — ${cfg.amount} ⭐`}
               >
                 <span className="left">
                   <span className="dot">🟣</span>
@@ -152,13 +165,13 @@ export default function ProMinPage() {
           })}
         </div>
 
-        {/* Оплата TON (прямой перевод) */}
+        {/* TON */}
         <div className="crypto-card">
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
             <div className="crypto-text">
-              <b className="crypto-title">Оплатить TON</b>
-              <small className="crypto-sub">Прямой перевод в кошелёк по ton:// ссылке</small>
+              <b className="crypto-title">{T.tonTitle}</b>
+              <small className="crypto-sub">{T.tonSub}</small>
             </div>
           </div>
 
@@ -181,7 +194,7 @@ export default function ProMinPage() {
             disabled={busyTon}
             className="crypto-cta"
           >
-            {busyTon ? 'Готовим ссылку…' : `Оплатить (${TITLES[planTon].split('— ')[1]})`}
+            {busyTon ? T.tonBtnBusy : T.tonBtn(TITLES[planTon].split('— ')[1])}
           </button>
         </div>
       </div>
@@ -209,7 +222,7 @@ export default function ProMinPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* TON card */
+        /* TON */
         .crypto-card {
           margin-top: 6px;
           padding: 14px;
