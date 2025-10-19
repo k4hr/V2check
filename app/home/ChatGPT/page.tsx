@@ -27,7 +27,7 @@ const norm = (s: string) => (s || '').toString().trim();
 const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
 
 // --- helpers ---
-// Вытаскиваем ТОЛЬКО http(s)-картинки из текста (data: урлы намеренно игнорим)
+// Тянем только http(s)-картинки из текста (data: исключаем — они громоздкие)
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
   const re = /(https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif))/gi;
@@ -333,7 +333,7 @@ export default function ChatGPTPage() {
       return;
     }
 
-    // ⚠️ БОЛЬШИЕ data:URL в текст НЕ КЛАДЁМ — только короткая пометка
+    // в prompt НЕ добавляем data: и длинные URL — только текст
     const promptText = tText || '';
 
     try {
@@ -346,7 +346,6 @@ export default function ChatGPTPage() {
       const r = await fetch('/api/assistant/ask' + idSuffix, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Картинки передаём отдельным полем — сервер сам прикрепит их как image_url
         body: JSON.stringify({ prompt: promptText, history, images: uploadedUrls, mode }),
       });
 
@@ -355,7 +354,7 @@ export default function ChatGPTPage() {
         const reply = String(data.answer || '').trim();
 
         const serverImages: string[] = Array.isArray(data.images) ? data.images.filter(Boolean) : [];
-        const fromText = extractImageUrlsFromText(reply); // data: тут не попадут
+        const fromText = extractImageUrlsFromText(reply);
         const uniqueImages = Array.from(new Set([...(serverImages || []), ...(fromText || [])]));
 
         if (reply.replace(/\s+/g, '').length) {
