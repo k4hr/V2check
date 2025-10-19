@@ -13,7 +13,7 @@ const FREE_QA_PER_DAY     = Number(process.env.FREE_QA_PER_DAY     ?? 2);
 const PRO_QA_PER_DAY      = Number(process.env.PRO_QA_PER_DAY      ?? 100);
 const PROPLUS_QA_PER_DAY  = Number(process.env.PROPLUS_QA_PER_DAY  ?? 200);
 
-/** Модели (как было, с фолбэками) */
+/** Модели */
 const MODEL_DEFAULT =
   process.env.AI_MODEL ||
   process.env.OPENAI_MODEL ||
@@ -34,8 +34,8 @@ const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
 function pickModelByMode(mode?: string): string {
   if (!mode) return MODEL_DEFAULT;
-  if (mode.startsWith('proplus-')) return MODEL_PRO_PLUS; // усиленные режимы для Pro+
-  if (mode.startsWith('legal-'))   return MODEL_PRO;      // юр-режимы для Pro
+  if (mode.startsWith('proplus-')) return MODEL_PRO_PLUS;
+  if (mode.startsWith('legal-'))   return MODEL_PRO;
   return MODEL_DEFAULT;
 }
 
@@ -47,7 +47,7 @@ function todayStr() {
   return `${y}-${m}-${dd}`;
 }
 
-/** ===== Helpers для учёта дневных лимитов (Pro/Pro+) ===== */
+/** ===== учёт дневных лимитов (Pro/Pro+) ===== */
 async function getUsedToday(userId: string, date: string) {
   const row = await prisma.usageDaily.findUnique({
     where: { userId_date: { userId, date } },
@@ -64,29 +64,24 @@ async function incUsedToday(userId: string, date: string) {
   });
 }
 
-/** Определяем Telegram ID:
- *  1) пробуем валидировать x-init-data (из Телеграма)
- *  2) если нет — берём ?id=
- */
+/** Telegram ID */
 function resolveTelegramId(req: NextRequest): string | null {
-  // из заголовка (Телеграм WebApp)
   const initData =
     req.headers.get('x-init-data') ||
     req.headers.get('x-tg-init-data') ||
-    getInitDataFrom(req as any) || // на всякий случай
+    getInitDataFrom(req as any) ||
     '';
   if (initData && BOT_TOKEN && verifyInitData(initData, BOT_TOKEN)) {
     const id = getTelegramId(initData);
     if (id) return String(id);
   }
-  // из query (?id=)
   const { searchParams } = new URL(req.url);
   const qsId = searchParams.get('id');
   if (qsId && /^\d{3,15}$/.test(qsId)) return qsId;
   return null;
 }
 
-/** Определение уровня подписки — ВЕРНУЛИ ЭТУ ФУНКЦИЮ */
+/** Определение уровня подписки */
 type TierLevel = 'FREE'|'PRO'|'PROPLUS';
 async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel; userId?: string }> {
   if (!tgId) return { tier: 'FREE' };
@@ -105,39 +100,36 @@ async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel;
 
 /* ==================== Vision helpers ==================== */
 
-/** Разрешаем и публичный https, и data:image/*;base64 */
+/** Разрешаем публичный https и data:image/*;base64 */
 function isValidImageUrl(u?: string): boolean {
   if (!u) return false;
-  if (/^data:image\/[a-z0-9+.-]+;base64,/i.test(u)) return true;
+  if (/^data:image\/[a-z0-9+.\-]+;base64,/i.test(u)) return true;
   try {
     const url = new URL(u);
     return url.protocol === 'https:' && !!url.hostname;
   } catch { return false; }
 }
 
-/** Формируем мультимодальный контент user-сообщения */
+/** Формируем мультимодальный контент user-сообщения под Chat Completions */
 function buildUserContent(prompt: string, images?: string[]) {
-  const content: any[] = [];
+  const parts: any[] = [];
   const text = (prompt || '').trim();
-  if (text) content.push({ type: 'text', text });
+  if (text) parts.push({ type: 'text', text });
 
   const arr = Array.isArray(images) ? images.filter(isValidImageUrl) : [];
   for (const url of arr) {
-    content.push({ type: 'input_image', image_url: { url } });
+    // ВАЖНО: Chat Completions ожидает type: 'image_url'
+    parts.push({ type: 'image_url', image_url: { url } });
   }
 
-  // Если пусто — вернём пустой текстовый блок (схема API требует непустой content)
-  return content.length ? content : [{ type: 'text', text: '' }];
+  return parts.length ? parts : [{ type: 'text', text: '' }];
 }
 
-/** Конвертируем историю в мультимодальную форму (текстовые блоки) */
+/** Историю приводим к массивам частей {type:'text'} */
 function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
   return (history || []).map((m) => {
     const txt = typeof m.content === 'string' ? m.content : '';
-    return {
-      role: m.role,
-      content: [{ type: 'text', text: txt }] as any,
-    } as ChatMessage;
+    return { role: m.role, content: [{ type: 'text', text: txt }] as any } as ChatMessage;
   });
 }
 
@@ -151,7 +143,6 @@ export async function POST(req: NextRequest) {
     const images   = Array.isArray(body?.images) ? (body.images as string[]) : [];
     const model    = pickModelByMode(mode);
 
-    // Разрешаем пустой prompt, если есть хотя бы одна валидная картинка
     const hasValidImages = images.some(isValidImageUrl);
     if (!prompt && !hasValidImages) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
@@ -161,11 +152,10 @@ export async function POST(req: NextRequest) {
     const { tier, userId } = await resolveTierByTgId(tgId);
     const today = todayStr();
 
-    // Собираем мультимодальные сообщения
     const mmHistory: ChatMessage[] = toMultimodalHistory(history);
     const userContent = buildUserContent(prompt, images);
 
-    // ===== FREE: считаем лимит куками =====
+    // ===== FREE: лимит в куках =====
     if (tier === 'FREE') {
       const usedStr = req.cookies.get('ai_free_used')?.value || '0';
       const dateStr = req.cookies.get('ai_free_date')?.value || '';
@@ -206,7 +196,7 @@ export async function POST(req: NextRequest) {
       return resp;
     }
 
-    // ===== PRO / PROPLUS: считаем в БД =====
+    // ===== PRO / PROPLUS: лимит в БД =====
     const limit = tier === 'PROPLUS' ? PROPLUS_QA_PER_DAY : PRO_QA_PER_DAY;
     const used = await getUsedToday(userId!, today);
 
@@ -228,7 +218,6 @@ export async function POST(req: NextRequest) {
 
     const answer = cleanAssistantText(raw);
 
-    // инкремент только после успешного ответа от модели
     await incUsedToday(userId!, today);
 
     const usedNew = used + 1;
@@ -245,7 +234,6 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     const msg = String(e?.message || 'SERVER_ERROR');
 
-    // Парсим ошибки из lib/ai.ts вида "AI_HTTP_429: …"
     const m = /^AI_HTTP_(\d+):\s*(.*)$/.exec(msg);
     if (m) {
       const status = Number(m[1]);
