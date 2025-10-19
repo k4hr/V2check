@@ -77,7 +77,7 @@ export default function ProSelectPage() {
           {/* Заголовок */}
           <div className="cell cell--head cell--label">Параметр</div>
           <div className="cell cell--head">Pro</div>
-          <div className="cell cell--head cell--proplus">Pro+</div>
+          <div className="cell cell--head cell--proplus-head">Pro+</div>
 
           {/* Модель ИИ */}
           <div className="cell cell--label">Модель ИИ</div>
@@ -122,6 +122,7 @@ export default function ProSelectPage() {
           background: #161b25; border: 1px solid rgba(255,255,255,.08);
           color: inherit; box-shadow: 0 6px 24px rgba(0,0,0,.25);
           transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+          -webkit-tap-highlight-color: transparent;
         }
         .card:hover { transform: translateY(-1px); }
         .card__left { display: flex; gap: 12px; align-items: center; }
@@ -164,7 +165,7 @@ export default function ProSelectPage() {
           grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
         }
 
-        /* Базовая ячейка — центрируем и создаём новый слой */
+        /* базовая ячейка — всё по центру */
         .cell {
           padding: 12px;
           font-size: 14px;
@@ -174,11 +175,7 @@ export default function ProSelectPage() {
           justify-content: center;
           text-align: center;
           min-height: 54px;
-          position: relative;
-          z-index: 2;               /* ячейка над фоновой сеткой */
-          mix-blend-mode: normal;   /* запрещаем любые режимы смешивания */
         }
-        .cell > * { position: relative; z-index: 3; } /* контент поверх любых подложек */
         .cell--label { background: rgba(255,255,255,.02); font-weight: 600; }
         .cell--head  { font-weight: 800; background: rgba(255,255,255,.04); }
 
@@ -187,16 +184,14 @@ export default function ProSelectPage() {
         .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(255,255,255,.06); }
         .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
 
-        /* Колонка Pro+ — фон как у золотой кнопки, но под контентом */
-        .cell--proplus { color: #fff; }
-        .cell--proplus::before {
-          content: "";
-          position: absolute;
-          inset: 0;
+        /* --- Pro+ колонка: фон = золотой как у кнопки, КАК ОБЫЧНЫЙ background --- */
+        .cell--proplus,
+        .cell--proplus-head {
           background: linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%);
-          z-index: 1;            /* фон ниже контента (3), выше базового задника */
-          pointer-events: none;  /* не перехватывает клики */
+          color: #fff;
         }
+        /* чтобы шапка Pro+ тоже была в том же стиле, но жирная */
+        .cell--proplus-head { font-weight: 800; }
 
         /* Чипы */
         .chip {
