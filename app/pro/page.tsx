@@ -10,6 +10,69 @@ export default function ProSelectPage() {
   const locale: Locale = readLocale();
   const S = STRINGS[locale];
 
+  // Локализация заголовков и подзаголовков карточек
+  const L: Record<Locale, {
+    choosePlan: string;
+    compareAndPay: string;
+    proSub: string;
+    proPlusSub: string;
+  }> = {
+    ru: {
+      choosePlan: 'Выберите подписку',
+      compareAndPay: 'Сравните и перейдите к оплате',
+      proSub: 'Попробуй — быстрые ежедневные инструменты',
+      proPlusSub: 'Углубись — продвинутые сценарии и повышенные лимиты',
+    },
+    en: {
+      choosePlan: 'Choose a plan',
+      compareAndPay: 'Compare and proceed to payment',
+      proSub: 'Try fast daily tools',
+      proPlusSub: 'Go deeper — advanced scenarios and higher limits',
+    },
+    uk: {
+      choosePlan: 'Оберіть підписку',
+      compareAndPay: 'Порівняйте й перейдіть до оплати',
+      proSub: 'Спробуйте — швидкі щоденні інструменти',
+      proPlusSub: 'Заглибтеся — розширені сценарії та підвищені ліміти',
+    },
+    be: {
+      choosePlan: 'Абярыце падпіску',
+      compareAndPay: 'Параўнайце і перайдзіце да аплаты',
+      proSub: 'Паспрабуйце — хуткія штодзённыя інструменты',
+      proPlusSub: 'Заглыбцеся — прасунутыя сцэнарыі і павышаныя ліміты',
+    },
+    kk: {
+      choosePlan: 'Жазылымды таңдаңыз',
+      compareAndPay: 'Салыстырып, төлемге өтіңіз',
+      proSub: 'Қолыңызда — күнделікті жылдам құралдар',
+      proPlusSub: 'Тереңірек — кеңейтілген сценарийлер және жоғары лимиттер',
+    },
+    uz: {
+      choosePlan: 'Obunani tanlang',
+      compareAndPay: 'Taqqoslang va to‘lovga o‘ting',
+      proSub: 'Har kuni uchun tezkor vositalar',
+      proPlusSub: 'Chuqurroq — kengaytirilgan ssenariylar va yuqori limitlar',
+    },
+    ky: {
+      choosePlan: 'Жазылууну тандаңыз',
+      compareAndPay: 'Салыштырып, төлөмгө өтүңүз',
+      proSub: 'Күнүмдүк тез куралдар',
+      proPlusSub: 'Тереңирээк — кеңейтилген сценарийлер жана жогору лимиттер',
+    },
+    fa: {
+      choosePlan: 'طرح را انتخاب کنید',
+      compareAndPay: 'مقایسه کنید و به پرداخت بروید',
+      proSub: 'ابزارهای سریع روزانه',
+      proPlusSub: 'عمیق‌تر — سناریوهای پیشرفته و محدودیت‌های بیشتر',
+    },
+    hi: {
+      choosePlan: 'प्लान चुनें',
+      compareAndPay: 'तुलना करें और भुगतान पर जाएँ',
+      proSub: 'तेज़ दैनिक टूल',
+      proPlusSub: 'और गहराई — उन्नत सीनारियो और अधिक लिमिट',
+    },
+  };
+
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
@@ -24,45 +87,34 @@ export default function ProSelectPage() {
     } catch { return ''; }
   }, []);
 
-  // Небольшие подписи (ru/en), для остальных — русские как дефолт
-  const T = {
-    back: S.back || 'Назад',
-    choosePlan: locale === 'en' ? 'Choose a plan' : 'Выберите подписку',
-    compareAndPay: locale === 'en' ? 'Compare and proceed to payment' : 'Сравните и перейдите к оплате',
-    proTitle: 'LiveManager Pro',
-    proSub: locale === 'en' ? 'Try fast daily tools' : 'Попробуй — быстрые ежедневные инструменты',
-    proPlusTitle: 'LiveManager Pro+',
-    proPlusSub: locale === 'en' ? 'Go deeper: advanced scenarios & higher limits' : 'Углубись — продвинутые сценарии и повышенные лимиты',
-  };
-
   return (
     <main className="lm-wrap">
       <button
         type="button"
         onClick={() => history.length > 1 ? history.back() : (location.href = '/home')}
         className="card"
-        style={{ maxWidth: 120, padding: '10px 12px', marginBottom: 12 }}
+        style={{ maxWidth: 140, padding: '10px 12px', marginBottom: 12 }}
       >
-        ← {T.back}
+        ← {S.back}
       </button>
 
-      <h1 style={{ textAlign: 'center' }}>{T.choosePlan}</h1>
-      <p className="lm-subtitle" style={{ textAlign: 'center' }}>
-        {T.compareAndPay}
+      <h1 style={{ textAlign:'center' }}>{L[locale].choosePlan}</h1>
+      <p className="lm-subtitle" style={{ textAlign:'center' }}>
+        {L[locale].compareAndPay}
       </p>
 
-      <div className="lm-grid" style={{ marginTop: 16 }}>
+      <div className="lm-grid" style={{ marginTop:16 }}>
         {/* Pro */}
         <Link
           href={`/pro/min${linkSuffix}` as Route}
           className="card card--pro"
-          style={{ textDecoration: 'none' }}
+          style={{ textDecoration:'none' }}
         >
           <span className="card__left">
             <span className="card__icon card__icon--pro">📦</span>
             <span>
-              <div className="card__title">{T.proTitle}</div>
-              <div className="card__subtitle">{T.proSub}</div>
+              <div className="card__title">LiveManager Pro</div>
+              <div className="card__subtitle">{L[locale].proSub}</div>
             </span>
           </span>
           <span className="card__chev">›</span>
@@ -72,13 +124,13 @@ export default function ProSelectPage() {
         <Link
           href={`/pro/max${linkSuffix}` as Route}
           className="card card--proplus"
-          style={{ textDecoration: 'none' }}
+          style={{ textDecoration:'none' }}
         >
           <span className="card__left">
             <span className="card__icon card__icon--proplus">✨</span>
             <span>
-              <div className="card__title">{T.proPlusTitle}</div>
-              <div className="card__subtitle">{T.proPlusSub}</div>
+              <div className="card__title">LiveManager Pro+</div>
+              <div className="card__subtitle">{L[locale].proPlusSub}</div>
             </span>
           </span>
           <span className="card__chev">›</span>
@@ -181,7 +233,7 @@ export default function ProSelectPage() {
           grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
         }
 
-        /* Все по центру */
+        /* Центровка содержимого */
         .cell {
           padding: 12px;
           font-size: 14px;
@@ -201,7 +253,7 @@ export default function ProSelectPage() {
         .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(255,255,255,.06); }
         .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
 
-        /* Pro+ колонка — золотой фон, не перекрывает контент */
+        /* Колонка Pro+ — фон как у «золотой» кнопки, контент всегда сверху */
         .cell--proplus,
         .cell--proplus-head {
           background: linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%);
@@ -209,7 +261,7 @@ export default function ProSelectPage() {
         }
         .cell--proplus-head { font-weight: 800; }
 
-        /* Чипы всегда поверх */
+        /* Чипы поверх фона */
         .chip {
           display: inline-flex; align-items: center; justify-content: center;
           min-width: 24px; height: 24px; padding: 0 8px;
