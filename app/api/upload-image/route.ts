@@ -4,10 +4,9 @@ import sharp from 'sharp';
 
 export const runtime = 'nodejs'; // sharp требует nodejs runtime
 
-// --- ENV (подставь свои значения в .env) ---
-// Хост R2 вида: 376b41c944d618564e7b3570cb03f142.r2.cloudflarestorage.com
-const R2_PUBLIC_HOST = process.env.R2_PUBLIC_HOST || '';
-const R2_BUCKET = process.env.R2_BUCKET || '';
+// --- ENV (заполни в .env) ---
+const R2_PUBLIC_HOST = process.env.R2_PUBLIC_HOST || ''; // пример: 376b41c....r2.cloudflarestorage.com
+const R2_BUCKET = process.env.R2_BUCKET || '';           // имя бакета
 
 function errJson(message: string, status = 400) {
   return NextResponse.json({ success: false, error: message }, { status });
@@ -23,39 +22,40 @@ export async function POST(req: Request) {
     const file = formData.get('file') as File | null;
 
     if (!file) return errJson('Файл не найден', 400);
-    if (!file.type || !file.type.startsWith('image/')) {
-      return errJson('Можно загружать только изображения', 415);
-    }
+    if (!file.type || !file.type.startsWith('image/')) return errJson('Можно загружать только изображения', 415);
 
     // Сжимаем до JPEG (80)
     const srcBuf = Buffer.from(await file.arrayBuffer());
     const jpegBuf = await sharp(srcBuf).jpeg({ quality: 80 }).toBuffer();
+    const contentType = 'image/jpeg';
 
-    // Ключ в бакете
+    // Ключ в бакете: YYYY/MM/DD/uuid.jpg
     const now = new Date();
     const y = now.getUTCFullYear();
     const m = String(now.getUTCMonth() + 1).padStart(2, '0');
     const d = String(now.getUTCDate()).padStart(2, '0');
     const key = `${y}/${m}/${d}/${crypto.randomUUID()}.jpg`;
 
-    const contentType = 'image/jpeg';
-
-    // ПУБЛИЧНЫЙ URL (для отдачи)
+    // Публичный URL (именно его вернем фронту)
     const publicUrl = `https://${R2_PUBLIC_HOST}/${R2_BUCKET}/${key}`;
 
-    // Прямая загрузка через HTTPS на R2 (если в аккаунте разрешён анонимный PUT; иначе нужен S3-подпись)
+    // Загружаем напрямую (анонимный PUT должен быть разрешен; иначе нужен presigned URL / S3 SDK)
     const putUrl = publicUrl;
 
-    // ✅ фикc типизации: передаём Blob, а не Buffer
-    const bodyBlob = new Blob([jpegBuf], { type: contentType });
+    // ✅ ВАЖНО: конвертируем Buffer -> ArrayBuffer
+    const ab: ArrayBuffer = jpegBuf.buffer.slice(
+      jpegBuf.byteOffset,
+      jpegBuf.byteOffset + jpegBuf.byteLength
+    );
 
     const putRes = await fetch(putUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': contentType,
-        // Если используешь подписанный доступ — тут должны быть заголовки авторизации (AWS SigV4).
+        // Если требуется подпись (обычно так и есть) — тут должна быть AWS SigV4 авторизация,
+        // или используй presigned URL/SDK.
       },
-      body: bodyBlob,
+      body: ab,
     });
 
     if (!putRes.ok) {
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
       name: file.name,
       size: jpegBuf.length,
       type: contentType,
-      url: publicUrl, // отдаём https-URL, который потом прилетит в /api/assistant/ask
+      url: publicUrl,
     });
   } catch (err: any) {
     console.error('Upload error:', err?.stack || err?.message || err);
