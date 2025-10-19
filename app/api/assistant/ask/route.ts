@@ -1,6 +1,6 @@
-/* path: app/api/assistant/ask/route.ts */
+// app/api/assistant/ask/route.ts
 import { NextResponse, NextRequest } from 'next/server';
-import { askAI, type ChatMessage } from '@/lib/ai';
+import { askAI, type ChatMessage, type ChatContentBlock } from '@/lib/ai';
 import { prisma } from '@/lib/prisma';
 import cleanAssistantText from '@/lib/cleanText';
 import { verifyInitData, getTelegramId, getInitDataFrom } from '@/lib/auth/verifyInitData';
@@ -103,18 +103,60 @@ async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel;
   return { tier: 'PRO', userId: user.id };
 }
 
+/* ==================== МУЛЬТИМОДАЛЬНЫЕ ХЕЛПЕРЫ ==================== */
+
+/** Разрешаем как публичный https, так и data:image/*;base64 */
+function isValidImageUrl(u?: string): boolean {
+  if (!u) return false;
+  if (/^data:image\/[a-z0-9+.-]+;base64,/i.test(u)) return true;
+  try {
+    const url = new URL(u);
+    return url.protocol === 'https:' && !!url.hostname;
+  } catch { return false; }
+}
+
+/** Формируем контент user-сообщения (текст + картинки) */
+function buildUserContent(prompt: string, images?: string[]): ChatContentBlock[] {
+  const parts: ChatContentBlock[] = [];
+  const text = (prompt || '').trim();
+  if (text) parts.push({ type: 'text', text });
+
+  const arr = Array.isArray(images) ? images.filter(isValidImageUrl) : [];
+  for (const url of arr) parts.push({ type: 'input_image', image_url: { url } });
+
+  // Если нет ничего, вернём пустой текстовый блок — API требует непустой content
+  return parts.length ? parts : [{ type: 'text', text: '' }];
+}
+
+/** Историю кладём как простые текстовые блоки, чтобы не ломать прошлые чаты */
+function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
+  return (history || []).map((m) => {
+    if (Array.isArray(m.content)) return m;
+    return {
+      role: m.role,
+      content: [{ type: 'text', text: typeof m.content === 'string' ? m.content : '' }],
+    };
+  });
+}
+
 /** Основной хэндлер */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
     const prompt  = String(body?.prompt || '').trim();
     const history = (body?.history || []) as ChatMessage[];
+    const images  = (body?.images || []) as string[];  // <— получаем массив картинок от клиента
     const mode    = String(body?.mode || '');
     const model   = pickModelByMode(mode);
 
-    if (!prompt) {
+    // Разрешаем пустой prompt, если есть хотя бы одна валидная картинка
+    const hasValidImages = Array.isArray(images) && images.some(isValidImageUrl);
+    if (!prompt && !hasValidImages) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
     }
+
+    const userContent = buildUserContent(prompt, images);
+    const histMM = toMultimodalHistory(history);
 
     const tgId = resolveTelegramId(req);
     const { tier, userId } = await resolveTierByTgId(tgId);
@@ -136,9 +178,9 @@ export async function POST(req: NextRequest) {
 
       const raw = await askAI(
         [
-          { role: 'system', content: 'Ты ассистент. Пиши кратко, без Markdown.' },
-          ...history,
-          { role: 'user', content: prompt },
+          { role: 'system', content: [{ type: 'text', text: 'Ты ассистент. Пиши кратко, без Markdown.' }] },
+          ...histMM,
+          { role: 'user', content: userContent as any },
         ],
         { model }
       );
@@ -174,9 +216,9 @@ export async function POST(req: NextRequest) {
 
     const raw = await askAI(
       [
-        { role: 'system', content: 'Ты ассистент. Пиши развернуто, но без Markdown.' },
-        ...history,
-        { role: 'user', content: prompt },
+        { role: 'system', content: [{ type: 'text', text: 'Ты ассистент. Пиши развернуто, но без Markdown.' }] },
+        ...histMM,
+        { role: 'user', content: userContent as any },
       ],
       { model }
     );
