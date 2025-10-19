@@ -47,7 +47,7 @@ function todayStr() {
   return `${y}-${m}-${dd}`;
 }
 
-/** ===== учёт дневных лимитов (Pro/Pro+) ===== */
+/* ===== Helpers для дневных лимитов ===== */
 async function getUsedToday(userId: string, date: string) {
   const row = await prisma.usageDaily.findUnique({
     where: { userId_date: { userId, date } },
@@ -64,7 +64,7 @@ async function incUsedToday(userId: string, date: string) {
   });
 }
 
-/** Telegram ID */
+/** Определяем Telegram ID */
 function resolveTelegramId(req: NextRequest): string | null {
   const initData =
     req.headers.get('x-init-data') ||
@@ -100,36 +100,42 @@ async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel;
 
 /* ==================== Vision helpers ==================== */
 
-/** Разрешаем публичный https и data:image/*;base64 */
-function isValidImageUrl(u?: string): boolean {
+/** Разрешаем https:// и data:image/*;base64, */
+function isSupportedImageUrl(u?: string): boolean {
   if (!u) return false;
-  if (/^data:image\/[a-z0-9+.\-]+;base64,/i.test(u)) return true;
+  if (u.startsWith('data:image/')) {
+    // можно ввести ограничение на размер (например, < 20MB), если нужно
+    return true;
+  }
   try {
     const url = new URL(u);
     return url.protocol === 'https:' && !!url.hostname;
   } catch { return false; }
 }
 
-/** Формируем мультимодальный контент user-сообщения под Chat Completions */
+/** Собираем контент user-сообщения для OpenAI chat/completions */
 function buildUserContent(prompt: string, images?: string[]) {
-  const parts: any[] = [];
+  const content: any[] = [];
   const text = (prompt || '').trim();
-  if (text) parts.push({ type: 'text', text });
+  if (text) content.push({ type: 'text', text });
 
-  const arr = Array.isArray(images) ? images.filter(isValidImageUrl) : [];
+  const arr = Array.isArray(images) ? images.filter(isSupportedImageUrl) : [];
   for (const url of arr) {
-    // ВАЖНО: Chat Completions ожидает type: 'image_url'
-    parts.push({ type: 'image_url', image_url: { url } });
+    // ВАЖНО: для OpenAI нужен type: "image_url"
+    content.push({ type: 'image_url', image_url: { url } });
   }
 
-  return parts.length ? parts : [{ type: 'text', text: '' }];
+  return content.length ? content : [{ type: 'text', text: '' }];
 }
 
-/** Историю приводим к массивам частей {type:'text'} */
+/** Историю переводим в мультимодальный формат (только текст) */
 function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
   return (history || []).map((m) => {
     const txt = typeof m.content === 'string' ? m.content : '';
-    return { role: m.role, content: [{ type: 'text', text: txt }] as any } as ChatMessage;
+    return {
+      role: m.role,
+      content: [{ type: 'text', text: txt }] as any,
+    } as ChatMessage;
   });
 }
 
@@ -143,8 +149,7 @@ export async function POST(req: NextRequest) {
     const images   = Array.isArray(body?.images) ? (body.images as string[]) : [];
     const model    = pickModelByMode(mode);
 
-    const hasValidImages = images.some(isValidImageUrl);
-    if (!prompt && !hasValidImages) {
+    if (!prompt && (!images || images.length === 0)) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
     }
 
@@ -155,7 +160,6 @@ export async function POST(req: NextRequest) {
     const mmHistory: ChatMessage[] = toMultimodalHistory(history);
     const userContent = buildUserContent(prompt, images);
 
-    // ===== FREE: лимит в куках =====
     if (tier === 'FREE') {
       const usedStr = req.cookies.get('ai_free_used')?.value || '0';
       const dateStr = req.cookies.get('ai_free_date')?.value || '';
@@ -196,7 +200,7 @@ export async function POST(req: NextRequest) {
       return resp;
     }
 
-    // ===== PRO / PROPLUS: лимит в БД =====
+    // ===== PRO / PROPLUS =====
     const limit = tier === 'PROPLUS' ? PROPLUS_QA_PER_DAY : PRO_QA_PER_DAY;
     const used = await getUsedToday(userId!, today);
 
@@ -219,7 +223,6 @@ export async function POST(req: NextRequest) {
     const answer = cleanAssistantText(raw);
 
     await incUsedToday(userId!, today);
-
     const usedNew = used + 1;
 
     return NextResponse.json({
@@ -234,16 +237,20 @@ export async function POST(req: NextRequest) {
   } catch (e: any) {
     const msg = String(e?.message || 'SERVER_ERROR');
 
+    // Логируем, чтобы видеть причину
     const m = /^AI_HTTP_(\d+):\s*(.*)$/.exec(msg);
     if (m) {
       const status = Number(m[1]);
+      const detail = m[2];
+      console.error('[AI_ERROR]', { status, detail });
       return NextResponse.json(
-        { ok: false, error: 'AI_ERROR', status, detail: m[2] },
+        { ok: false, error: 'AI_ERROR', status, detail },
         { status }
       );
     }
 
     if (msg === 'AI_API_KEY_MISSING') {
+      console.error('[AI_ERROR] API key missing');
       return NextResponse.json(
         { ok: false, error: 'AI_API_KEY_MISSING', detail: 'Set AI_API_KEY (or OPENAI_API_KEY) on the server' },
         { status: 500 }
@@ -251,12 +258,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (/aborted|timeout/i.test(msg)) {
+      console.error('[AI_ERROR] Timeout/Abort:', msg);
       return NextResponse.json(
         { ok: false, error: 'AI_TIMEOUT', detail: msg },
         { status: 504 }
       );
     }
 
+    console.error('[AI_ERROR] Server:', msg);
     return NextResponse.json(
       { ok: false, error: 'SERVER_ERROR', detail: msg },
       { status: 500 }
