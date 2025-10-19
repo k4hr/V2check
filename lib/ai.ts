@@ -1,5 +1,13 @@
 // lib/ai.ts
-export type ChatMessage = { role: 'user' | 'assistant' | 'system'; content: string };
+
+export type ChatContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'input_image'; image_url: { url: string } };
+
+export type ChatMessage = {
+  role: 'user' | 'assistant' | 'system';
+  content: string | ChatContentBlock[];
+};
 
 // --- Конфиг через ENV с фолбэками ---
 const PROVIDER = (process.env.AI_PROVIDER || 'openai').toLowerCase();
