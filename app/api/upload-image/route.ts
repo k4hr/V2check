@@ -6,13 +6,13 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 export const runtime = 'nodejs'; // sharp + aws-sdk требуют nodejs runtime
 
 // ===== ENV (оба варианта имён + trim) =========================
-const R2_ACCOUNT_ID       = (process.env.R2_ACCOUNT_ID || '').trim();            // 376b41c9...
-const R2_BUCKET_NAME      = (
+const R2_ACCOUNT_ID        = (process.env.R2_ACCOUNT_ID || '').trim();            // 376b41c9...
+const R2_BUCKET_NAME       = (
   process.env.R2_BUCKET_NAME ||
   process.env.R2_BUCKET ||
   ''
 ).trim();
-const R2_ACCESS_KEY_ID    = (
+const R2_ACCESS_KEY_ID     = (
   process.env.R2_ACCESS_KEY_ID ||
   process.env.R2_ACCESS_KEY ||
   ''
@@ -22,7 +22,8 @@ const R2_SECRET_ACCESS_KEY = (
   process.env.R2_SECRET_KEY ||
   ''
 ).trim();
-// База для публичных ссылок: https://pub-....r2.dev или свой домен/хост
+// База для публичных ссылок: https://pub-....r2.dev или свой домен/хост.
+// Если пусто — используем cloudflarestorage.com
 const R2_PUBLIC_BASE = (
   process.env.R2_PUBLIC_URL ||
   process.env.R2_PUBLIC_HOST ||
@@ -88,11 +89,23 @@ export async function POST(req: Request) {
       ContentType: contentType,
     }));
 
-    // Публичный URL
-    const base = R2_PUBLIC_BASE
+    // Публичный URL:
+    // - *.r2.dev   -> НЕ добавляем имя бакета
+    // - кастомный домен (обычно привязан к бакету) -> НЕ добавляем имя бакета
+    // - *.r2.cloudflarestorage.com -> НУЖНО /{bucket}/
+    const baseStr = R2_PUBLIC_BASE
       ? (R2_PUBLIC_BASE.startsWith('http') ? R2_PUBLIC_BASE : `https://${R2_PUBLIC_BASE}`)
       : `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`;
-    const publicUrl = `${base.replace(/\/+$/, '')}/${encodeURIComponent(R2_BUCKET_NAME)}/${encodeURI(key)}`;
+
+    const base = new URL(baseStr);
+    let publicUrl: string;
+
+    if (base.hostname.endsWith('.r2.cloudflarestorage.com')) {
+      publicUrl = `${base.origin}/${encodeURIComponent(R2_BUCKET_NAME)}/${encodeURI(key)}`;
+    } else {
+      // r2.dev или кастомный домен
+      publicUrl = `${base.origin}/${encodeURI(key)}`;
+    }
 
     return NextResponse.json({
       success: true,
