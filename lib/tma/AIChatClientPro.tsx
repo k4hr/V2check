@@ -1,3 +1,4 @@
+/* path: lib/tma/AIChatClientPro.tsx */
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -8,7 +9,7 @@ import { extractLeadingEmoji } from '@/lib/utils/extractEmoji';
 export type Msg = {
   role: 'system' | 'user' | 'assistant';
   content: string;
-  images?: string[]; // изображения от ассистента (Pro+ фича)
+  images?: string[]; // изображения от ассистента (Pro+)
 };
 
 type Attach = {
@@ -43,7 +44,7 @@ function isProPlusActiveFromResp(data: any): boolean {
   const raw = String(sub?.plan || '').toUpperCase().replace(/\s+|[_-]/g, '');
   return raw === 'PROPLUS' || raw === 'PRO+' || raw.includes('PROPLUS');
 }
-// вытащить ссылки на изображения из текста
+// вытаскиваем http(s)-картинки из текста; data: намеренно игнорируем
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
   const re = /(https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif))/gi;
@@ -84,8 +85,6 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
   const [uploading, setUploading] = useState(false);
   const [attach, setAttach] = useState<Attach[]>([]);
   const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
-
-  // NEW: состояние подписки
   const [proPlusActive, setProPlusActive] = useState<boolean>(false);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -109,7 +108,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     trayRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
   }, [attach.length]);
 
-  // ?id= и ?thread=
+  // ?id= для прокидывания TG id
   const idSuffix = useMemo(() => {
     if (!passthroughIdParam) return '';
     try {
@@ -119,7 +118,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     } catch { return ''; }
   }, [passthroughIdParam]);
 
-  // NEW: загрузка статуса подписки для бейджа
+  // бейдж Pro+
   useEffect(() => {
     (async () => {
       try {
@@ -138,8 +137,8 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     })();
   }, [idSuffix]);
 
+  // автозагрузка сохранённого треда: /chat?thread=xxx
   useEffect(() => {
-    // автозагрузка сохранённого треда: /chat?thread=xxx
     try {
       const u = new URL(window.location.href);
       const tid = u.searchParams.get('thread');
@@ -236,16 +235,13 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
       setThread({ id: tid, starred: true, busy: false });
       setMessages(m => [...m, { role: 'assistant', content: 'Чат сохранён в избранное ★' }]);
-    } catch (e: any) {
+    } catch {
       setMessages(m => [...m, { role: 'assistant', content: 'Не удалось сохранить в избранное.' }]);
       setThread(t => ({ ...t, busy: false }));
     }
   }, [thread, collectMsgsForSave, title, mode, idSuffix]);
 
-  // ==== остальной код отправки ====
-
-  const listRefLocal = listRef; // (ничего не менял ниже)
-  const [/* state above */] = [];
+  // ==== отправка сообщения + загрузка на R2 ====
 
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
@@ -326,10 +322,8 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       return;
     }
 
-    const imagesNote = uploadedUrls.length
-      ? '\n\nПрикреплённые изображения:\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
-      : '';
-    const promptText = (t || '') + imagesNote;
+    // ⚠️ НЕ вставляем длинные URL картинок в промпт — передадим их отдельным полем `images`
+    const promptText = t || '';
 
     try {
       const history = [
@@ -362,8 +356,8 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         if (!reply && !uniqueImages.length) {
           setMessages(m => [...m, { role: 'assistant', content: 'Готово. Продолжим?' }]);
         }
-      } else if (data?.error === 'FREE_LIMIT_REACHED') {
-        const msg = `Исчерпан дневной бесплатный лимит (${data?.freeLimit ?? 0}). Оформите Pro или попробуйте завтра.`;
+      } else if (data?.error === 'FREE_LIMIT_REACHED' || data?.error === 'DAILY_LIMIT_REACHED') {
+        const msg = `Исчерпан дневной бесплатный лимит (${Number(data?.freeLimit ?? data?.limit ?? 0)}). Оформите Pro или попробуйте завтра.`;
         setMessages(m => [...m, { role: 'assistant', content: msg }]);
       } else {
         setMessages(m => [...m, { role: 'assistant', content: 'Сервис временно недоступен. Попробуем ещё раз?' }]);
