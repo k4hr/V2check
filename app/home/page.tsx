@@ -4,25 +4,48 @@
 import Link from 'next/link';
 import type { Route } from 'next';
 import { useEffect, useMemo, useState } from 'react';
-import { STRINGS, readLocale, setLocaleEverywhere, type Locale } from '@/lib/i18n';
+import { STRINGS, readLocale, setLocaleEverywhere, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 
 const LOCALES = [
-  { code: 'ru' as const, label: 'Русский', flag: '🇷🇺' },
-  { code: 'en' as const, label: 'English', flag: '🇬🇧' },
+  { code: 'ru' as const, label: 'Русский',     flag: '🇷🇺' },
+  { code: 'uk' as const, label: 'Українська',  flag: '🇺🇦' },
+  { code: 'be' as const, label: 'Беларуская',  flag: '🇧🇾' },
+  { code: 'kk' as const, label: 'Қазақша',     flag: '🇰🇿' },
+  { code: 'uz' as const, label: "Oʻzbekcha",   flag: '🇺🇿' },
+  { code: 'ky' as const, label: 'Кыргызча',    flag: '🇰🇬' },
+  { code: 'fa' as const, label: 'فارسی',       flag: '🇮🇷' },
+  { code: 'hi' as const, label: 'हिन्दी',      flag: '🇮🇳' },
+  { code: 'en' as const, label: 'English',     flag: '🇬🇧' },
 ];
 
-function haptic(type:'light'|'medium'='light'){ try{(window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);}catch{} }
+function haptic(type:'light'|'medium'='light'){
+  try{ (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);}catch{}
+}
 
 export default function HomePage(){
+  // если пользователь впервые — создадим cookie из автоопределения
+  useEffect(()=>{ try{ ensureLocaleCookie(); }catch{} }, []);
+
   const [open,setOpen]=useState(false);
   const currentLocale=useMemo<Locale>(()=>readLocale(),[]);
   const [pendingLocale,setPendingLocale]=useState<Locale>(currentLocale);
   const [saving,setSaving]=useState(false);
   const L=STRINGS[currentLocale];
 
-  useEffect(()=>{ const w:any=window; try{w?.Telegram?.WebApp?.ready?.();w?.Telegram?.WebApp?.expand?.();}catch{}; try{document.documentElement.lang=currentLocale;}catch{}; if(open) window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'}); },[currentLocale,open]);
+  useEffect(()=>{
+    const w:any=window;
+    try{ w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); }catch{}
+    try{ document.documentElement.lang=currentLocale; }catch{}
+    if(open) window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
+  },[currentLocale,open]);
 
-  const linkSuffix=useMemo(()=>{ try{ const u=new URL(window.location.href); const id=u.searchParams.get('id'); return id?`?id=${encodeURIComponent(id)}`:''; }catch{ return ''; } },[]);
+  const linkSuffix=useMemo(()=>{
+    try{
+      const u=new URL(window.location.href);
+      const id=u.searchParams.get('id');
+      return id?`?id=${encodeURIComponent(id)}`:'';
+    }catch{ return ''; }
+  },[]);
   const href=(p:string)=>`${p}${linkSuffix}` as Route;
 
   async function onSave(){
@@ -30,7 +53,10 @@ export default function HomePage(){
     setSaving(true);
     setLocaleEverywhere(pendingLocale);
     haptic('medium');
-    const url=new URL(window.location.href); url.searchParams.set('_lng',String(Date.now())); window.location.replace(url.toString());
+    // перезагрузка для надёжного применения
+    const url=new URL(window.location.href);
+    url.searchParams.set('_lng',String(Date.now()));
+    window.location.replace(url.toString());
   }
   function onCancel(){ setPendingLocale(currentLocale); setOpen(false); haptic('light'); }
 
@@ -84,7 +110,13 @@ export default function HomePage(){
       </div>
 
       <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
-        <button type="button" onClick={()=>{setOpen(v=>!v);haptic('light');}} className="ghost-link" style={{textDecoration:'none'}} aria-expanded={open}>
+        <button
+          type="button"
+          onClick={()=>{setOpen(v=>!v);haptic('light');}}
+          className="ghost-link"
+          style={{textDecoration:'none'}}
+          aria-expanded={open}
+        >
           🌐 {L.changeLang}
         </button>
       </div>
@@ -96,22 +128,35 @@ export default function HomePage(){
             {LOCALES.map(l=>{
               const active=pendingLocale===l.code;
               return (
-                <button key={l.code} onClick={()=>setPendingLocale(l.code)} className="list-btn"
-                  style={{display:'flex',alignItems:'center',gap:10,borderRadius:12,padding:'10px 12px',
-                          background:active?'#1e2434':'#171a21',border:active?'1px solid #6573ff':'1px solid var(--border)',
-                          boxShadow:active?'0 0 0 3px rgba(101,115,255,.15) inset':'none'}}>
+                <button
+                  key={l.code}
+                  onClick={()=>setPendingLocale(l.code)}
+                  className="list-btn"
+                  style={{
+                    display:'flex',alignItems:'center',gap:10,borderRadius:12,padding:'10px 12px',
+                    background:active?'#1e2434':'#171a21',
+                    border:active?'1px solid #6573ff':'1px solid var(--card-border)',
+                    boxShadow:active?'0 0 0 3px rgba(101,115,255,.15) inset':'none'
+                  }}
+                >
                   <span style={{width:22,textAlign:'center'}}>{l.flag}</span>
                   <span style={{fontWeight:600}}>{l.label}</span>
                 </button>
               );
             })}
           </div>
+
           <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:12}}>
-            <button type="button" onClick={onCancel} className="list-btn" style={{padding:'10px 14px',borderRadius:12,background:'#1a1f2b',border:'1px solid var(--border)'}}>
+            <button type="button" onClick={onCancel} className="list-btn" style={{padding:'10px 14px',borderRadius:12,background:'#1a1f2b',border:'1px solid var(--card-border)'}}>
               {STRINGS[currentLocale].cancel}
             </button>
-            <button type="button" onClick={onSave} disabled={saving || pendingLocale===currentLocale} className="list-btn"
-              style={{padding:'10px 14px',borderRadius:12,background:saving?'#2a3150':'#2e3560',border:'1px solid #4b57b3',opacity: saving ? 0.7 : 1}}>
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving || pendingLocale===currentLocale}
+              className="list-btn"
+              style={{padding:'10px 14px',borderRadius:12,background:saving?'#2a3150':'#2e3560',border:'1px solid #4b57b3',opacity: saving ? 0.7 : 1}}
+            >
               {STRINGS[currentLocale].save}
             </button>
           </div>
