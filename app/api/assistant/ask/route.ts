@@ -1,6 +1,6 @@
-// app/api/assistant/ask/route.ts
+/* path: app/api/assistant/ask/route.ts */
 import { NextResponse, NextRequest } from 'next/server';
-import { askAI, type ChatMessage, type ChatContentBlock } from '@/lib/ai';
+import { askAI, type ChatMessage } from '@/lib/ai';
 import { prisma } from '@/lib/prisma';
 import cleanAssistantText from '@/lib/cleanText';
 import { verifyInitData, getTelegramId, getInitDataFrom } from '@/lib/auth/verifyInitData';
@@ -86,26 +86,9 @@ function resolveTelegramId(req: NextRequest): string | null {
   return null;
 }
 
-/** Определение уровня подписки */
-type TierLevel = 'FREE'|'PRO'|'PROPLUS';
-async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel; userId?: string }> {
-  if (!tgId) return { tier: 'FREE' };
-  const user = await prisma.user.findFirst({
-    where: { telegramId: String(tgId) },
-    select: { id: true, plan: true, subscriptionUntil: true },
-  });
-  const active = !!user?.subscriptionUntil && user.subscriptionUntil > new Date();
-  if (!active || !user?.id) return { tier: 'FREE' };
+/* ==================== Vision helpers ==================== */
 
-  const plan = String(user.plan || '').toUpperCase();
-  if (plan === 'PROPLUS') return { tier: 'PROPLUS', userId: user.id };
-  if (plan === 'PRO')     return { tier: 'PRO',     userId: user.id };
-  return { tier: 'PRO', userId: user.id };
-}
-
-/* ==================== МУЛЬТИМОДАЛЬНЫЕ ХЕЛПЕРЫ ==================== */
-
-/** Разрешаем как публичный https, так и data:image/*;base64 */
+/** Разрешаем и публичный https, и data:image/*;base64 */
 function isValidImageUrl(u?: string): boolean {
   if (!u) return false;
   if (/^data:image\/[a-z0-9+.-]+;base64,/i.test(u)) return true;
@@ -115,27 +98,29 @@ function isValidImageUrl(u?: string): boolean {
   } catch { return false; }
 }
 
-/** Формируем контент user-сообщения (текст + картинки) */
-function buildUserContent(prompt: string, images?: string[]): ChatContentBlock[] {
-  const parts: ChatContentBlock[] = [];
+/** Формируем мультимодальный контент user-сообщения */
+function buildUserContent(prompt: string, images?: string[]) {
+  const content: any[] = [];
   const text = (prompt || '').trim();
-  if (text) parts.push({ type: 'text', text });
+  if (text) content.push({ type: 'text', text });
 
   const arr = Array.isArray(images) ? images.filter(isValidImageUrl) : [];
-  for (const url of arr) parts.push({ type: 'input_image', image_url: { url } });
+  for (const url of arr) {
+    content.push({ type: 'input_image', image_url: { url } });
+  }
 
-  // Если нет ничего, вернём пустой текстовый блок — API требует непустой content
-  return parts.length ? parts : [{ type: 'text', text: '' }];
+  // Если пусто — вернём пустой текстовый блок (схема API требует непустой content)
+  return content.length ? content : [{ type: 'text', text: '' }];
 }
 
-/** Историю кладём как простые текстовые блоки, чтобы не ломать прошлые чаты */
+/** Конвертируем историю в мультимодальную форму (текстовые блоки) */
 function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
   return (history || []).map((m) => {
-    if (Array.isArray(m.content)) return m;
+    const txt = typeof m.content === 'string' ? m.content : '';
     return {
       role: m.role,
-      content: [{ type: 'text', text: typeof m.content === 'string' ? m.content : '' }],
-    };
+      content: [{ type: 'text', text: txt }] as any,
+    } as ChatMessage;
   });
 }
 
@@ -143,24 +128,25 @@ function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
-    const prompt  = String(body?.prompt || '').trim();
-    const history = (body?.history || []) as ChatMessage[];
-    const images  = (body?.images || []) as string[];  // <— получаем массив картинок от клиента
-    const mode    = String(body?.mode || '');
-    const model   = pickModelByMode(mode);
+    const prompt   = String(body?.prompt || '').trim();
+    const history  = (body?.history || []) as ChatMessage[];
+    const mode     = String(body?.mode || '');
+    const images   = Array.isArray(body?.images) ? (body.images as string[]) : [];
+    const model    = pickModelByMode(mode);
 
     // Разрешаем пустой prompt, если есть хотя бы одна валидная картинка
-    const hasValidImages = Array.isArray(images) && images.some(isValidImageUrl);
+    const hasValidImages = images.some(isValidImageUrl);
     if (!prompt && !hasValidImages) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
     }
 
-    const userContent = buildUserContent(prompt, images);
-    const histMM = toMultimodalHistory(history);
-
     const tgId = resolveTelegramId(req);
     const { tier, userId } = await resolveTierByTgId(tgId);
     const today = todayStr();
+
+    // Собираем мультимодальные сообщения
+    const mmHistory: ChatMessage[] = toMultimodalHistory(history);
+    const userContent = buildUserContent(prompt, images);
 
     // ===== FREE: считаем лимит куками =====
     if (tier === 'FREE') {
@@ -178,8 +164,8 @@ export async function POST(req: NextRequest) {
 
       const raw = await askAI(
         [
-          { role: 'system', content: [{ type: 'text', text: 'Ты ассистент. Пиши кратко, без Markdown.' }] },
-          ...histMM,
+          { role: 'system', content: [{ type: 'text', text: 'Ты ассистент. Пиши кратко, без Markdown.' }] as any },
+          ...mmHistory,
           { role: 'user', content: userContent as any },
         ],
         { model }
@@ -216,8 +202,8 @@ export async function POST(req: NextRequest) {
 
     const raw = await askAI(
       [
-        { role: 'system', content: [{ type: 'text', text: 'Ты ассистент. Пиши развернуто, но без Markdown.' }] },
-        ...histMM,
+        { role: 'system', content: [{ type: 'text', text: 'Ты ассистент. Пиши развернуто, но без Markdown.' }] as any },
+        ...mmHistory,
         { role: 'user', content: userContent as any },
       ],
       { model }
