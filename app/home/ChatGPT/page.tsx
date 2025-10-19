@@ -26,8 +26,7 @@ const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 const norm = (s: string) => (s || '').toString().trim();
 const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
 
-// --- helpers ---
-// Тянем только http(s)-картинки из текста (data: исключаем — они громоздкие)
+// http(s)-картинки из текста (data: исключаем)
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
   const re = /(https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif))/gi;
@@ -35,6 +34,7 @@ function extractImageUrlsFromText(text: string): string[] {
   while ((m = re.exec(text)) !== null) urls.add(m[1]);
   return Array.from(urls);
 }
+
 function openLink(url: string) {
   try {
     const tg: any = (window as any)?.Telegram?.WebApp;
@@ -43,6 +43,7 @@ function openLink(url: string) {
   } catch {}
   window.open(url, '_blank', 'noopener,noreferrer');
 }
+
 function isProPlusActiveFromResp(data: any): boolean {
   const sub = data?.subscription || null;
   if (!sub?.active) return false;
@@ -124,6 +125,7 @@ export default function ChatGPTPage() {
   useEffect(() => {
     listRef.current?.scrollTo({ top: 9e9, behavior: 'smooth' });
   }, [messages, loading, uploading]);
+
   useEffect(() => {
     if (!attach.length) return;
     trayRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
@@ -252,8 +254,6 @@ export default function ChatGPTPage() {
     }
   }, [thread, collectMsgsForSave, idSuffix, mode, title, TT]);
 
-  const [loadingRef] = [loading];
-
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
     if (!files.length) return;
@@ -333,7 +333,6 @@ export default function ChatGPTPage() {
       return;
     }
 
-    // в prompt НЕ добавляем data: и длинные URL — только текст
     const promptText = tText || '';
 
     try {
@@ -451,137 +450,134 @@ export default function ChatGPTPage() {
         )}
       </div>
 
-      {/* лента сообщений */}
       <div ref={listRef} style={{ minHeight: 0, overflow: 'auto', padding: '4px 2px' }}>
         {messages.filter(m => m.role !== 'system').map((m, i) => {
           const isUser = m.role === 'user';
           const hasImages = Array.isArray(m.images) && m.images.length > 0;
 
-          return (
-            <div key={i} style={{
-              margin: '10px 0',
-              display: 'flex',
-              justifyContent: isUser ? 'flex-end' : 'flex-start'
-            }}>
-              <div style={{ maxWidth: '86%' }}>
-                {m.content && m.content !== TT.imagesMarker && (
-                  <div
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 14,
-                      lineHeight: 1.5,
-                      background: isUser ? '#24304a' : '#1a2132',
-                      border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
-                      boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
-                      whiteSpace: 'pre-wrap',
-                      fontSize: 16,
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {m.content}
-                  </div>
-                )}
+        return (
+          <div key={i} style={{
+            margin: '10px 0',
+            display: 'flex',
+            justifyContent: isUser ? 'flex-end' : 'flex-start'
+          }}>
+            <div style={{ maxWidth: '86%' }}>
+              {m.content && m.content !== TT.imagesMarker && (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 14,
+                    lineHeight: 1.5,
+                    background: isUser ? '#24304a' : '#1a2132',
+                    border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
+                    boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
+                    whiteSpace: 'pre-wrap',
+                    fontSize: 16,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {m.content}
+                </div>
+              )}
 
-                {hasImages && (
+              {hasImages && (
+                <div
+                  style={{
+                    marginTop: m.content && m.content !== TT.imagesMarker ? 8 : 0,
+                    padding: 8,
+                    borderRadius: 14,
+                    background: '#101622',
+                    border: '1px solid #2b3552',
+                  }}
+                >
                   <div
                     style={{
-                      marginTop: m.content && m.content !== TT.imagesMarker ? 8 : 0,
-                      padding: 8,
-                      borderRadius: 14,
-                      background: '#101622',
-                      border: '1px solid #2b3552',
+                      display: 'grid',
+                      gap: 8,
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'grid',
-                        gap: 8,
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                      }}
-                    >
-                      {m.images!.map((src, idx) => (
-                        <figure
-                          key={idx}
+                    {m.images!.map((src, idx) => (
+                      <figure
+                        key={idx}
+                        style={{
+                          margin: 0,
+                          position: 'relative',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                          border: '1px solid #2b3552',
+                          background: '#0f1422',
+                          aspectRatio: '1 / 1',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt=""
+                          onClick={() => openLink(src)}
                           style={{
-                            margin: 0,
-                            position: 'relative',
-                            borderRadius: 12,
-                            overflow: 'hidden',
-                            border: '1px solid #2b3552',
-                            background: '#0f1422',
-                            aspectRatio: '1 / 1',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                            cursor: 'zoom-in',
+                          }}
+                        />
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: 6,
+                            right: 6,
+                            display: 'flex',
+                            gap: 6,
                           }}
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={src}
-                            alt=""
-                            onClick={() => openLink(src)}
+                          <a
+                            href={src}
+                            download
+                            title={TT.download}
                             style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              display: 'block',
-                              cursor: 'zoom-in',
-                            }}
-                          />
-                          <div
-                            style={{
-                              position: 'absolute',
-                              bottom: 6,
-                              right: 6,
-                              display: 'flex',
-                              gap: 6,
+                              padding: '6px 8px',
+                              borderRadius: 10,
+                              background: 'rgba(0,0,0,.45)',
+                              border: '1px solid rgba(255,255,255,.25)',
+                              color: '#fff',
+                              fontSize: 12,
+                              textDecoration: 'none',
+                              backdropFilter: 'blur(6px)',
                             }}
                           >
-                            <a
-                              href={src}
-                              download
-                              title={TT.download}
-                              style={{
-                                padding: '6px 8px',
-                                borderRadius: 10,
-                                background: 'rgba(0,0,0,.45)',
-                                border: '1px solid rgba(255,255,255,.25)',
-                                color: '#fff',
-                                fontSize: 12,
-                                textDecoration: 'none',
-                                backdropFilter: 'blur(6px)',
-                              }}
-                            >
-                              {TT.download}
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => openLink(src)}
-                              title={TT.open}
-                              style={{
-                                padding: '6px 8px',
-                                borderRadius: 10,
-                                background: 'rgba(0,0,0,.45)',
-                                border: '1px solid rgba(255,255,255,.25)',
-                                color: '#fff',
-                                fontSize: 12,
-                              }}
-                            >
-                              {TT.open}
-                            </button>
-                          </div>
-                        </figure>
-                      ))}
-                    </div>
+                            {TT.download}
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => openLink(src)}
+                            title={TT.open}
+                            style={{
+                              padding: '6px 8px',
+                              borderRadius: 10,
+                              background: 'rgba(0,0,0,.45)',
+                              border: '1px solid rgba(255,255,255,.25)',
+                              color: '#fff',
+                              fontSize: 12,
+                            }}
+                          >
+                            {TT.open}
+                          </button>
+                        </div>
+                      </figure>
+                    ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          );
-        })}
+          </div>
+        );})}
         {(loading || uploading) && (
           <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>{TT.thinking}</div>
         )}
       </div>
 
-      {/* трей вложений */}
       {!!attach.length && (
         <div
           ref={trayRef}
@@ -630,7 +626,6 @@ export default function ChatGPTPage() {
         </div>
       )}
 
-      {/* нижняя панель */}
       <div
         style={{
           position: 'sticky',
@@ -651,7 +646,7 @@ export default function ChatGPTPage() {
           <button
             type="button"
             aria-label={TT.attachAria}
-            disabled={pickDisabled}
+            disabled={attach.length >= maxAttach || uploading || loading}
             title={attach.length >= maxAttach ? TT.attachTitleLimit(maxAttach) : TT.attachTitleDefault}
             style={{
               width: '100%', height: '100%', borderRadius: 10,
@@ -659,7 +654,7 @@ export default function ChatGPTPage() {
               display: 'grid', placeItems: 'center',
               fontSize: 22, lineHeight: 1,
               boxShadow: '0 8px 24px rgba(255,191,73,.14)',
-              opacity: pickDisabled ? .5 : 1
+              opacity: (attach.length >= maxAttach || uploading || loading) ? .5 : 1
             }}
           >
             +
@@ -669,7 +664,7 @@ export default function ChatGPTPage() {
             type="file"
             accept="image/*"
             multiple
-            disabled={pickDisabled}
+            disabled={attach.length >= maxAttach || uploading || loading}
             onChange={(e) => addFilesFromPicker(e.target.files)}
             style={{ position: 'absolute', inset: 0, opacity: 0 }}
           />
