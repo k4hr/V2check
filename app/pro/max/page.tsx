@@ -140,7 +140,6 @@ export default function ProMaxPage() {
   return (
     <main>
       <div className="safe">
-        {/* Назад */}
         <button
           type="button"
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
@@ -153,7 +152,6 @@ export default function ProMaxPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Stars */}
         <div className="list">
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
@@ -179,7 +177,6 @@ export default function ProMaxPage() {
           })}
         </div>
 
-        {/* TON */}
         <div className="crypto-card">
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
@@ -235,7 +232,6 @@ export default function ProMaxPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* TON (золотой стиль) */
         .crypto-card {
           margin-top: 6px;
           padding: 14px;
