@@ -53,6 +53,8 @@ type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
 export default function ChatGPTPage() {
   const locale = readLocale();
+
+  // ===== локаль-зависимые строки (ru/en) =====
   const title = 'CHATGPT 5';
   const subtitle = locale === 'en' ? 'Free-form chat. Ask anything.' : 'Свободное общение. Спросите что угодно.';
   const systemPrompt = locale === 'en'
@@ -81,6 +83,19 @@ export default function ChatGPTPage() {
     open: locale === 'en' ? 'Open' : 'Открыть',
     thinking: locale === 'en' ? 'Thinking…' : 'Думаю…',
     hello: locale === 'en' ? 'Hi! How can I help?' : 'Привет! Чем помочь?',
+    // новое — локализация скрытых системных меток
+    noTextMsg: locale === 'en' ? '(message without text)' : '(сообщение без текста)',
+    attachNote: (n:number) => locale === 'en' ? `\n📎 Attachments: ${n}` : `\n📎 Вложений: ${n}`,
+    imagesMarker: locale === 'en' ? '(images)' : '(изображения)',
+    imagesHeader: locale === 'en' ? 'Attached images:' : 'Прикреплённые изображения:',
+    errorShort: locale === 'en' ? 'Error' : 'Ошибка',
+    attachAria: locale === 'en' ? 'Attach' : 'Прикрепить',
+    attachTitle: (atLimit:boolean) =>
+      atLimit
+        ? (locale === 'en' ? `Limit reached: ${maxAttach} images` : `Достигнут лимит ${maxAttach} фото`)
+        : (locale === 'en' ? 'Attach images' : 'Прикрепить изображения'),
+    sendAria: locale === 'en' ? 'Send' : 'Отправить',
+    sendTitle: locale === 'en' ? 'Send' : 'Отправить',
   };
 
   const [messages, setMessages] = useState<Msg[]>([
@@ -93,7 +108,7 @@ export default function ChatGPTPage() {
   const [attach, setAttach] = useState<Attach[]>([]);
   const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
 
-  // NEW: состояние для мини-плашки Pro+
+  // мини-плашка Pro+
   const [proPlusActive, setProPlusActive] = useState<boolean>(false);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -104,7 +119,8 @@ export default function ChatGPTPage() {
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
-  }, []);
+    try { document.documentElement.lang = locale; } catch {}
+  }, [locale]);
 
   // авто-скролл
   useEffect(() => {
@@ -125,7 +141,7 @@ export default function ChatGPTPage() {
     } catch { return ''; }
   }, [passthroughIdParam]);
 
-  // NEW: подтянуть статус подписки для показа бейджа
+  // подтянуть статус подписки для бейджа
   useEffect(() => {
     (async () => {
       try {
@@ -173,15 +189,15 @@ export default function ChatGPTPage() {
       .filter(m => m.role !== 'system')
       .map(m => ({
         role: m.role,
-        content: m.content === '(изображения)' ? '' : (m.content || ''),
+        content: m.content === t.imagesMarker ? '' : (m.content || ''),
         images: Array.isArray(m.images) ? m.images : undefined,
       }));
-  }, [messages]);
+  }, [messages, t.imagesMarker]);
 
   // избранное
   const toggleStar = useCallback(async () => {
     if (thread.busy) return;
-    setThread(t => ({ ...t, busy: true }));
+    setThread(tstate => ({ ...tstate, busy: true }));
 
     try {
       if (thread.id && thread.starred) {
@@ -245,8 +261,6 @@ export default function ChatGPTPage() {
 
   // ==== отправка ====
 
-  const [loadingRef] = [loading];
-
   const addFilesFromPicker = useCallback((list: FileList | null) => {
     const files = Array.from(list || []);
     if (!files.length) return;
@@ -283,7 +297,7 @@ export default function ChatGPTPage() {
 
     setMessages(m => [
       ...m,
-      { role: 'user', content: (tText || '(сообщение без текста)') + (attach.length ? `\n📎 Вложений: ${attach.length}` : '') },
+      { role: 'user', content: (tText || t.noTextMsg) + (attach.length ? t.attachNote(attach.length) : '') },
     ]);
 
     const uploadedUrls: string[] = [];
@@ -318,7 +332,7 @@ export default function ChatGPTPage() {
       setAttach(prev => {
         if (!prev.length) return prev;
         const last = prev[prev.length - 1];
-        return prev.map(x => x.id === last.id ? { ...x, status: 'error', errMsg: 'Ошибка' } : x);
+        return prev.map(x => x.id === last.id ? { ...x, status: 'error', errMsg: t.errorShort } : x);
       });
       setMessages(m => [...m, { role: 'assistant', content: t.uploadingFail }]);
       setUploading(false);
@@ -327,7 +341,7 @@ export default function ChatGPTPage() {
     }
 
     const imagesNote = uploadedUrls.length
-      ? '\n\nПрикреплённые изображения:\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
+      ? '\n\n' + t.imagesHeader + '\n' + uploadedUrls.map(u => `- ${u}`).join('\n')
       : '';
     const promptText = (tText || '') + imagesNote;
 
@@ -356,7 +370,7 @@ export default function ChatGPTPage() {
           setMessages(m => [...m, { role: 'assistant', content: reply }]);
         }
         if (uniqueImages.length) {
-          setMessages(m => [...m, { role: 'assistant', content: '(изображения)', images: uniqueImages }]);
+          setMessages(m => [...m, { role: 'assistant', content: t.imagesMarker, images: uniqueImages }]);
         }
         if (!reply && !uniqueImages.length) {
           setMessages(m => [...m, { role: 'assistant', content: t.gotIt }]);
@@ -428,7 +442,7 @@ export default function ChatGPTPage() {
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
         )}
 
-        {/* Мини-плашка Pro+ — ТОЛЬКО при активной подписке */}
+        {/* Мини-плашка Pro+ — только при активной подписке */}
         {proPlusActive && (
           <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
             <span
@@ -461,7 +475,7 @@ export default function ChatGPTPage() {
               justifyContent: isUser ? 'flex-end' : 'flex-start'
             }}>
               <div style={{ maxWidth: '86%' }}>
-                {m.content && m.content !== '(изображения)' && (
+                {m.content && m.content !== t.imagesMarker && (
                   <div
                     style={{
                       padding: '10px 12px',
@@ -482,7 +496,7 @@ export default function ChatGPTPage() {
                 {hasImages && (
                   <div
                     style={{
-                      marginTop: m.content && m.content !== '(изображения)' ? 8 : 0,
+                      marginTop: m.content && m.content !== t.imagesMarker ? 8 : 0,
                       padding: 8,
                       borderRadius: 14,
                       background: '#101622',
@@ -607,7 +621,7 @@ export default function ChatGPTPage() {
               <img src={a.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               <button
                 type="button"
-                aria-label="Удалить"
+                aria-label={t.attachAria}
                 onClick={() => removeAttach(a.id)}
                 style={{
                   position: 'absolute', top: -6, right: -6,
@@ -647,9 +661,9 @@ export default function ChatGPTPage() {
         <div style={{ position: 'relative', width: 40, height: 40 }}>
           <button
             type="button"
-            aria-label="Прикрепить"
+            aria-label={t.attachAria}
             disabled={pickDisabled}
-            title={attach.length >= maxAttach ? `Достигнут лимит ${maxAttach} фото` : 'Прикрепить изображения'}
+            title={t.attachTitle(attach.length >= maxAttach)}
             style={{
               width: '100%', height: '100%', borderRadius: 10,
               border: '1px solid rgba(255,191,73,.45)', background: '#121722',
@@ -695,8 +709,8 @@ export default function ChatGPTPage() {
         <button
           onClick={send}
           disabled={(loading || uploading) || (!norm(text) && !attach.length)}
-          aria-label="Отправить"
-          title="Отправить"
+          aria-label={t.sendAria}
+          title={t.sendTitle}
           style={{
             width: 40, height: 40, borderRadius: 10,
             border: '1px solid rgba(255,191,73,.45)',
