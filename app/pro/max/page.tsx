@@ -4,14 +4,21 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Plan, Tier } from '@/lib/pricing';
 import { getPrices } from '@/lib/pricing';
+import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
 
 const tier: Tier = 'PROPLUS';
 
-const TITLES: Record<Plan, string> = {
+const TITLES_RU: Record<Plan, string> = {
   WEEK: 'Pro+ — Неделя',
   MONTH: 'Pro+ — Месяц',
   HALF_YEAR: 'Pro+ — Полгода',
   YEAR: 'Pro+ — Год',
+};
+const TITLES_EN: Record<Plan, string> = {
+  WEEK: 'Pro+ — Week',
+  MONTH: 'Pro+ — Month',
+  HALF_YEAR: 'Pro+ — 6 months',
+  YEAR: 'Pro+ — Year',
 };
 
 function Star({ size = 16 }: { size?: number }) {
@@ -23,11 +30,14 @@ function Star({ size = 16 }: { size?: number }) {
 }
 
 export default function ProMaxPage() {
+  const locale: Locale = readLocale();
+  const S = STRINGS[locale];
+  const TITLES = locale === 'en' ? TITLES_EN : TITLES_RU;
+
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // TON
   const [planTon, setPlanTon] = useState<Plan>('WEEK');
   const [busyTon, setBusyTon] = useState(false);
 
@@ -41,21 +51,24 @@ export default function ProMaxPage() {
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
 
-      // для Stars инвойса (верхние кнопки)
       const onClosed = (d: any) => {
         if (d?.status === 'paid') {
           try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
-          setInfo('Оплата подтверждена. Обновляем статус…');
+          setInfo(locale === 'en' ? 'Payment confirmed. Updating status…' : 'Оплата подтверждена. Обновляем статус…');
           setTimeout(() => { window.location.href = '/cabinet'; }, 400);
         } else {
-          setInfo('Окно оплаты закрыто. Если оплата прошла — проверьте статус в кабинете.');
+          setInfo(locale === 'en'
+            ? 'Payment window closed. If you paid, check your status in the account.'
+            : 'Окно оплаты закрыто. Если оплата прошла — проверьте статус в кабинете.'
+          );
         }
         setBusy(null);
       };
       tg?.onEvent?.('invoiceClosed', onClosed);
       return () => { tg?.BackButton?.hide?.(); tg?.offEvent?.('invoiceClosed', onClosed); };
     } catch {}
-  }, []);
+    try { document.documentElement.lang = locale; } catch {}
+  }, [locale]);
 
   async function buyStars(plan: Plan) {
     if (busy) return;
@@ -76,7 +89,6 @@ export default function ProMaxPage() {
     }
   }
 
-  // Оплата TON (deeplink + https-fallback)
   async function buyTon() {
     if (busyTon) return;
     setBusyTon(true); setMsg(null); setInfo(null);
@@ -89,9 +101,7 @@ export default function ProMaxPage() {
 
       if (typeof payton === 'string' && payton.startsWith('ton://')) {
         try {
-          // пробуем системную схему
           window.location.href = payton;
-          // fallback через 400 мс — откроет Tonkeeper в браузере
           setTimeout(() => {
             if (universal) {
               if (tg?.openLink) tg.openLink(universal);
@@ -102,7 +112,6 @@ export default function ProMaxPage() {
         } catch {}
       }
 
-      // если ton:// не доступен, сразу https
       if (universal) {
         if (tg?.openLink) tg.openLink(universal);
         else window.location.href = universal;
@@ -119,6 +128,15 @@ export default function ProMaxPage() {
 
   const entries = Object.entries(prices) as [Plan, typeof prices[Plan]][];
 
+  const T = {
+    back: S.back || 'Назад',
+    title: locale === 'en' ? 'LiveManager Pro+ — payment' : 'LiveManager Pro+ — оплата',
+    tonTitle: locale === 'en' ? 'Pay with TON' : 'Оплатить TON',
+    tonSub: locale === 'en' ? 'Direct transfer via ton:// link' : 'Прямой перевод в кошелёк по ton:// ссылке',
+    tonBtnBusy: locale === 'en' ? 'Preparing link…' : 'Готовим ссылку…',
+    tonBtn: (suffix: string) => (locale === 'en' ? `Pay (${suffix})` : `Оплатить (${suffix})`),
+  };
+
   return (
     <main>
       <div className="safe">
@@ -128,10 +146,10 @@ export default function ProMaxPage() {
           onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
           className="back"
         >
-          <span>←</span><b>Назад</b>
+          <span>←</span><b>{T.back}</b>
         </button>
 
-        <h1 className="title">LiveManager Pro+ — оплата</h1>
+        <h1 className="title">{T.title}</h1>
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
@@ -145,7 +163,7 @@ export default function ProMaxPage() {
                 disabled={!can}
                 onClick={() => buyStars(key)}
                 className="row"
-                aria-label={`${TITLES[key]} — ${cfg.amount} звёзд`}
+                aria-label={`${TITLES[key]} — ${cfg.amount} ⭐`}
               >
                 <span className="left">
                   <span className="dot">✨</span>
@@ -161,13 +179,13 @@ export default function ProMaxPage() {
           })}
         </div>
 
-        {/* Оплата TON (прямой перевод) */}
+        {/* TON */}
         <div className="crypto-card">
           <div className="crypto-header">
             <span className="crypto-icon">💠</span>
             <div className="crypto-text">
-              <b className="crypto-title">Оплатить TON</b>
-              <small className="crypto-sub">Прямой перевод в кошелёк по ton:// ссылке</small>
+              <b className="crypto-title">{T.tonTitle}</b>
+              <small className="crypto-sub">{T.tonSub}</small>
             </div>
           </div>
 
@@ -190,7 +208,7 @@ export default function ProMaxPage() {
             disabled={busyTon}
             className="crypto-cta"
           >
-            {busyTon ? 'Готовим ссылку…' : `Оплатить (${TITLES[planTon].split('— ')[1]})`}
+            {busyTon ? T.tonBtnBusy : T.tonBtn(TITLES[planTon].split('— ')[1])}
           </button>
         </div>
       </div>
@@ -217,7 +235,7 @@ export default function ProMaxPage() {
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* Карточка TON (золото, но текст белый) */
+        /* TON (золотой стиль) */
         .crypto-card {
           margin-top: 6px;
           padding: 14px;
