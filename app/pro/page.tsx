@@ -1,3 +1,4 @@
+/* path: app/pro/page.tsx */
 'use client';
 
 import Link from 'next/link';
@@ -51,7 +52,7 @@ export default function ProSelectPage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Pro+ (золотая подсветка) */}
+        {/* Pro+ (акцент без перекрытия текста) */}
         <Link
           href={`/pro/max${linkSuffix}` as Route}
           className="card card--proplus"
@@ -78,15 +79,15 @@ export default function ProSelectPage() {
           <div className="cell cell--head">Pro</div>
           <div className="cell cell--head cell--proplus">Pro+</div>
 
-          {/* Модель */}
+          {/* Модель ИИ */}
           <div className="cell cell--label">Модель ИИ</div>
-          <div className="cell">ChatGPT 4</div>
+          <div className="cell">ChatGPT 5 mini</div>
           <div className="cell cell--proplus">ChatGPT 5</div>
 
           {/* Без ограничений */}
           <div className="cell cell--label">Без ограничений</div>
           <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✔</span> да†</div>
+          <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
 
           {/* Работа с файлами */}
           <div className="cell cell--label">Работа с файлами</div>
@@ -107,30 +108,6 @@ export default function ProSelectPage() {
           <div className="cell cell--label">Сохранение ответов</div>
           <div className="cell"><span className="chip chip--no">⛔</span></div>
           <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
-
-          {/* Автопереключение */}
-          <div className="cell cell--label">Автопереключение модели</div>
-          <div className="cell">на Mini при лимите</div>
-          <div className="cell cell--proplus">на Mini при пиках</div>
-
-          {/* Лимиты */}
-          <div className="cell cell--label">Флагман-запросов в день</div>
-          <div className="cell">20</div>
-          <div className="cell cell--proplus">60</div>
-
-          <div className="cell cell--label">Общий лимит запросов</div>
-          <div className="cell">100</div>
-          <div className="cell cell--proplus">300</div>
-
-          {/* Оплата */}
-          <div className="cell cell--label">Оплата</div>
-          <div className="cell">Stars, Crypto Pay</div>
-          <div className="cell cell--proplus">Stars, Crypto Pay</div>
-
-          {/* Цена */}
-          <div className="cell cell--label">Цена / месяц</div>
-          <div className="cell">399 ⭐</div>
-          <div className="cell cell--proplus">749 ⭐</div>
         </div>
 
         <p className="cmp__note">† «без ограничений» — без жёстких квот, действует fair-use: при аномальной нагрузке доступ может временно переключаться на Mini.</p>
@@ -169,7 +146,7 @@ export default function ProSelectPage() {
           background: radial-gradient(120% 120% at 20% 20%, rgba(120,150,255,.45), rgba(120,150,255,.08) 60%, rgba(255,255,255,.05));
         }
 
-        /* Золотая подсветка (Pro+) */
+        /* Золотой акцент (Pro+) — без перекрытия текста */
         .card--proplus {
           border-color: rgba(255, 191, 73, .45);
           box-shadow:
@@ -188,12 +165,14 @@ export default function ProSelectPage() {
           font-size: 18px;
           opacity: .95;
         }
+
         .cmp-grid {
           border: 1px solid rgba(255,255,255,.08);
           border-radius: 14px;
           overflow: hidden;
           background: #111624;
         }
+
         /* каждая строка — три соседние ячейки */
         .cell {
           padding: 12px;
@@ -202,13 +181,20 @@ export default function ProSelectPage() {
         }
         .cell--label { background: rgba(255,255,255,.02); font-weight: 600; }
         .cell--head { font-weight: 800; background: rgba(255,255,255,.04); }
-        .cell--proplus { background: linear-gradient(180deg, rgba(255,210,120,.10), rgba(255,210,120,.06)); }
+
+        /* Акцент для колонки Pro+ без заливки поверх текста */
+        .cell--proplus {
+          background: transparent;                 /* убрали золотую подложку */
+          border-left: 1px solid rgba(255,191,73,.28);
+          box-shadow: inset 0 0 0 1px rgba(255,191,73,.12);
+        }
+
         /* грид для таблицы */
         .cmp-grid {
           display: grid;
           grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
         }
-        /* вертикальные разделители */
+        /* вертикальные разделители для первых двух колонок */
         .cmp-grid .cell:nth-child(3n+1),
         .cmp-grid .cell:nth-child(3n+2) {
           border-right: 1px solid rgba(255,255,255,.06);
