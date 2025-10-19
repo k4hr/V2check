@@ -3,7 +3,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { readLocale, type Locale } from '@/lib/i18n';
+import { readLocale, type Locale, STRINGS } from '@/lib/i18n';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
@@ -74,30 +74,42 @@ function normalizePlan(plan?: string | null): 'pro' | 'pro+' | null {
 
 export default function CabinetPage() {
   const locale: Locale = readLocale();
+  const L = STRINGS[locale] ?? STRINGS.ru;
+  const _ = (key: keyof typeof L, fallback?: string) =>
+    (L as any)[key] ?? (STRINGS.ru as any)[key] ?? fallback ?? String(key);
 
-  // локализованные строки (минимально самодостаточные для страницы)
+  // строки из i18n.ts
   const T = {
-    back: locale === 'en' ? 'Back' : 'Назад',
-    title: locale === 'en' ? 'Account' : 'Личный кабинет',
-    hi: locale === 'en' ? 'Hello,' : 'Здравствуйте,',
-    welcome: locale === 'en' ? 'Welcome!' : 'Добро пожаловать!',
-    subTitle: locale === 'en' ? 'Subscription status' : 'Статус подписки',
-    checking: locale === 'en' ? 'Checking subscription…' : 'Проверяем подписку…',
-    buyBtn: locale === 'en' ? 'Buy / extend subscription' : 'Купить/продлить подписку',
-    favBtn: locale === 'en' ? 'Favorites' : 'Избранное',
-    notActive: locale === 'en' ? 'No active subscription.' : 'Подписка не активна.',
-    proActive: (until?: string | null) =>
-      locale === 'en'
-        ? `Your Pro plan is active.${until ? ` Until ${until}` : ''}`
-        : `У вас подписка Pro.${until ? ` До ${until}` : ''}`,
-    proPlusActive: (until?: string | null) =>
-      locale === 'en'
-        ? `Your Pro+ plan is active.${until ? ` Until ${until}` : ''}`
-        : `У вас подписка Pro+.${until ? ` До ${until}` : ''}`,
-    activeGeneric: (until?: string | null) =>
-      locale === 'en'
-        ? `Subscription is active.${until ? ` Until ${until}` : ''}`
-        : `Подписка активна.${until ? ` До ${until}` : ''}`,
+    back: _('back', 'Назад'),
+    title: _('accountTitle', 'Личный кабинет'),
+    hi: _('hello', 'Здравствуйте,'),
+    welcome: _('welcome', 'Добро пожаловать!'),
+    subTitle: _('subStatus', 'Статус подписки'),
+    checking: _('checking', 'Проверяем подписку…'),
+    buyBtn: _('buyExtend', 'Купить/продлить подписку'),
+    favBtn: _('favorites', 'Избранное'),
+    notActive: _('notActive', 'Подписка не активна.'),
+    proActive: (until?: string | null) => {
+      const fn = (L as any).proActive as (u?: string) => string;
+      return typeof fn === 'function' ? fn(until || undefined) :
+        (locale === 'en'
+          ? `Your Pro plan is active.${until ? ` Until ${until}` : ''}`
+          : `У вас подписка Pro.${until ? ` До ${until}` : ''}`);
+    },
+    proPlusActive: (until?: string | null) => {
+      const fn = (L as any).proPlusActive as (u?: string) => string;
+      return typeof fn === 'function' ? fn(until || undefined) :
+        (locale === 'en'
+          ? `Your Pro+ plan is active.${until ? ` Until ${until}` : ''}`
+          : `У вас подписка Pro+.${until ? ` До ${until}` : ''}`);
+    },
+    activeGeneric: (until?: string | null) => {
+      const fn = (L as any).activeGeneric as (u?: string) => string;
+      return typeof fn === 'function' ? fn(until || undefined) :
+        (locale === 'en'
+          ? `Subscription is active.${until ? ` Until ${until}` : ''}`
+          : `Подписка активна.${until ? ` До ${until}` : ''}`);
+    },
   };
 
   const [user, setUser] = useState<MeResp['user']>(null);
@@ -132,8 +144,11 @@ export default function CabinetPage() {
   );
 
   useEffect(() => {
-    // синхронизируем <html lang> на всякий случай
-    try { document.documentElement.lang = locale; } catch {}
+    // синхронизируем <html lang/dir>
+    try {
+      document.documentElement.lang = locale;
+      document.documentElement.dir = locale === 'fa' ? 'rtl' : 'ltr';
+    } catch {}
   }, [locale]);
 
   async function loadMe(initData?: string) {
