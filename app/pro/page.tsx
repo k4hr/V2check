@@ -87,27 +87,27 @@ export default function ProSelectPage() {
           {/* Без ограничений */}
           <div className="cell cell--label">Без ограничений</div>
           <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
+          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
 
           {/* Работа с файлами */}
           <div className="cell cell--label">Работа с файлами</div>
           <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
+          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
 
           {/* Продвинутые сценарии */}
           <div className="cell cell--label">Продвинутые сценарии</div>
           <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
+          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
 
           {/* Приоритет в очереди */}
           <div className="cell cell--label">Приоритет в очереди</div>
           <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
+          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
 
           {/* Сохранение ответов */}
           <div className="cell cell--label">Сохранение ответов</div>
           <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✔</span></div>
+          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
         </div>
       </section>
 
@@ -184,24 +184,32 @@ export default function ProSelectPage() {
         .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(255,255,255,.06); }
         .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
 
-        /* --- Pro+ колонка: фон = золотой как у кнопки, КАК ОБЫЧНЫЙ background --- */
+        /* --- Pro+ колонка: фон как у золотой кнопки, обычным background --- */
         .cell--proplus,
         .cell--proplus-head {
           background: linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%);
           color: #fff;
         }
-        /* чтобы шапка Pro+ тоже была в том же стиле, но жирная */
         .cell--proplus-head { font-weight: 800; }
 
         /* Чипы */
         .chip {
           display: inline-flex; align-items: center; justify-content: center;
-          min-width: 22px; height: 22px; padding: 0 6px;
-          border-radius: 999px; font-size: 12px; line-height: 22px;
+          min-width: 24px; height: 24px; padding: 0 8px;
+          border-radius: 999px; font-size: 13px; line-height: 24px;
           border: 1px solid transparent;
+          position: relative; z-index: 1; /* всегда над фонами */
         }
-        .chip--ok { background: rgba(80,200,120,.15); border-color: rgba(80,200,120,.35); }
-        .chip--no { background: rgba(255,90,90,.15); border-color: rgba(255,90,90,.35); }
+        .chip--ok {
+          background: rgba(80,200,120,.30); /* плотнее, чтобы читалось на золоте */
+          border-color: rgba(80,200,120,.55);
+          color: #dfffe6; /* светло-зелёный текст/эмодзи */
+        }
+        .chip--no {
+          background: rgba(255,90,90,.22);
+          border-color: rgba(255,90,90,.45);
+          color: #ffd6d6;
+        }
 
         @media (max-width: 420px) {
           .cell { padding: 10px; font-size: 13px; min-height: 48px; }
