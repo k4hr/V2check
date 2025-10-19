@@ -133,36 +133,27 @@ export default function ProSelectPage() {
         .card__subtitle { opacity: .78; font-size: 13px; margin-top: 2px; }
         .card__chev { opacity: .6; font-size: 22px; }
 
-        /* Фиолетовая карточка */
+        /* Pro */
         .card--pro {
           border-color: rgba(91, 140, 255, .45);
-          box-shadow:
-            0 10px 30px rgba(91, 140, 255, .16),
-            inset 0 0 0 1px rgba(91, 140, 255, .10);
+          box-shadow: 0 10px 30px rgba(91, 140, 255, .16), inset 0 0 0 1px rgba(91, 140, 255, .10);
         }
         .card__icon--pro {
           background: radial-gradient(120% 120% at 20% 20%, rgba(120,150,255,.45), rgba(120,150,255,.08) 60%, rgba(255,255,255,.05));
         }
 
-        /* Золотой акцент (как на кнопке), только для карточки Pro+ */
+        /* Pro+ карточка (золото) */
         .card--proplus {
           border-color: rgba(255, 191, 73, .45);
-          box-shadow:
-            0 10px 30px rgba(255,191,73,.18),
-            inset 0 0 0 1px rgba(255,191,73,.10);
+          box-shadow: 0 10px 30px rgba(255,191,73,.18), inset 0 0 0 1px rgba(255,191,73,.10);
         }
         .card__icon--proplus {
           background: radial-gradient(120% 120% at 20% 20%, rgba(255,210,120,.55), rgba(255,210,120,.10) 60%, rgba(255,255,255,.05));
         }
 
-        /* ===== Сравнение тарифов ===== */
+        /* ===== Таблица ===== */
         .cmp { margin-top: 18px; }
-        .cmp__title {
-          margin: 10px 0 10px;
-          text-align: center;
-          font-size: 18px;
-          opacity: .95;
-        }
+        .cmp__title { margin: 10px 0 10px; text-align: center; font-size: 18px; opacity: .95; }
 
         .cmp-grid {
           border: 1px solid rgba(255,255,255,.08);
@@ -173,7 +164,7 @@ export default function ProSelectPage() {
           grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
         }
 
-        /* базовая ячейка — всё по центру */
+        /* Базовая ячейка — центрируем и создаём новый слой */
         .cell {
           padding: 12px;
           font-size: 14px;
@@ -183,32 +174,28 @@ export default function ProSelectPage() {
           justify-content: center;
           text-align: center;
           min-height: 54px;
-          position: relative; /* нужно, чтобы ::before работал в Pro+ */
-          z-index: 1; /* контент над любым фоном */
+          position: relative;
+          z-index: 2;               /* ячейка над фоновой сеткой */
+          mix-blend-mode: normal;   /* запрещаем любые режимы смешивания */
         }
+        .cell > * { position: relative; z-index: 3; } /* контент поверх любых подложек */
         .cell--label { background: rgba(255,255,255,.02); font-weight: 600; }
         .cell--head  { font-weight: 800; background: rgba(255,255,255,.04); }
 
-        /* вертикальные разделители между колонками 1 и 2 */
+        /* Вертикальные разделители между 1-й и 2-й колонкой */
         .cmp-grid .cell:nth-child(3n+1),
-        .cmp-grid .cell:nth-child(3n+2) {
-          border-right: 1px solid rgba(255,255,255,.06);
-        }
-        /* убрать низ у последних трёх ячеек */
+        .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(255,255,255,.06); }
         .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
 
-        /* --- Pro+ колонка: фон как у золотой кнопки, контент поверх --- */
-        .cell--proplus {
-          color: #fff;
-        }
+        /* Колонка Pro+ — фон как у золотой кнопки, но под контентом */
+        .cell--proplus { color: #fff; }
         .cell--proplus::before {
           content: "";
           position: absolute;
-          inset: 0;                /* закрываем всю ячейку */
+          inset: 0;
           background: linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%);
-          opacity: .95;            /* можно подкрутить интенсивность */
-          z-index: 0;              /* фон НАД задником таблицы, НО под контентом */
-          pointer-events: none;    /* не перекрывает клики */
+          z-index: 1;            /* фон ниже контента (3), выше базового задника */
+          pointer-events: none;  /* не перехватывает клики */
         }
 
         /* Чипы */
