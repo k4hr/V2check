@@ -36,31 +36,27 @@ export async function POST(req: Request) {
     const d = String(now.getUTCDate()).padStart(2, '0');
     const key = `${y}/${m}/${d}/${crypto.randomUUID()}.jpg`;
 
-    // Публичный URL (именно его вернем фронту)
+    // Публичный URL (его и вернем фронту)
     const publicUrl = `https://${R2_PUBLIC_HOST}/${R2_BUCKET}/${key}`;
 
-    // Загружаем напрямую (анонимный PUT должен быть разрешен; иначе нужен presigned URL / S3 SDK)
+    // Если у бакета разрешен анонимный PUT — можно так.
+    // В противном случае нужен presigned URL / загрузка через S3 SDK.
     const putUrl = publicUrl;
 
-    // ✅ ВАЖНО: конвертируем Buffer -> ArrayBuffer
-    const ab: ArrayBuffer = jpegBuf.buffer.slice(
-      jpegBuf.byteOffset,
-      jpegBuf.byteOffset + jpegBuf.byteLength
-    );
+    // ✅ ФИКС ТИПИЗАЦИИ: передаем ArrayBufferView (Uint8Array), а НЕ Buffer/Blob.
+    const bodyBytes = new Uint8Array(jpegBuf);
 
     const putRes = await fetch(putUrl, {
       method: 'PUT',
       headers: {
         'Content-Type': contentType,
-        // Если требуется подпись (обычно так и есть) — тут должна быть AWS SigV4 авторизация,
-        // или используй presigned URL/SDK.
       },
-      body: ab,
+      body: bodyBytes, // <-- корректный BodyInit
     });
 
     if (!putRes.ok) {
       const txt = await putRes.text().catch(() => '');
-      console.error('[R2_PUT_FAILED]', putRes.status, txt);
+      console.error('[R2_PUT_FAILED]', { status: putRes.status, body: txt.slice(0, 500) });
       return errJson(`R2 PUT failed: ${putRes.status}`, 502);
     }
 
