@@ -1,5 +1,5 @@
 # ---------- base ----------
-FROM node:20-bookworm-slim AS base
+FROM ghcr.io/library/node:20-bookworm-slim AS base
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
@@ -61,5 +61,4 @@ COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
 ENTRYPOINT ["/usr/bin/tini","--"]
-
 CMD ["sh","-c","(test -f prisma/schema.prisma && npx prisma db push --accept-data-loss || echo '⚠️ prisma step skipped') && npm run start -s"]
