@@ -9,7 +9,8 @@
     "build": "npm run build:web && npm run build:bot",
     "build:web": "next build",
     "build:bot": "tsc -p tsconfig.bot.json",
-    "start": "node ./dist-bot/start.js & next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "start:bot": "node dist-bot/start.js",
     "postinstall": "prisma generate || true",
     "migrate": "prisma db push --schema=prisma/schema.prisma"
   },
@@ -27,7 +28,7 @@
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
-    "@types/node": "^24.8.1",
+    "@types/node": "^24.9.0",
     "@types/react": "^19.2.2",
     "prisma": "^5.22.0",
     "typescript": "^5.9.3"

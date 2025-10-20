@@ -1,17 +1,34 @@
 {
-  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "noEmit": false,
-    "outDir": "./dist-bot",
-    "module": "CommonJS",
     "target": "ES2020",
-    "isolatedModules": false,
-    "skipLibCheck": true
+    "lib": [
+      "es2020"
+    ],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": false,
+    "outDir": "dist-bot",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    },
+    "types": [
+      "node"
+    ]
   },
   "include": [
     "bot/**/*.ts"
   ],
   "exclude": [
+    "app",
+    ".next",
     "node_modules"
   ]
 }
