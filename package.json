@@ -6,11 +6,8 @@
     "node": ">=18.18.0"
   },
   "scripts": {
-    "build": "npm run build:web && npm run build:bot",
-    "build:web": "next build",
-    "build:bot": "tsc -p tsconfig.bot.json",
-    "start": "node ./node_modules/next/dist/bin/next start -H 0.0.0.0 -p ${PORT:-3000}",
-    "start:bot": "node dist-bot/start.js",
+    "build": "next build",
+    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "postinstall": "prisma generate || true",
     "migrate": "prisma db push --schema=prisma/schema.prisma"
   },
