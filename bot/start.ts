@@ -1,91 +1,40 @@
-// bot/start.ts
-import { Telegraf, Markup, Context } from 'telegraf';
+  // bot/start.ts
+  import { Telegraf, Markup } from 'telegraf';
 
-const BOT_TOKEN = process.env.TG_BOT_TOKEN;
-const APP_ORIGIN = (process.env.APP_ORIGIN || '').replace(/\/+$/, ''); // trim trailing slash
-const APP_START_PATH = process.env.APP_START_PATH || '/';              // e.g. "/home" or "/home/pro"
+  const BOT_TOKEN  = process.env.TG_BOT_TOKEN;
+  const APP_ORIGIN = (process.env.APP_ORIGIN || '').replace(/\/$/, '');
+  const APP_START_PATH = process.env.APP_START_PATH || '/';
+  if (!BOT_TOKEN) throw new Error('Missing TG_BOT_TOKEN');
+  if (!APP_ORIGIN) throw new Error('Missing APP_ORIGIN');
 
-if (!BOT_TOKEN) throw new Error('TG_BOT_TOKEN is required');
-if (!APP_ORIGIN) throw new Error('APP_ORIGIN is required');
+  const WEBAPP_URL = APP_ORIGIN + APP_START_PATH;
 
-const APP_URL = `${APP_ORIGIN}${APP_START_PATH}`;
+  const bot = new Telegraf(BOT_TOKEN);
 
-const bot = new Telegraf(BOT_TOKEN);
+  bot.start(async (ctx) => {
+    const text =
+`✨ LiveManager — your daily assistant in Telegram.
 
-// Commands in Telegram menu
-bot.telegram.setMyCommands([
-  { command: 'start', description: 'Start' },
-  { command: 'open',  description: 'Open the app' },
-]).catch(() => { /* ignore non-fatal */ });
+Inside you’ll find smart tools for everyday life:
+• planning, health, and home
+• content, texts, and ideas
+• money, shopping, and walks
 
-/** Inline keyboard with WebApp button (opens IN Telegram) */
-const openKeyboard = Markup.inlineKeyboard([
-  Markup.button.webApp('Open the App', APP_URL),
-]);
+Open the app — and let’s roll!`;
 
-/** English welcome message */
-const WELCOME_EN = [
-  'Hi! I’m your personal assistant on Telegram.',
-  '',
-  '🚀 Inside: smart everyday tools:',
-  '• planning, health & home',
-  '• content, writing & ideas',
-  '• money, shopping & walks',
-  '',
-  'Open the app — let’s go!',
-].join('\n');
+    const inline = Markup.inlineKeyboard([
+      Markup.button.webApp('Open the App', WEBAPP_URL),
+      Markup.button.url('Open in Telegram (fallback)', WEBAPP_URL)
+    ]);
 
-/** Reply helper */
-async function sendWelcome(ctx: Context) {
-  // You can localize later based on ctx.from?.language_code if needed
-  await ctx.reply(WELCOME_EN, {
-    ...openKeyboard,
-    disable_web_page_preview: true,
-  });
-}
-
-// /start handler (supports deep-link payload but we don’t need it yet)
-bot.start(async (ctx) => {
-  try {
-    await sendWelcome(ctx);
-  } catch (err) {
-    console.error('start handler error:', err);
-  }
-});
-
-// /open handler
-bot.command('open', async (ctx) => {
-  try {
-    await sendWelcome(ctx);
-  } catch (err) {
-    console.error('open handler error:', err);
-  }
-});
-
-// Optional: react to “open” text messages
-bot.hears(/^open|app|start$/i, async (ctx) => {
-  try {
-    await sendWelcome(ctx);
-  } catch (err) {
-    console.error('hears error:', err);
-  }
-});
-
-// Optional: receive data from WebApp (window.Telegram.WebApp.sendData)
-bot.on('web_app_data', async (ctx) => {
-  const raw = ctx.webAppData?.data || '';
-  console.log('web_app_data:', raw);
-  await ctx.reply('Got it ✅', { disable_web_page_preview: true });
-});
-
-// Launch (long polling)
-bot.launch()
-  .then(() => console.log('Bot is up. WebApp URL:', APP_URL))
-  .catch((e) => {
-    console.error('Bot launch failed:', e);
-    process.exit(1);
+    await ctx.reply(text, { reply_markup: inline.reply_markup });
   });
 
-// Graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+  bot.command('help', (ctx) =>
+    ctx.reply('Type /start to get the app button.')
+  );
+
+  bot.launch();
+  process.once('SIGINT', () => bot.stop('SIGINT'));
+  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+  console.log('Bot is up. WebApp URL:', WEBAPP_URL);
