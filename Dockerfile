@@ -1,13 +1,15 @@
 # ---------- base ----------
-FROM ghcr.io/library/node:20-bookworm-slim AS base
+FROM node:20-bullseye-slim AS base
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
+
+# базовые утилиты
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates openssl curl bash tini \
  && rm -rf /var/lib/apt/lists/*
 
-# ---------- deps ----------
+# ---------- deps (полный набор для сборки) ----------
 FROM base AS deps
 WORKDIR /app
 COPY package.json ./
@@ -25,7 +27,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN mkdir -p public
 
-# Prisma validate/generate (мягко)
+# Prisma: мягкая проверка/генерация (если prisma есть)
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
 RUN set -eux; \
   (test -f prisma/schema.prisma && sed -i '1s/^\xEF\xBB\xBF//' prisma/schema.prisma) || true; \
@@ -35,7 +37,7 @@ RUN set -eux; \
 # Сборка Next.js
 RUN npm run build
 
-# ---------- deps-prod ----------
+# ---------- deps-prod (рантайм зависимости) ----------
 FROM base AS deps_prod
 WORKDIR /app
 COPY package.json ./
