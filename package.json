@@ -2,6 +2,7 @@
   "name": "juristum-tma",
   "version": "0.9.5",
   "private": true,
+  "packageManager": "npm@10",
   "engines": {
     "node": ">=18.18.0"
   },
@@ -9,7 +10,8 @@
     "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "build": "next build",
     "postinstall": "prisma generate || true",
-    "migrate": "prisma db push --schema=prisma/schema.prisma"
+    "migrate": "prisma db push --schema=prisma/schema.prisma",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.679.0",
