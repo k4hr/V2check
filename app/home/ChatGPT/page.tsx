@@ -4,7 +4,8 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import BackBtn from '@/components/BackBtn';
 import type { Route } from 'next';
-import { readLocale, applyLocaleToDocument, t, STRINGS, type Locale } from '@/lib/i18n';
+import { readLocale, applyLocaleToDocument, type Locale } from '@/lib/i18n';
+import { getChatStrings } from '@/lib/i18n/ChatGPT';
 
 export type Msg = {
   role: 'system' | 'user' | 'assistant';
@@ -26,7 +27,7 @@ const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 const norm = (s: string) => (s || '').toString().trim();
 const TG_INIT = () => (window as any)?.Telegram?.WebApp?.initData || '';
 
-// http(s)-картинки из текста (data: исключаем)
+/** вытащить http(s)-картинки из текста (data: исключаем) */
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
   const re = /(https?:\/\/[^\s)]+?\.(?:png|jpe?g|webp|gif))/gi;
@@ -55,15 +56,11 @@ type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
 export default function ChatGPTPage() {
   const locale: Locale = readLocale();
-  const S = STRINGS[locale];
+  const C = getChatStrings(locale); // все строки для этой страницы
 
-  const title = t(locale, 'chatTitle', 'CHATGPT 5');
-  const subtitle = t(locale, 'chatSubtitle', 'Свободное общение. Спросите что угодно.');
-  const systemPrompt = t(
-    locale,
-    'chatSystemPrompt',
-    'Ты дружелюбный ассистент. Пиши по делу и без Markdown.'
-  );
+  const title = C.title;
+  const subtitle = C.subtitle;
+  const systemPrompt = C.systemPrompt;
 
   const mode = 'chat';
   const backHref = '/home' as Route;
@@ -71,33 +68,31 @@ export default function ChatGPTPage() {
   const passthroughIdParam = true;
 
   const TT = {
-    proBadge: t(locale, 'chatProBadge', 'Pro+ активен'),
-    uploadingFail: t(locale, 'chatUploadFail', 'Не удалось загрузить все вложения. Попробуем ещё раз?'),
-    svcDown: t(locale, 'chatSvcDown', 'Сервис временно недоступен. Попробуем ещё раз?'),
-    gotIt: t(locale, 'chatDone', 'Готово. Продолжим?'),
-    limit: (n: number) =>
-      (S.chatFreeLimit ? S.chatFreeLimit(n) : `Исчерпан дневной бесплатный лимит (${n}). Оформите Pro или попробуйте завтра.`),
-    starAddOnlyPro: t(locale, 'chatFavOnlyPro', 'Избранное доступно только в Pro+.'),
-    saved: t(locale, 'chatSaved', 'Чат сохранён в избранное ★'),
-    saveFail: t(locale, 'chatSaveFail', 'Не удалось сохранить в избранное.'),
-    starOnTitle: t(locale, 'chatFavRemove', 'Убрать из избранного'),
-    starOffTitle: t(locale, 'chatFavAdd', 'Сохранить весь чат в избранное (Pro+)'),
-    placeholder: t(locale, 'chatPlaceholder', 'Я вас слушаю...'),
-    download: t(locale, 'chatDownload', 'Скачать'),
-    open: t(locale, 'chatOpen', 'Открыть'),
-    thinking: t(locale, 'chatThinking', 'Думаю…'),
-    hello: t(locale, 'chatHello', 'Привет! Чем помочь?'),
-    noText: t(locale, 'chatNoText', '(сообщение без текста)'),
-    attachNote: (n: number) => (S.chatAttachNote ? S.chatAttachNote(n) : `\n📎 Вложений: ${n}`),
-    imagesMarker: t(locale, 'chatImagesMarker', '(изображения)'),
-    imagesHeader: t(locale, 'chatImagesHeader', 'Прикреплённые изображения:'),
-    errorShort: t(locale, 'chatErrorShort', 'Ошибка'),
-    attachAria: t(locale, 'chatAttachAria', 'Прикрепить'),
-    attachTitleLimit: (max: number) =>
-      (S.chatAttachTitle ? S.chatAttachTitle(max) : `Достигнут лимит ${max} фото`),
-    attachTitleDefault: t(locale, 'chatAttachTitleDefault', 'Прикрепить изображения'),
-    sendAria: t(locale, 'chatSendAria', 'Отправить'),
-    sendTitle: t(locale, 'chatSendTitle', 'Отправить'),
+    proBadge: C.proBadge,
+    uploadingFail: C.uploadingFail,
+    svcDown: C.svcDown,
+    gotIt: C.done,
+    limit: (n: number) => C.freeLimit(n),
+    starAddOnlyPro: C.favOnlyPro,
+    saved: C.saved,
+    saveFail: C.saveFail,
+    starOnTitle: C.starOnTitle,
+    starOffTitle: C.starOffTitle,
+    placeholder: C.placeholder,
+    download: C.download,
+    open: C.open,
+    thinking: C.thinking,
+    hello: C.hello,
+    noText: C.noText,
+    attachNote: (n: number) => C.attachNote(n),
+    imagesMarker: C.imagesMarker,
+    imagesHeader: C.imagesHeader,
+    errorShort: C.errorShort,
+    attachAria: C.attachAria,
+    attachTitleLimit: (max: number) => C.attachTitle(max),
+    attachTitleDefault: C.attachTitleDefault,
+    sendAria: C.sendAria,
+    sendTitle: C.sendTitle,
   };
 
   const [messages, setMessages] = useState<Msg[]>([
@@ -455,124 +450,125 @@ export default function ChatGPTPage() {
           const isUser = m.role === 'user';
           const hasImages = Array.isArray(m.images) && m.images.length > 0;
 
-        return (
-          <div key={i} style={{
-            margin: '10px 0',
-            display: 'flex',
-            justifyContent: isUser ? 'flex-end' : 'flex-start'
-          }}>
-            <div style={{ maxWidth: '86%' }}>
-              {m.content && m.content !== TT.imagesMarker && (
-                <div
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 14,
-                    lineHeight: 1.5,
-                    background: isUser ? '#24304a' : '#1a2132',
-                    border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
-                    boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
-                    whiteSpace: 'pre-wrap',
-                    fontSize: 16,
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {m.content}
-                </div>
-              )}
-
-              {hasImages && (
-                <div
-                  style={{
-                    marginTop: m.content && m.content !== TT.imagesMarker ? 8 : 0,
-                    padding: 8,
-                    borderRadius: 14,
-                    background: '#101622',
-                    border: '1px solid #2b3552',
-                  }}
-                >
+          return (
+            <div key={i} style={{
+              margin: '10px 0',
+              display: 'flex',
+              justifyContent: isUser ? 'flex-end' : 'flex-start'
+            }}>
+              <div style={{ maxWidth: '86%' }}>
+                {m.content && m.content !== TT.imagesMarker && (
                   <div
                     style={{
-                      display: 'grid',
-                      gap: 8,
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                      padding: '10px 12px',
+                      borderRadius: 14,
+                      lineHeight: 1.5,
+                      background: isUser ? '#24304a' : '#1a2132',
+                      border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
+                      boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
+                      whiteSpace: 'pre-wrap',
+                      fontSize: 16,
+                      wordBreak: 'break-word',
                     }}
                   >
-                    {m.images!.map((src, idx) => (
-                      <figure
-                        key={idx}
-                        style={{
-                          margin: 0,
-                          position: 'relative',
-                          borderRadius: 12,
-                          overflow: 'hidden',
-                          border: '1px solid #2b3552',
-                          background: '#0f1422',
-                          aspectRatio: '1 / 1',
-                        }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={src}
-                          alt=""
-                          onClick={() => openLink(src)}
+                    {m.content}
+                  </div>
+                )}
+
+                {hasImages && (
+                  <div
+                    style={{
+                      marginTop: m.content && m.content !== TT.imagesMarker ? 8 : 0,
+                      padding: 8,
+                      borderRadius: 14,
+                      background: '#101622',
+                      border: '1px solid #2b3552',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 8,
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                      }}
+                    >
+                      {m.images!.map((src, idx) => (
+                        <figure
+                          key={idx}
                           style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                            cursor: 'zoom-in',
-                          }}
-                        />
-                        <div
-                          style={{
-                            position: 'absolute',
-                            bottom: 6,
-                            right: 6,
-                            display: 'flex',
-                            gap: 6,
+                            margin: 0,
+                            position: 'relative',
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            border: '1px solid #2b3552',
+                            background: '#0f1422',
+                            aspectRatio: '1 / 1',
                           }}
                         >
-                          <a
-                            href={src}
-                            download
-                            title={TT.download}
-                            style={{
-                              padding: '6px 8px',
-                              borderRadius: 10,
-                              background: 'rgba(0,0,0,.45)',
-                              border: '1px solid rgba(255,255,255,.25)',
-                              color: '#fff',
-                              fontSize: 12,
-                              textDecoration: 'none',
-                              backdropFilter: 'blur(6px)',
-                            }}
-                          >
-                            {TT.download}
-                          </a>
-                          <button
-                            type="button"
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={src}
+                            alt=""
                             onClick={() => openLink(src)}
-                            title={TT.open}
                             style={{
-                              padding: '6px 8px',
-                              borderRadius: 10,
-                              background: 'rgba(0,0,0,.45)',
-                              border: '1px solid rgba(255,255,255,.25)',
-                              color: '#fff',
-                              fontSize: 12,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block',
+                              cursor: 'zoom-in',
+                            }}
+                          />
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: 6,
+                              right: 6,
+                              display: 'flex',
+                              gap: 6,
                             }}
                           >
-                            {TT.open}
-                          </button>
-                        </div>
-                      </figure>
-                    ))}
+                            <a
+                              href={src}
+                              download
+                              title={TT.download}
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 10,
+                                background: 'rgba(0,0,0,.45)',
+                                border: '1px solid rgba(255,255,255,.25)',
+                                color: '#fff',
+                                fontSize: 12,
+                                textDecoration: 'none',
+                                backdropFilter: 'blur(6px)',
+                              }}
+                            >
+                              {TT.download}
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => openLink(src)}
+                              title={TT.open}
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 10,
+                                background: 'rgba(0,0,0,.45)',
+                                border: '1px solid rgba(255,255,255,.25)',
+                                color: '#fff',
+                                fontSize: 12,
+                              }}
+                            >
+                              {TT.open}
+                            </button>
+                          </div>
+                        </figure>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        );})}
+          );
+        })}
         {(loading || uploading) && (
           <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>{TT.thinking}</div>
         )}
