@@ -1,40 +1,61 @@
-  // bot/start.ts
-  import { Telegraf, Markup } from 'telegraf';
+// bot/start.ts
+import { Telegraf, Markup } from 'telegraf';
 
-  const BOT_TOKEN  = process.env.TG_BOT_TOKEN;
-  const APP_ORIGIN = (process.env.APP_ORIGIN || '').replace(/\/$/, '');
-  const APP_START_PATH = process.env.APP_START_PATH || '/';
-  if (!BOT_TOKEN) throw new Error('Missing TG_BOT_TOKEN');
-  if (!APP_ORIGIN) throw new Error('Missing APP_ORIGIN');
+const BOT_TOKEN  = process.env.TG_BOT_TOKEN!;
+const APP_ORIGIN = process.env.APP_ORIGIN!; // e.g. https://v2check-production.up.railway.app
 
-  const WEBAPP_URL = APP_ORIGIN + APP_START_PATH;
+if (!BOT_TOKEN)  throw new Error('TG_BOT_TOKEN is not set');
+if (!APP_ORIGIN) throw new Error('APP_ORIGIN is not set');
 
-  const bot = new Telegraf(BOT_TOKEN);
+const WEBAPP_URL = `${APP_ORIGIN}/home`; // Change if needed
+const bot = new Telegraf(BOT_TOKEN);
 
-  bot.start(async (ctx) => {
-    const text =
+// /start — rich card + "Open in Telegram" button
+bot.start(async (ctx) => {
+  const caption =
 `✨ LiveManager — your daily assistant in Telegram.
+Helps with tasks, plans, and ideas — all in one place.
 
-Inside you’ll find smart tools for everyday life:
-• planning, health, and home
-• content, texts, and ideas
-• money, shopping, and walks
+Always here to make your life easier 💙`;
 
-Open the app — and let’s roll!`;
+  const kb = Markup.inlineKeyboard([
+    Markup.button.webApp('Open LiveManager ❤️', WEBAPP_URL)
+  ]);
 
-    const inline = Markup.inlineKeyboard([
-      Markup.button.webApp('Open the App', WEBAPP_URL),
-      Markup.button.url('Open in Telegram (fallback)', WEBAPP_URL)
-    ]);
+  try {
+    await ctx.replyWithPhoto(
+      { url: `${APP_ORIGIN}/og/live-manager.jpg` },
+      { caption, ...kb }
+    );
+  } catch {
+    await ctx.reply(caption, kb);
+  }
+});
 
-    await ctx.reply(text, { reply_markup: inline.reply_markup });
+// Optional: explicit open command
+bot.command('open', (ctx) =>
+  ctx.reply('Open the app:', Markup.inlineKeyboard([
+    Markup.button.webApp('Open LiveManager ❤️', WEBAPP_URL)
+  ]))
+);
+
+// Health
+bot.command('ping', (ctx) => ctx.reply('pong'));
+
+export async function launchBot() {
+  await bot.launch();
+  console.log('[bot] started with long polling');
+  const stop = async () => {
+    try { await bot.stop('SIGTERM'); } catch {}
+    process.exit(0);
+  };
+  process.once('SIGINT', stop);
+  process.once('SIGTERM', stop);
+}
+
+if (require.main === module) {
+  launchBot().catch((e) => {
+    console.error('[bot] failed to start', e);
+    process.exit(1);
   });
-
-  bot.command('help', (ctx) =>
-    ctx.reply('Type /start to get the app button.')
-  );
-
-  bot.launch();
-  process.once('SIGINT', () => bot.stop('SIGINT'));
-  process.once('SIGTERM', () => bot.stop('SIGTERM'));
-  console.log('Bot is up. WebApp URL:', WEBAPP_URL);
+}
