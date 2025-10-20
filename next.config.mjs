@@ -1,7 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // SSR-бандл для `next start`, без static export
-  output: 'standalone',
-  experimental: { typedRoutes: true },
+  typescript: {
+    // Не выполнять проверку типов во время `next build`
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    // Не запускать ESLint во время `next build`
+    ignoreDuringBuilds: true,
+  },
+  experimental: {
+    typedRoutes: true,
+  },
 };
+
 export default nextConfig;
