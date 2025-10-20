@@ -1,33 +1,18 @@
 # ---------- base ----------
-# Надёжное зеркало Docker Hub (Google cache)
-FROM mirror.gcr.io/library/node:20-alpine AS base
-ENV NODE_ENV=production
+FROM node:20-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates openssl curl bash tini && rm -rf /var/lib/apt/lists/*
 
-# Базовые пакеты для рантайма и скриптов
-#  - libc6-compat: совместимость glibc для некоторых нативных модулей
-#  - openssl, libstdc++: нужны Prisma/https
-#  - tini: корректный PID1
-RUN apk add --no-cache \
-    libc6-compat \
-    openssl \
-    libstdc++ \
-    bash \
-    curl \
-    tini
-
-# ---------- deps (полный набор для сборки) ----------
+# ---------- deps (ставим все зависимости, включая dev) ----------
 FROM base AS deps
 WORKDIR /app
 COPY package.json ./
 COPY package-lock.json* ./
-# Если есть lockfile — используем его, иначе fallback на install
-RUN if [ -f package-lock.json ]; then \
-      npm ci --no-audit --no-fund --ignore-scripts ; \
-    else \
-      npm install --no-audit --no-fund --ignore-scripts ; \
-    fi
+# На всякий случай выпилим возможное поле packageManager, чтобы Next не лез за yarn
+RUN node -e "try{const fs=require('fs');let p=JSON.parse(fs.readFileSync('package.json','utf8')); if(p.packageManager){delete p.packageManager; fs.writeFileSync('package.json', JSON.stringify(p,null,2));}}catch(e){process.exit(0)}"
+RUN npm ci --no-audit --no-fund --ignore-scripts
 
 # ---------- builder ----------
 FROM base AS builder
@@ -35,50 +20,31 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN mkdir -p public
-
-# Prisma validate/generate (мягко)
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db?schema=public"
-# Убираем возможный BOM у prisma/schema.prisma
 RUN (test -f prisma/schema.prisma && sed -i '1s/^\xEF\xBB\xBF//' prisma/schema.prisma) || true
-RUN (npx prisma validate --schema=prisma/schema.prisma || true)
-RUN (npx prisma generate --schema=prisma/schema.prisma || true)
-
-# Next 15 иногда сам дотягивает тайпинги. Поставим сами, без сохранения.
-RUN npm install -D --no-save typescript @types/react @types/node
-
-# Сборка Next.js
+RUN npx prisma generate --schema=prisma/schema.prisma || true
 RUN npm run build
 
-# ---------- deps-prod (только продовые модули для рантайма) ----------
+# ---------- deps-prod (только прод-зависимости) ----------
 FROM base AS deps_prod
 WORKDIR /app
 COPY package.json ./
 COPY package-lock.json* ./
-RUN if [ -f package-lock.json ]; then \
-      npm ci --omit=dev --no-audit --no-fund --ignore-scripts ; \
-    else \
-      npm install --omit=dev --no-audit --no-fund --ignore-scripts ; \
-    fi
+RUN npm ci --omit=dev --no-audit --no-fund --ignore-scripts
 
 # ---------- runner ----------
 FROM base AS runner
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 WORKDIR /app
 
-# Продовые node_modules
 COPY --from=deps_prod /app/node_modules ./node_modules
-
-# Артефакты рантайма
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3000
-ENTRYPOINT ["/sbin/tini","--"]
-
-# Мягкий prisma db push и старт Next
-CMD ["sh","-c","(test -f prisma/schema.prisma && npx prisma db push --accept-data-loss || echo '⚠️ prisma step skipped') && npm run start -s"]
+ENTRYPOINT ["/usr/bin/tini","--"]
+CMD ["sh","-c","(test -f prisma/schema.prisma && npx prisma db push --accept-data-loss || echo '⚠ prisma step skipped') && npm run start -s"]

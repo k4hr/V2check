@@ -14,9 +14,7 @@
     "jsx": "preserve",
     "incremental": true,
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"]
-    },
+    "paths": { "@/*": ["./*"] },
     "plugins": [{ "name": "next" }]
   },
   "include": [
@@ -27,9 +25,5 @@
     "lib/**/*",
     "pages/**/*"
   ],
-  "exclude": [
-    "node_modules",
-    "bot",
-    "scripts"
-  ]
+  "exclude": ["node_modules", "bot", "scripts"]
 }

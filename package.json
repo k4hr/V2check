@@ -2,7 +2,6 @@
   "name": "juristum-tma",
   "version": "0.9.5",
   "private": true,
-  "packageManager": "npm@10",
   "engines": {
     "node": ">=18.18.0"
   },
@@ -12,7 +11,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "postinstall": "prisma generate || true",
     "migrate": "prisma db push --schema=prisma/schema.prisma",
-
     "build:bot": "tsc -p tsconfig.bot.json",
     "start:bot": "node dist-bot/bot/start.js"
   },
