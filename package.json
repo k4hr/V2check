@@ -6,13 +6,12 @@
     "node": ">=18.18.0"
   },
   "scripts": {
-    "start": "next start -H 0.0.0.0 -p ${PORT:-3000}",
-    "build": "next build",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "postinstall": "prisma generate || true",
-    "migrate": "prisma db push --schema=prisma/schema.prisma",
+    "build": "npm run build:web && npm run build:bot",
+    "build:web": "next build",
     "build:bot": "tsc -p tsconfig.bot.json",
-    "start:bot": "node dist-bot/bot/start.js"
+    "start": "node ./dist-bot/start.js & next start -H 0.0.0.0 -p ${PORT:-3000}",
+    "postinstall": "prisma generate || true",
+    "migrate": "prisma db push --schema=prisma/schema.prisma"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.679.0",
