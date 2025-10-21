@@ -6,9 +6,11 @@ import { getPrices, resolvePlan, resolveTier, type Tier, type Plan } from '@/lib
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// --- токены и конфигурация ---
 const BOT_TOKEN  = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
-const WH_SECRET  = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || '').trim();
-const APP_ORIGIN = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/,'');
+// Если переменная окружения не задана — fallback на "supersecret12345"
+const WH_SECRET  = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'supersecret12345').trim();
+const APP_ORIGIN = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/, '');
 
 type TgUpdate = {
   update_id?: number;
@@ -28,8 +30,8 @@ type TgUpdate = {
       provider_payment_charge_id?: string;
       currency?: string;
       total_amount?: number; // minor units (Stars)
-    }
-  }
+    };
+  };
 };
 
 async function tg(method: string, payload: any) {
@@ -41,7 +43,6 @@ async function tg(method: string, payload: any) {
   return res.json();
 }
 
-// subs2:TIER:PLAN  |  subs:PLAN (legacy → PRO)
 function parsePayload(raw: string): { tier: Tier; plan: Plan } | null {
   const m2 = /^subs2:([A-Za-z_]+):([A-Za-z_]+)$/i.exec(String(raw || ''));
   if (m2) return { tier: resolveTier(m2[1]), plan: resolvePlan(m2[2]) };
@@ -56,7 +57,7 @@ function addDays(base: Date, days: number): Date {
   return d;
 }
 
-// --- простой пинг, чтобы в браузере не был "белый экран"
+// --- health-check, чтобы в браузере не был "белый экран"
 export async function GET() {
   return NextResponse.json({ ok: true, ping: 'botWebhook alive' });
 }
@@ -67,67 +68,52 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
     }
 
-    // Проверка секрета только для входящих апдейтов от Telegram
-    if (WH_SECRET) {
-      const got = (req.headers.get('x-telegram-bot-api-secret-token') || '').trim();
-      if (got !== WH_SECRET) {
-        return NextResponse.json({ ok: false, error: 'WEBHOOK_FORBIDDEN' }, { status: 403 });
-      }
+    // Проверяем секрет от Telegram (или наш дефолт)
+    const got = (req.headers.get('x-telegram-bot-api-secret-token') || '').trim();
+    if (WH_SECRET && got !== WH_SECRET) {
+      console.warn('[botWebhook] Forbidden: bad secret', { got });
+      return NextResponse.json({ ok: false, error: 'WEBHOOK_FORBIDDEN' }, { status: 403 });
     }
 
     const update = (await req.json().catch(() => ({}))) as TgUpdate;
-
-    // --- /start (текстовые апдейты)
     const text = update.message?.text?.trim();
     const chatId = update.message?.chat?.id || update.message?.from?.id;
 
+    // --- Обработка /start ---
     if (text && chatId && /^\/start\b/i.test(text)) {
-      // Сообщение на английском + кнопка, открывающая Web App прямо в Telegram
       const welcome =
         "Hi! I'm your personal assistant in Telegram.\n\n" +
         "🚀 Inside you’ll find daily tools for plans, health, home, content, ideas, and more.\n\n" +
         "Tap the button below to open the app — let’s go!";
 
       const reply_markup = APP_ORIGIN
-        ? {
-            inline_keyboard: [[{ text: 'Open LiveManager ❤️', web_app: { url: APP_ORIGIN } }]],
-          }
-        : undefined; // если URL не задан — просто пришлём текст
+        ? { inline_keyboard: [[{ text: 'Open LiveManager ❤️', web_app: { url: `${APP_ORIGIN}/home` } }]] }
+        : undefined;
 
-      await tg('sendMessage', {
-        chat_id: chatId,
-        text: welcome,
-        reply_markup,
-      });
-
+      await tg('sendMessage', { chat_id: chatId, text: welcome, reply_markup });
       return NextResponse.json({ ok: true, stage: 'start_sent' });
     }
 
-    // --- Pre-checkout fast ack
+    // --- Pre-checkout fast ack ---
     if (update.pre_checkout_query) {
       const { id } = update.pre_checkout_query;
       await tg('answerPreCheckoutQuery', { pre_checkout_query_id: id, ok: true });
       return NextResponse.json({ ok: true, stage: 'pre_checkout_ok' });
     }
 
-    // --- Успешная оплата (Stars/TON/…)
+    // --- Оплата / продление подписки ---
     const sp = update.message?.successful_payment;
-
     if (sp && chatId) {
       const parsed = parsePayload(sp.invoice_payload);
       if (!parsed) return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
-
       const { tier, plan } = parsed;
-      const username =
-        update.message?.from?.username ||
-        update.message?.chat?.username ||
-        null;
+      const username = update.message?.from?.username || update.message?.chat?.username || null;
 
       const telegramId = String(chatId);
       const chargeId = sp.telegram_payment_charge_id || null;
       const providerChargeId = sp.provider_payment_charge_id || null;
 
-      // идемпотентность по telegramChargeId
+      // идемпотентность
       if (chargeId) {
         const exists = await prisma.payment.findFirst({
           where: { telegramId, telegramChargeId: chargeId },
@@ -136,7 +122,6 @@ export async function POST(req: NextRequest) {
         if (exists) return NextResponse.json({ ok: true, stage: 'already_processed' });
       }
 
-      // upsert user
       const u = await prisma.user.upsert({
         where: { telegramId },
         create: { telegramId, username: username || undefined, plan: tier },
@@ -146,12 +131,10 @@ export async function POST(req: NextRequest) {
 
       const now = new Date();
       const from = u.subscriptionUntil && u.subscriptionUntil > now ? u.subscriptionUntil : now;
-
       const prices = getPrices(tier);
       const days = prices[plan].days;
       const until = addDays(from, days);
 
-      // лог платежа
       await prisma.payment.create({
         data: {
           userId: u.id,
@@ -167,26 +150,24 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // продление подписки
       await prisma.user.update({
         where: { id: u.id },
         data: { subscriptionUntil: until, plan: tier },
       });
 
-      try {
-        await tg('sendMessage', {
-          chat_id: chatId,
-          text:
-            `✅ Subscription active until ${until.toISOString().slice(0, 10)}.\n` +
-            `Tier: ${tier === 'PROPLUS' ? 'Pro+' : 'Pro'} — ${prices[plan].label}. Thank you!`,
-        });
-      } catch {}
+      await tg('sendMessage', {
+        chat_id: chatId,
+        text:
+          `✅ Subscription active until ${until.toISOString().slice(0, 10)}.\n` +
+          `Tier: ${tier === 'PROPLUS' ? 'Pro+' : 'Pro'} — ${prices[plan].label}. Thank you!`,
+      });
 
       return NextResponse.json({ ok: true, stage: 'subscription_extended', tier, plan, until });
     }
 
     return NextResponse.json({ ok: true, noop: true });
   } catch (e: any) {
+    console.error('[botWebhook] Error:', e);
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
 }
