@@ -2,24 +2,24 @@
 import { Telegraf, Markup } from 'telegraf';
 
 const BOT_TOKEN  = process.env.TG_BOT_TOKEN!;
-const APP_ORIGIN = process.env.APP_ORIGIN!; // e.g. https://v2check-production.up.railway.app
+const APP_ORIGIN = process.env.APP_ORIGIN!; // напр. https://v2check-production.up.railway.app
 
 if (!BOT_TOKEN)  throw new Error('TG_BOT_TOKEN is not set');
 if (!APP_ORIGIN) throw new Error('APP_ORIGIN is not set');
 
-const WEBAPP_URL = `${APP_ORIGIN}/home`; // Change if needed
+const WEBAPP_URL = `${APP_ORIGIN}/home`;
 const bot = new Telegraf(BOT_TOKEN);
 
-// /start — rich card + "Open in Telegram" button
+// /start — карточка + кнопка «Открыть»
 bot.start(async (ctx) => {
   const caption =
-`✨ LiveManager — your daily assistant in Telegram.
-Helps with tasks, plans, and ideas — all in one place.
+`✨ LiveManager — ваш ежедневный ассистент в Telegram.
+Помогает с задачами, планами и идеями — всё в одном месте.
 
-Always here to make your life easier 💙`;
+Всегда рядом, чтобы сделать жизнь проще 💙`;
 
   const kb = Markup.inlineKeyboard([
-    Markup.button.webApp('Open LiveManager ❤️', WEBAPP_URL)
+    Markup.button.webApp('Открыть LiveManager ❤️', WEBAPP_URL)
   ]);
 
   try {
@@ -32,14 +32,19 @@ Always here to make your life easier 💙`;
   }
 });
 
-// Optional: explicit open command
+// /open — явная команда открыть мини-апп
 bot.command('open', (ctx) =>
-  ctx.reply('Open the app:', Markup.inlineKeyboard([
-    Markup.button.webApp('Open LiveManager ❤️', WEBAPP_URL)
+  ctx.reply('Открыть приложение:', Markup.inlineKeyboard([
+    Markup.button.webApp('Открыть LiveManager ❤️', WEBAPP_URL)
   ]))
 );
 
-// Health
+// /support — поддержка
+bot.command('support', (ctx) =>
+  ctx.reply('При возникновении каких либо проблем — обращайтесь @seimngr')
+);
+
+// /ping — проверка живости
 bot.command('ping', (ctx) => ctx.reply('pong'));
 
 export async function launchBot() {
