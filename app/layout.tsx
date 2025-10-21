@@ -1,9 +1,9 @@
-// app/layout.tsx
 import './globals.css';
 import { cookies } from 'next/headers';
 import { I18nProvider } from '../components/I18nProvider';
 import TwaBootstrap from '../components/TwaBootstrap';
 import GlobalSafeTop from '../components/GlobalSafeTop';
+import TMAInit from '../components/TMAInit';
 
 import ru from '../i18n/messages/ru';
 import en from '../i18n/messages/en';
@@ -29,9 +29,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         {/* Глобальный фон */}
         <div className="lm-bg" />
+
         {/* Безопасная зона под хедер TWA */}
         <GlobalSafeTop />
-        {/* Контент */}
+
+        {/* Инициализация Telegram WebApp: ready()+expand() */}
+        <TMAInit />
+
+        {/* Контент приложения */}
         <div className="lm-page">
           {/* Глобальная инициализация TWA + i18n */}
           <TwaBootstrap>
