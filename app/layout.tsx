@@ -29,9 +29,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         {/* Глобальный фон */}
         <div className="lm-bg" />
-        {/* Глобальная безопасная зона для Telegram-хедера */}
+        {/* Безопасная зона под хедер TWA */}
         <GlobalSafeTop />
-        {/* Контент приложения */}
+        {/* Контент */}
         <div className="lm-page">
           {/* Глобальная инициализация TWA + i18n */}
           <TwaBootstrap>
