@@ -1,3 +1,4 @@
+/* path: lib/tma/AIChatClient.tsx */
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -62,8 +63,6 @@ export default function AIChatClient(props: AIChatClientProps) {
   const [uploading, setUploading] = useState(false);
   const [attach, setAttach] = useState<Attach[]>([]);
   const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
-
-  // NEW: статус для бейджа
   const [proPlusActive, setProPlusActive] = useState<boolean>(false);
 
   const listRef = useRef<HTMLDivElement>(null);
@@ -93,7 +92,7 @@ export default function AIChatClient(props: AIChatClientProps) {
     } catch { return ''; }
   }, [passthroughIdParam]);
 
-  // NEW: загрузка статуса подписки
+  // статус подписки (для бейджа)
   useEffect(() => {
     (async () => {
       try {
@@ -403,92 +402,50 @@ export default function AIChatClient(props: AIChatClientProps) {
         </div>
       )}
 
-      {/* Нижняя панель */}
-      <div
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr auto',
-          gap: 6,
-          alignItems: 'center',
-          padding: 8,
-          borderRadius: 16,
-          background: 'rgba(9, 13, 22, 0.7)',
-          backdropFilter: 'saturate(160%) blur(12px)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
-        }}
-      >
-        {/* ПЛЮС + прозрачный input поверх — работает на iOS/TG */}
-        <div style={{ position: 'relative', width: 40, height: 40 }}>
-            <button
-              type="button"
-              aria-label="Прикрепить"
-              disabled={pickDisabled}
-              title={attach.length >= maxAttach ? `Достигнут лимит ${maxAttach} фото` : 'Прикрепить изображения'}
-              style={{
-                width: '100%', height: '100%', borderRadius: 10,
-                border: '1px solid #2b3552', background: '#121722',
-                display: 'grid', placeItems: 'center',
-                fontSize: 22, lineHeight: 1,
-                opacity: pickDisabled ? .5 : 1
-              }}
-            >
-              +
-            </button>
-
-            <input
-              ref={pickerRef}
-              type="file"
-              accept="image/*"
-              multiple
-              disabled={pickDisabled}
-              onChange={(e) => addFilesFromPicker(e.target.files)}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                opacity: 0,
-                cursor: pickDisabled ? 'default' : 'pointer',
-              }}
-            />
+      {/* Нижняя панель — ОБЕРНУТО В lm-composer */}
+      <div className="lm-composer">
+        {/* Плюс + прозрачный file input поверх */}
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            aria-label="Прикрепить"
+            disabled={pickDisabled}
+            title={attach.length >= maxAttach ? `Достигнут лимит ${maxAttach} фото` : 'Прикрепить изображения'}
+            className="lm-composer__btn"
+            style={{ opacity: pickDisabled ? .5 : 1 }}
+          >
+            +
+          </button>
+          <input
+            ref={pickerRef}
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={pickDisabled}
+            onChange={(e) => addFilesFromPicker(e.target.files)}
+            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: pickDisabled ? 'default' : 'pointer' }}
+          />
         </div>
 
-        <input
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-          placeholder="Я вас слушаю..."
-          style={{
-            height: 40,
-            padding: '0 12px',
-            borderRadius: 12,
-            border: '1px solid #2b3552',
-            background: '#121722',
-            color: 'var(--fg)',
-            fontSize: 16,
-            outline: 'none',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        />
+        {/* Поле ввода */}
+        <div className="lm-composer__field">
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+            placeholder="Я вас слушаю..."
+            type="text"
+          />
+        </div>
 
+        {/* Кнопка отправки */}
         <button
           onClick={send}
           disabled={(loading || uploading) || (!norm(text) && !attach.length)}
           aria-label="Отправить"
           title="Отправить"
-          style={{
-            width: 40, height: 40, borderRadius: 10,
-            border: '1px solid #2b3552',
-            background: '#121722',
-            color: 'var(--fg)',
-            fontSize: 20, lineHeight: 1,
-            display: 'grid',
-            placeItems: 'center',
-            opacity: (loading || uploading) || (!norm(text) && !attach.length) ? .6 : 1
-          }}
+          className="lm-composer__btn"
+          style={{ opacity: (loading || uploading) || (!norm(text) && !attach.length) ? .6 : 1 }}
         >
           ↑
         </button>
