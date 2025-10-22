@@ -6,6 +6,7 @@ import { I18nProvider } from '../components/I18nProvider';
 import TwaBootstrap from '../components/TwaBootstrap';
 import GlobalSafeTop from '../components/GlobalSafeTop';
 import TMAInit from '../components/TMAInit';
+import VKBootstrap from '../components/VKBootstrap';
 
 import ru from '../i18n/messages/ru';
 import en from '../i18n/messages/en';
@@ -58,13 +59,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {/* Инициализация Telegram WebApp: ready()+expand() */}
         <TMAInit />
 
-        {/* Контент приложения */}
-        <div className="lm-page">
-          {/* Глобальная инициализация TWA + i18n */}
-          <TwaBootstrap>
-            <I18nProvider messages={messages}>{children}</I18nProvider>
-          </TwaBootstrap>
-        </div>
+        {/* Контент приложения (обёрнут в VKBootstrap) */}
+        <VKBootstrap>
+          <div className="lm-page">
+            {/* Глобальная инициализация TWA + i18n */}
+            <TwaBootstrap>
+              <I18nProvider messages={messages}>{children}</I18nProvider>
+            </TwaBootstrap>
+          </div>
+        </VKBootstrap>
       </body>
     </html>
   );
