@@ -23,8 +23,6 @@
   --proplus: #f59e0b;
 }
 
-/* Никаких auto-light: убрали media query с prefers-color-scheme */
-
 /* ===== Базовые стили ===== */
 html, body { height: 100%; }
 *,
@@ -58,7 +56,7 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
 .lm-grid { display: grid; gap: 14px; }
 @media (min-width: 560px) { .lm-grid--2col { grid-template-columns: 1fr 1fr; } }
 
-/* ===== Карточки (совместимы с Link и button) ===== */
+/* ===== Карточки ===== */
 .card {
   display:flex; align-items:center; justify-content:space-between;
   padding:16px 16px;
@@ -91,7 +89,7 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
 .badge { margin-left:6px; font-weight:700; color: var(--pro); }
 .badge--gold { color: var(--proplus); }
 
-/* ===== Чип «Назад» (общий) ===== */
+/* ===== Чип «Назад» ===== */
 .back-chip {
   display:inline-flex; align-items:center; gap:8px;
   border:1px solid var(--card-border);
@@ -128,14 +126,12 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
 }
 
 /* =============================== */
-/* Chat composer (универсальный фикс под iOS 17/18, iPhone 13–15) */
-/* Добавь класс .lm-composer на контейнер нижней панели ввода,
-   .lm-composer__btn на плюс/стрелку и .lm-composer__field на input/textarea. */
+/* Chat composer (универсальный фикс под iOS 17/18) */
 /* =============================== */
 
 .lm-composer {
-  --h: 48px;                 /* единая высота */
-  --r: 14px;                 /* радиус скругления */
+  --h: 48px;
+  --r: 14px;
   position: sticky;
   bottom: max(env(safe-area-inset-bottom, 0px), 6px);
   display: grid;
@@ -153,18 +149,15 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
   border-radius: 12px;
   border: 1px solid rgba(255,255,255,.18);
   background: rgba(255,255,255,.06);
-  display: grid;            /* надёжная центровка иконок на всех девайсах */
+  display: grid;
   place-items: center;
-  line-height: 1;           /* убираем baseline-смещение */
+  line-height: 1;
   -webkit-appearance: none;
   box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 10px 26px rgba(0,0,0,.35);
 }
-
 .lm-composer__btn svg,
 .lm-composer__btn i,
-.lm-composer__btn span {
-  display: block;           /* чтобы иконка не прыгала из-за inline-baseline */
-}
+.lm-composer__btn span { display:block; }
 
 .lm-composer__field {
   min-height: var(--h);
@@ -173,44 +166,39 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
   border: 1px solid rgba(255,255,255,.18);
   background: rgba(255,255,255,.06);
   box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 10px 26px rgba(0,0,0,.35);
-  padding: 0 14px;          /* вертикаль держим высотой, не паддингами */
-  display: flex;            /* для textarea с единой высотой */
-  align-items: center;      /* центрируем текст по вертикали */
+  padding: 0 14px;
+  display: flex;
+  align-items: center;
   line-height: 1.2;
-  font-size: 16px;          /* предотвращает iOS-zoom на фокусе */
+  font-size: 16px;          /* ключевой размер против iOS zoom */
   color: var(--text);
 }
-
-/* если поле — textarea */
 .lm-composer__field textarea {
-  width: 100%;
-  height: 100%;
-  resize: none;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: inherit;
-  line-height: 1.2;
-  padding: 0;
+  width: 100%; height: 100%;
+  resize: none; border: 0; outline: none;
+  background: transparent; color: inherit;
+  line-height: 1.2; padding: 0;
 }
-
-/* если поле — input */
 .lm-composer__field input[type="text"],
 .lm-composer__field input[type="search"] {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  outline: none;
-  background: transparent;
-  color: inherit;
-  line-height: var(--h);    /* для input — идеальный вертикальный центр */
-  padding: 0;
+  width: 100%; height: 100%;
+  border: 0; outline: none;
+  background: transparent; color: inherit;
+  line-height: var(--h); padding: 0;
 }
 
 /* чтобы иконки и текст не сдвигались на ретинах */
-.lm-composer,
-.lm-composer * {
+.lm-composer, .lm-composer * {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  transform: translateZ(0); /* убирает сабпиксельные артефакты iOS */
+  transform: translateZ(0);
 }
+
+/* ===== Глобальный фикс зума iOS (VK WebView) ===== */
+input, textarea, select,
+.lm-composer__field,
+.lm-composer__field input,
+.lm-composer__field textarea {
+  font-size: 16px !important;
+}
+html { -webkit-text-size-adjust: 100%; }
