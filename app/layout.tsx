@@ -1,4 +1,6 @@
+/* path: app/layout.tsx */
 import './globals.css';
+import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import { I18nProvider } from '../components/I18nProvider';
 import TwaBootstrap from '../components/TwaBootstrap';
@@ -16,8 +18,22 @@ import hy from '../i18n/messages/hy';
 
 const dicts: Record<string, any> = { ru, en, uk, kk, tr, az, ka, hy };
 
-export const viewport = { width: 'device-width', initialScale: 1 };
-export const metadata = { title: 'Juristum', description: 'Юридический ассистент' };
+/** Всегда тёмная тема + правильный цвет статус-бара */
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: '#0b1220',
+};
+
+export const metadata: Metadata = {
+  title: 'Juristum',
+  description: 'Юридический ассистент',
+  themeColor: '#0b1220',
+  other: {
+    'color-scheme': 'dark',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+  },
+};
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies();
@@ -25,8 +41,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const messages = dicts[locale] ?? dicts['ru'];
 
   return (
-    <html lang={locale}>
-      <body>
+    <html lang={locale} data-theme="dark">
+      <head>
+        {/* Жёстко фиксируем тёмный UI и статус-бар */}
+        <meta name="color-scheme" content="dark" />
+        <meta name="theme-color" content="#0b1220" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+      </head>
+      <body style={{ background: '#0b1220', color: '#e5e7eb' }}>
         {/* Глобальный фон */}
         <div className="lm-bg" />
 
