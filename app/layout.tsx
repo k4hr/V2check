@@ -19,10 +19,13 @@ import hy from '../i18n/messages/hy';
 
 const dicts: Record<string, any> = { ru, en, uk, kk, tr, az, ka, hy };
 
-/** Всегда тёмная тема + правильный цвет статус-бара */
+/** Всегда тёмная тема + отключаем масштабирование (iOS zoom fix) */
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
   themeColor: '#0b1220',
 };
 
@@ -44,7 +47,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang={locale} data-theme="dark">
       <head>
-        {/* Жёстко фиксируем тёмный UI и статус-бар */}
+        {/* Дублируем meta viewport для совместимости с WebView VK/Telegram */}
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+        />
         <meta name="color-scheme" content="dark" />
         <meta name="theme-color" content="#0b1220" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
