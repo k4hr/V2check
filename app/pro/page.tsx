@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useEffect, useMemo } from 'react';
 import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
+import { detectPlatform } from '@/lib/platform';
 
 export default function ProSelectPage() {
   const locale: Locale = readLocale();
@@ -73,12 +74,34 @@ export default function ProSelectPage() {
     },
   };
 
+  // Определяем платформу один раз на клиенте
+  const platform = useMemo(() => detectPlatform(), []);
+
   useEffect(() => {
     const w: any = window;
-    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
     try { document.documentElement.lang = locale; } catch {}
-  }, [locale]);
 
+    // Инициализация контейнера в зависимости от платформы
+    try {
+      if (platform === 'telegram') {
+        w?.Telegram?.WebApp?.ready?.();
+        w?.Telegram?.WebApp?.expand?.();
+      } else if (platform === 'vk') {
+        // Пытаемся проинициализировать VK Mini App
+        const bridge = (w as any).vkBridge;
+        if (bridge?.send) {
+          bridge.send('VKWebAppInit').catch(() => {});
+          bridge.send('VKWebAppExpand').catch(() => {});
+        } else if (typeof w.VKWebAppInit === 'function') {
+          w.VKWebAppInit();
+          // Для старых бриджей отдельного expand может не быть — ок
+          try { w.VKWebAppExpand?.(); } catch {}
+        }
+      }
+    } catch {}
+  }, [locale, platform]);
+
+  // Хвост для передачи id (если он у тебя используется)
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -86,6 +109,9 @@ export default function ProSelectPage() {
       return id ? `?id=${encodeURIComponent(id)}` : '';
     } catch { return ''; }
   }, []);
+
+  // База ссылок в зависимости от платформы
+  const base = platform === 'vk' ? '/pro/vk' : '/pro';
 
   return (
     <main className="lm-wrap">
@@ -106,7 +132,7 @@ export default function ProSelectPage() {
       <div className="lm-grid" style={{ marginTop:16 }}>
         {/* Pro */}
         <Link
-          href={`/pro/min${linkSuffix}` as Route}
+          href={`${base}/min${linkSuffix}` as Route}
           className="card card--pro"
           style={{ textDecoration:'none' }}
         >
@@ -122,7 +148,7 @@ export default function ProSelectPage() {
 
         {/* Pro+ */}
         <Link
-          href={`/pro/max${linkSuffix}` as Route}
+          href={`${base}/max${linkSuffix}` as Route}
           className="card card--proplus"
           style={{ textDecoration:'none' }}
         >
