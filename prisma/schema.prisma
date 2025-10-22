@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -15,6 +17,11 @@ model User {
   username          String?
   firstName         String?
   lastName          String?
+
+  // --- VK (добавлено для ВК; всё опционально) ---
+  vkUserId          String?    @unique   // numeric/str id пользователя ВК
+  vkScreenName      String?              // domain/shortname пользователя
+  vkPhoto           String?              // аватар, если пригодится
 
   // подписка / тариф
   plan              String?    // 'PRO' | 'PROPLUS' (валидируем в коде)
@@ -168,18 +175,40 @@ model Payment {
   userId                  String
   telegramId              String
   payload                 String?
+
+  // Тариф/план
   tier                    String?  // 'PRO' | 'PROPLUS'
   plan                    String?  // 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR'
-  amount                  Int?     // Stars
-  currency                String?  // 'XTR'
+
+  // Сумма в МИНОРНЫХ единицах (Stars, копейки и т.п.)
+  amount                  Int?
+  currency                String?  // 'XTR' | 'RUB' | 'TON' и т.д.
   days                    Int?
+
+  // Провайдеры/платформы
+  platform                String?  // 'TG' | 'VK' | 'WEB' (добавлено для ВК)
+  provider                String?  // 'TG_STARS' | 'VK_PAY' | 'TON_DIRECT' ...
+
+  // Telegram
   telegramChargeId        String?  // telegram_payment_charge_id
+
+  // VK (добавлено для ВК)
+  vkOrderId               String?  // идентификатор заказа ВК (для идемпотентности)
+  vkAppId                 Int?     // id приложения ВК, если нужно
+  vkPayerId               String?  // vk user id плательщика
+
+  // Прочее
   providerPaymentChargeId String?  // provider_payment_charge_id
+  raw                     Json?    // сырой ответ провайдера/подпись и т.п. (для отладки)
+
   createdAt               DateTime @default(now())
 
   user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([telegramId, telegramChargeId])
+  @@unique([vkOrderId])            // у VK много NULL допустимо, но один и тот же заказ не продублируем
   @@index([userId])
   @@index([telegramId])
+  @@index([platform])
+  @@index([currency])
 }
