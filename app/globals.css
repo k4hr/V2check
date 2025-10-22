@@ -1,36 +1,26 @@
-/* ===== Палитра и базовая тема ===== */
+/* ===== Палитра и базовая (всегда тёмная) тема ===== */
 :root {
-  --border: rgba(15,23,42,.14);
-  --text: #0f172a;
-  --subtle: #475569;
+  /* говорим браузеру, что у нас dark UI */
+  color-scheme: dark;
 
-  --bg1: #f7f9ff;
-  --bg2: #eaf1ff;
+  --border: rgba(148,163,184,.12);
+  --text: #e5e7eb;
+  --subtle: #9aa3b2;
 
-  --card-bg: #ffffff;
-  --card-border: rgba(15, 23, 42, 0.08);
-  --card-hover: rgba(99, 102, 241, 0.08);
+  --bg1: #0b1220;
+  --bg2: #0f172a;
+
+  --card-bg: #111827;
+  --card-border: rgba(148,163,184,.12);
+  --card-hover: rgba(99,102,241,.10);
   --radius: 16px;
-  --shadow: 0 8px 28px rgba(2, 6, 23, 0.08);
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
 
   --pro: #6366f1;
   --proplus: #f59e0b;
 }
 
-/* Авто-инверсия под тёмную схему (Telegram/OS) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #e5e7eb;
-    --subtle: #9aa3b2;
-    --bg1: #0b1220;
-    --bg2: #0f172a;
-
-    --card-bg: #111827;
-    --card-border: rgba(148,163,184,.12);
-    --card-hover: rgba(99,102,241,.10);
-    --shadow: 0 10px 30px rgba(0,0,0,.35);
-  }
-}
+/* Никаких auto-light: убрали media query с prefers-color-scheme */
 
 /* ===== Базовые стили ===== */
 html, body { height: 100%; }
