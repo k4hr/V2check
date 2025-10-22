@@ -622,36 +622,17 @@ export default function ChatGPTPage() {
         </div>
       )}
 
-      <div
-        style={{
-          position: 'sticky',
-          bottom: 0,
-          display: 'grid',
-          gridTemplateColumns: 'auto 1fr auto',
-          gap: 6,
-          alignItems: 'center',
-          padding: 8,
-          borderRadius: 16,
-          background: 'rgba(9, 13, 22, 0.72)',
-          backdropFilter: 'saturate(160%) blur(12px)',
-          border: '1px solid rgba(255,210,120,.28)',
-          boxShadow: '0 10px 30px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,.04)',
-        }}
-      >
-        <div style={{ position: 'relative', width: 40, height: 40 }}>
+      {/* НИЖНЯЯ ПАНЕЛЬ — универсальный композер */}
+      <div className="lm-composer">
+        {/* Плюс + прозрачный file-input поверх */}
+        <div style={{ position: 'relative' }}>
           <button
             type="button"
             aria-label={TT.attachAria}
-            disabled={attach.length >= maxAttach || uploading || loading}
+            disabled={pickDisabled}
             title={attach.length >= maxAttach ? TT.attachTitleLimit(maxAttach) : TT.attachTitleDefault}
-            style={{
-              width: '100%', height: '100%', borderRadius: 10,
-              border: '1px solid rgba(255,191,73,.45)', background: '#121722',
-              display: 'grid', placeItems: 'center',
-              fontSize: 22, lineHeight: 1,
-              boxShadow: '0 8px 24px rgba(255,191,73,.14)',
-              opacity: (attach.length >= maxAttach || uploading || loading) ? .5 : 1
-            }}
+            className="lm-composer__btn"
+            style={{ opacity: pickDisabled ? .5 : 1 }}
           >
             +
           </button>
@@ -660,48 +641,31 @@ export default function ChatGPTPage() {
             type="file"
             accept="image/*"
             multiple
-            disabled={attach.length >= maxAttach || uploading || loading}
+            disabled={pickDisabled}
             onChange={(e) => addFilesFromPicker(e.target.files)}
-            style={{ position: 'absolute', inset: 0, opacity: 0 }}
+            style={{ position: 'absolute', inset: 0, opacity: 0, cursor: pickDisabled ? 'default' : 'pointer' }}
           />
         </div>
 
-        <input
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-          placeholder={TT.placeholder}
-          style={{
-            height: 40,
-            padding: '0 12px',
-            borderRadius: 12,
-            border: '1px solid #2b3552',
-            background: '#121722',
-            color: 'var(--fg)',
-            fontSize: 16,
-            outline: 'none',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        />
+        {/* Поле ввода */}
+        <div className="lm-composer__field">
+          <input
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+            placeholder={TT.placeholder}
+            type="text"
+          />
+        </div>
 
+        {/* Кнопка отправки */}
         <button
           onClick={send}
           disabled={(loading || uploading) || (!norm(text) && !attach.length)}
           aria-label={TT.sendAria}
           title={TT.sendTitle}
-          style={{
-            width: 40, height: 40, borderRadius: 10,
-            border: '1px solid rgba(255,191,73,.45)',
-            background: '#121722',
-            color: 'var(--fg)',
-            fontSize: 20, lineHeight: 1,
-            display: 'grid',
-            placeItems: 'center',
-            boxShadow: '0 8px 24px rgba(255,191,73,.14)',
-            opacity: (loading || uploading) || (!norm(text) && !attach.length) ? .6 : 1
-          }}
+          className="lm-composer__btn"
+          style={{ opacity: (loading || uploading) || (!norm(text) && !attach.length) ? .6 : 1 }}
         >
           ↑
         </button>
