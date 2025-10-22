@@ -1,4 +1,4 @@
-// lib/platform.ts
+/* path: lib/platform.ts */
 'use client';
 
 export type Platform = 'telegram' | 'vk' | 'web';
@@ -11,38 +11,61 @@ declare global {
   }
 }
 
-export function detectPlatform(): Platform {
-  // 1) Явный переключатель через query (?platform=vk|tg|telegram|web)
-  if (typeof window !== 'undefined') {
-    try {
-      const url = new URL(window.location.href);
-      const p = (url.searchParams.get('platform') || '').toLowerCase();
-      if (p === 'vk') return 'vk';
-      if (p === 'tg' || p === 'telegram') return 'telegram';
-      if (p === 'web') return 'web';
+let cached: Platform | null = null;
 
-      // 2) Признаки VK Mini Apps в урле
-      if (url.searchParams.has('vk_platform') || url.searchParams.has('vk_app_id')) {
-        return 'vk';
-      }
-
-      // 3) Признаки Telegram WebApp в урле
-      if (url.searchParams.has('tgWebAppPlatform') || url.searchParams.has('tgWebAppData')) {
-        return 'telegram';
-      }
-    } catch {
-      // молча игнорим, пойдём дальше по рантайм-признакам
+function getAllParams(): URLSearchParams {
+  // Объединяем query (?a=1) и hash (#vk_app_id=...) в единый набор
+  const params = new URLSearchParams();
+  try {
+    const url = new URL(window.location.href);
+    // query
+    url.searchParams.forEach((v, k) => params.append(k, v));
+    // hash
+    const h = (url.hash || '').replace(/^#/, '');
+    if (h) {
+      const hp = new URLSearchParams(h);
+      hp.forEach((v, k) => params.append(k, v));
     }
+  } catch {
+    // no-op
   }
+  return params;
+}
 
-  // 4) Рантайм-признаки
+export function detectPlatform(): Platform {
+  if (cached) return cached;
+
   if (typeof window !== 'undefined') {
-    if (window.vkBridge || (window as any).VKWebAppInit) return 'vk';
-    if (window.Telegram?.WebApp) return 'telegram';
+    const params = getAllParams();
+
+    // 1) Явный переключатель
+    const p = (params.get('platform') || '').toLowerCase();
+    if (p === 'vk') return (cached = 'vk');
+    if (p === 'tg' || p === 'telegram') return (cached = 'telegram');
+    if (p === 'web') return (cached = 'web');
+
+    // 2) Признаки VK Mini Apps в URL (query или hash)
+    const hasVkExplicit =
+      params.has('vk_platform') ||
+      params.has('vk_app_id') ||
+      // общая проверка на любые vk_* ключи
+      Array.from(params.keys()).some((k) => k.toLowerCase().startsWith('vk_'));
+    if (hasVkExplicit) return (cached = 'vk');
+
+    // 3) Признаки Telegram WebApp в URL
+    const hasTgExplicit =
+      params.has('tgWebAppPlatform') ||
+      params.has('tgWebAppData') ||
+      params.has('tgWebAppVersion');
+    if (hasTgExplicit) return (cached = 'telegram');
+
+    // 4) Рантайм-признаки
+    if (window.vkBridge || (window as any).VKWebAppInit) return (cached = 'vk');
+    if (window.Telegram?.WebApp) return (cached = 'telegram');
   }
 
   // 5) Фоллбек
-  return 'web';
+  return (cached = 'web');
 }
 
 // Удобные шорткаты
