@@ -1,5 +1,20 @@
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+
+function withFrameHeaders(res: NextResponse) {
+  // Разрешаем встраивание во фрейм VK и не ломаем TWA/браузер
+  res.headers.set(
+    'Content-Security-Policy',
+    "frame-ancestors 'self' https://*.vk.com https://*.vk.ru https://vk.com https://vk.ru"
+  );
+  // X-Frame-Options устарел и конфликтует с frame-ancestors — убираем
+  res.headers.delete('X-Frame-Options');
+  // Нормализуем базовые заголовки безопасности (опционально, но не мешают фреймам)
+  res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.headers.set('X-Content-Type-Options', 'nosniff');
+  return res;
+}
 
 export function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
@@ -12,7 +27,8 @@ export function middleware(req: NextRequest) {
     if (!tgHeader && legacyHeader) {
       requestHeaders.set('x-telegram-init-data', legacyHeader);
     }
-    return NextResponse.next({ request: { headers: requestHeaders } });
+    const res = NextResponse.next({ request: { headers: requestHeaders } });
+    return withFrameHeaders(res);
   }
 
   // B) Онбординг один раз: '/' -> '/country' -> '/home'
@@ -24,7 +40,8 @@ export function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
     url.search = search; // сохраняем query (?id= и т.п.)
-    return NextResponse.redirect(url);
+    const res = NextResponse.redirect(url);
+    return withFrameHeaders(res);
   }
 
   // Если онбординг уже пройден — не даём застрять на шагах
@@ -32,10 +49,13 @@ export function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = '/home';
     url.search = search;
-    return NextResponse.redirect(url);
+    const res = NextResponse.redirect(url);
+    return withFrameHeaders(res);
   }
 
-  return NextResponse.next();
+  // Обычный проход
+  const res = NextResponse.next();
+  return withFrameHeaders(res);
 }
 
 export const config = {
