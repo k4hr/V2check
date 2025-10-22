@@ -1,34 +1,48 @@
-/* ===== Палитра и базовая (всегда тёмная) тема ===== */
+/* ===== Палитра и базовая тема ===== */
 :root {
-  /* говорим браузеру, что у нас dark UI */
-  color-scheme: dark;
+  --border: rgba(15,23,42,.14);
+  --text: #0f172a;
+  --subtle: #475569;
 
-  --border: rgba(148,163,184,.12);
-  --text: #e5e7eb;
-  --subtle: #9aa3b2;
+  --bg1: #f7f9ff;
+  --bg2: #eaf1ff;
 
-  --bg1: #0b1220;
-  --bg2: #0f172a;
-
-  --card-bg: #111827;
-  --card-border: rgba(148,163,184,.12);
-  --card-hover: rgba(99,102,241,.10);
+  --card-bg: #ffffff;
+  --card-border: rgba(15, 23, 42, 0.08);
+  --card-hover: rgba(99, 102, 241, 0.08);
   --radius: 16px;
-  --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --shadow: 0 8px 28px rgba(2, 6, 23, 0.08);
 
   --pro: #6366f1;
   --proplus: #f59e0b;
 }
 
-/* Никаких auto-light: убрали media query с prefers-color-scheme */
+/* Авто-инверсия под тёмную схему (Telegram/OS) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e5e7eb;
+    --subtle: #9aa3b2;
+    --bg1: #0b1220;
+    --bg2: #0f172a;
+
+    --card-bg: #111827;
+    --card-border: rgba(148,163,184,.12);
+    --card-hover: rgba(99,102,241,.10);
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
+  }
+}
 
 /* ===== Базовые стили ===== */
 html, body { height: 100%; }
+*,
+*::before,
+*::after { box-sizing: border-box; } /* важно для точной геометрии */
 body {
   color: var(--text);
   background: var(--bg1);
   font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;
   margin: 0;
+  -webkit-text-size-adjust: 100%;
 }
 
 /* Градиентная «живая» подложка */
@@ -105,3 +119,92 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
   transition: transform .12s ease, background .12s ease, border-color .12s ease;
 }
 .ghost-link:hover { transform: translateY(-1px); background: rgba(115,130,255,.1); border-color: rgba(115,130,255,.55); }
+
+/* =============================== */
+/* Chat composer (универсальный фикс под iOS 17/18, iPhone 13–15) */
+/* Добавь класс .lm-composer на контейнер нижней панели ввода,
+   .lm-composer__btn на плюс/стрелку и .lm-composer__field на input/textarea.
+   Ничего больше менять не нужно. */
+/* =============================== */
+
+.lm-composer {
+  --h: 48px;                 /* единая высота */
+  --r: 14px;                 /* радиус скругления */
+  position: sticky;
+  bottom: max(env(safe-area-inset-bottom, 0px), 6px);
+  display: grid;
+  grid-template-columns: var(--h) 1fr var(--h);
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  background: transparent;
+  z-index: 5;
+}
+
+.lm-composer__btn {
+  height: var(--h);
+  width: var(--h);
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  display: grid;            /* надёжная центровка иконок на всех девайсах */
+  place-items: center;
+  line-height: 1;           /* убираем baseline-смещение */
+  -webkit-appearance: none;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 10px 26px rgba(0,0,0,.35);
+}
+
+.lm-composer__btn svg,
+.lm-composer__btn i,
+.lm-composer__btn span {
+  display: block;           /* чтобы иконка не прыгала из-за inline-baseline */
+}
+
+.lm-composer__field {
+  min-height: var(--h);
+  height: var(--h);
+  border-radius: var(--r);
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.06);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset, 0 10px 26px rgba(0,0,0,.35);
+  padding: 0 14px;          /* вертикаль держим высотой, не паддингами */
+  display: flex;            /* для textarea с единой высотой */
+  align-items: center;      /* центрируем текст по вертикали */
+  line-height: 1.2;
+  font-size: 16px;          /* предотвращает iOS-zoom на фокусе */
+  color: var(--text);
+}
+
+/* если поле — textarea */
+.lm-composer__field textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  line-height: 1.2;
+  padding: 0;
+}
+
+/* если поле — input */
+.lm-composer__field input[type="text"],
+.lm-composer__field input[type="search"] {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  line-height: var(--h);    /* для input — идеальный вертикальный центр */
+  padding: 0;
+}
+
+/* чтобы иконки и текст не сдвигались на ретинах */
+.lm-composer,
+.lm-composer * {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transform: translateZ(0); /* убирает сабпиксельные артефакты iOS */
+}
