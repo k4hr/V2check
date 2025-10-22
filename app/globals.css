@@ -1,42 +1,36 @@
-/* ===== Палитра и базовая тема ===== */
+/* path: app/globals.css */
+
+/* ===== Палитра и базовая (всегда тёмная) тема ===== */
 :root {
-  --border: rgba(15,23,42,.14);
-  --text: #0f172a;
-  --subtle: #475569;
+  /* Говорим браузеру и нативным контролам, что UI тёмный */
+  color-scheme: dark;
 
-  --bg1: #f7f9ff;
-  --bg2: #eaf1ff;
+  --text: #e5e7eb;          /* основной текст */
+  --fg: #e5e7eb;            /* на всякий случай для inline-стилей */
+  --subtle: #9aa3b2;        /* вторичный текст */
+  --border: rgba(148,163,184,.12);
 
-  --card-bg: #ffffff;
-  --card-border: rgba(15, 23, 42, 0.08);
-  --card-hover: rgba(99, 102, 241, 0.08);
+  --bg1: #0b1220;
+  --bg2: #0f172a;
+
+  --card-bg: #111827;
+  --card-border: rgba(148,163,184,.12);
+  --card-hover: rgba(99,102,241,.10);
   --radius: 16px;
-  --shadow: 0 8px 28px rgba(2, 6, 23, 0.08);
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
 
   --pro: #6366f1;
   --proplus: #f59e0b;
 }
 
-/* Авто-инверсия под тёмную схему (Telegram/OS) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #e5e7eb;
-    --subtle: #9aa3b2;
-    --bg1: #0b1220;
-    --bg2: #0f172a;
-
-    --card-bg: #111827;
-    --card-border: rgba(148,163,184,.12);
-    --card-hover: rgba(99,102,241,.10);
-    --shadow: 0 10px 30px rgba(0,0,0,.35);
-  }
-}
+/* Никаких auto-light: убрали media query с prefers-color-scheme */
 
 /* ===== Базовые стили ===== */
 html, body { height: 100%; }
 *,
 *::before,
-*::after { box-sizing: border-box; } /* важно для точной геометрии */
+*::after { box-sizing: border-box; }
+
 body {
   color: var(--text);
   background: var(--bg1);
@@ -76,7 +70,11 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
   transition: transform .08s ease, border-color .15s ease, background .15s ease;
   -webkit-tap-highlight-color: transparent;
 }
-.card:hover { transform: translateY(-1px); border-color: var(--pro); background: color-mix(in srgb, var(--card-bg) 90%, var(--card-hover)); }
+.card:hover {
+  transform: translateY(-1px);
+  border-color: var(--pro);
+  background: color-mix(in srgb, var(--card-bg) 90%, var(--card-hover));
+}
 .card:active { transform: translateY(0); }
 .card__left { display:flex; align-items:center; gap:12px; }
 .card__icon {
@@ -103,8 +101,13 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
 }
 .back-chip:hover { border-color: var(--pro); }
 
-/* ===== Совместимость с твоими текущими кнопками ===== */
-.list-btn { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-radius:12px; background: var(--card-bg); border:1px solid var(--card-border); color:inherit; box-shadow: var(--shadow); }
+/* ===== Совместимость с текущими кнопками ===== */
+.list-btn {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 16px; border-radius:12px;
+  background: var(--card-bg); border:1px solid var(--card-border);
+  color:inherit; box-shadow: var(--shadow);
+}
 .list-btn__left { display:flex; align-items:center; gap:10px; }
 .list-btn__right { opacity:.7; }
 .list-btn__emoji { width:26px; display:inline-flex; justify-content:center; }
@@ -118,13 +121,16 @@ h1 { font-weight: 800; letter-spacing: -0.02em; margin: 12px 0 8px; }
   color:#aab3ff; font-weight:600;
   transition: transform .12s ease, background .12s ease, border-color .12s ease;
 }
-.ghost-link:hover { transform: translateY(-1px); background: rgba(115,130,255,.1); border-color: rgba(115,130,255,.55); }
+.ghost-link:hover {
+  transform: translateY(-1px);
+  background: rgba(115,130,255,.1);
+  border-color: rgba(115,130,255,.55);
+}
 
 /* =============================== */
 /* Chat composer (универсальный фикс под iOS 17/18, iPhone 13–15) */
 /* Добавь класс .lm-composer на контейнер нижней панели ввода,
-   .lm-composer__btn на плюс/стрелку и .lm-composer__field на input/textarea.
-   Ничего больше менять не нужно. */
+   .lm-composer__btn на плюс/стрелку и .lm-composer__field на input/textarea. */
 /* =============================== */
 
 .lm-composer {
