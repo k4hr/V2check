@@ -1,15 +1,11 @@
-'use client';
-
+/* path: app/info/offer/page.tsx */
 import React from 'react';
 import Link from 'next/link';
-import {
-  PRICES,
-  type Plan,
-  type Tier,
-  getPriceFor,
-} from '@/lib/pricing';
+import type { Metadata } from 'next';
+import BackBtn from '@/components/BackBtn';
+import { PRICES, type Plan, type Tier, getPriceFor } from '@/lib/pricing';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Публичная оферта — LiveManager',
   description: 'Публичная оферта на оказание услуг сервиса LiveManager',
 };
@@ -32,6 +28,10 @@ function fmtRUB(kopecks: number) {
 export default function OfferPage() {
   return (
     <main className="lm-page" style={{ maxWidth: 900 }}>
+      <div style={{ position: 'relative', marginBottom: 6 }}>
+        <BackBtn fallback="/cabinet" />
+      </div>
+
       <h1>Публичная оферта на оказание услуг LiveManager</h1>
       <p className="lm-subtitle">Редакция от 01.10.2025</p>
 
@@ -46,9 +46,8 @@ export default function OfferPage() {
       <ul>
         <li>
           <b>Сервис (LiveManager)</b> — программно-аппаратный комплекс,
-          предоставляющий онлайн-инструменты и чат-ассистента на базе ИИ, а
-          также иные функции, доступные через мини-приложения Telegram/VK и
-          веб-интерфейс.
+          предоставляющий онлайн-инструменты и чат-ассистента на базе ИИ,
+          доступные через мини-приложения Telegram/VK и веб-интерфейс.
         </li>
         <li>
           <b>Аккаунт</b> — учётная запись, создаваемая посредством авторизации в
@@ -130,9 +129,9 @@ export default function OfferPage() {
       <ul>
         <li>
           Запрещается: (а) нарушать права третьих лиц; (б) пытаться обойти
-          лимиты; (в) использовать Сервис для противоправных целей; (г)
-          реинжиниринг, копирование и распространение компонентов Сервиса без
-          согласия Исполнителя.
+          ограничения доступа/лимиты; (в) использовать Сервис для противоправных
+          целей; (г) реинжиниринг, копирование и распространение компонентов
+          Сервиса без согласия Исполнителя.
         </li>
         <li>
           Контент ИИ может содержать неточности. Пользователь обязан критически
@@ -180,7 +179,7 @@ export default function OfferPage() {
       <p>
         Стороны освобождаются от ответственности за частичное или полное
         неисполнение обязательств при наступлении обстоятельств непреодолимой
-        силы.
+        силы (форс-мажор).
       </p>
 
       <h2>12. Срок действия и расторжение</h2>
@@ -199,36 +198,36 @@ export default function OfferPage() {
       <h2>13. Применимое право и споры</h2>
       <p>
         Применяется право РФ. Споры решаются в претензионном порядке, затем в
-        суде по местонахождению Исполнителя (если иное не предусмотрено
+        суде по месту нахождения Исполнителя (если иное не предусмотрено
         императивной нормой).
       </p>
 
       <h2>14. Реквизиты и контакты</h2>
-      <p><i>Замените плейсхолдеры на реальные данные перед публикацией.</i></p>
       <ul>
         <li>Исполнитель: <b>«LiveManager»</b></li>
         <li>Поддержка: <b>support@seimngr</b></li>
       </ul>
 
-      {/* =================== Приложение 1: тарифы =================== */}
+      {/* ============ Приложение 1. Тарифы ============ */}
       <h2 style={{ marginTop: 32 }}>Приложение 1. Тарифы и стоимость</h2>
       <p>
-        Цены автоматически подтягиваются из файла <code>lib/pricing.ts</code>.
-        Для <b>Telegram</b> стоимость указана в <b>XTR (Stars)</b>. Для <b>VK</b> — в
-        <b> рублях</b> (итоговые суммы формируются из копеек). Конечная сумма,
-        отображаемая платёжной площадкой, может отличаться из-за комиссий и
-        является приоритетной.
+        Цены подтягиваются из <code>lib/pricing.ts</code>. Для <b>Telegram</b> —{' '}
+        <b>XTR (Stars)</b>, для <b>VK</b> — <b>рубли</b> (копейки). Итоговая
+        сумма у платёжного провайдера может отличаться из-за комиссий и является
+        приоритетной.
       </p>
 
       {TIERS.map((tier) => (
         <section key={tier} style={{ marginTop: 18 }}>
           <h3>{tier === 'PRO' ? 'Тариф «Pro»' : 'Тариф «Pro+»'}</h3>
 
-          <div style={{
-            overflowX: 'auto',
-            border: '1px solid var(--card-border)',
-            borderRadius: 12,
-          }}>
+          <div
+            style={{
+              overflowX: 'auto',
+              border: '1px solid var(--card-border)',
+              borderRadius: 12,
+            }}
+          >
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,.04)' }}>
@@ -260,7 +259,7 @@ export default function OfferPage() {
 
       <p style={{ marginTop: 12, opacity: .8 }}>
         Примечание: цены могут изменяться. Обновления публикуются в интерфейсе
-        Сервиса; оплаченное ранее не пересчитывается до окончания периода.
+        Сервиса; ранее оплаченное не пересчитывается до окончания периода.
       </p>
 
       <p style={{ marginTop: 24 }}>
