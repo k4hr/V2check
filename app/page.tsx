@@ -6,17 +6,25 @@ import type { Route } from 'next';
 import { useEffect, useMemo } from 'react';
 
 function haptic(type: 'light' | 'medium' = 'light') {
-  try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
+  try {
+    (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);
+  } catch {}
+}
+
+function setCookie(k: string, v: string) {
+  try {
+    const maxAge = 60 * 60 * 24 * 365; // 1 год
+    document.cookie = `${k}=${encodeURIComponent(v)}; Path=/; Max-Age=${maxAge}; SameSite=Lax`;
+  } catch {}
 }
 
 export default function LandingPage() {
-  // Телега разворачивается на фулл
   useEffect(() => {
     const w: any = window;
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // Сохраняем возможный ?id= (твой режим отладки/проброса)
+  // Протаскиваем debug ?id=...
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -26,146 +34,142 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <main className="lm-page" style={{ maxWidth: 900 }}>
-      {/* Анимированная «аурора» поверх глобального фона */}
-      <div className="lp-aurora" aria-hidden />
+    <main className="lp">
+      {/* мягкие ореолы */}
+      <div className="lp-orb orb-tr" aria-hidden />
+      <div className="lp-orb orb-bl" aria-hidden />
 
-      {/* Герой-блок */}
-      <section className="lp-hero">
-        <div className="lp-badge">LiveManager</div>
-        <h1 className="lp-title">CHATGPT 5</h1>
-        <p className="lp-subtitle">Продвинутый помощник на базе&nbsp;ChatGPT 5</p>
+      <div className="lp-inner">
+        {/* единственная крупная надпись */}
+        <h1 className="lp-title">
+          <span className="lp-gpt">CHATGPT&nbsp;5</span>
+        </h1>
 
-        <div className="lp-cta-wrap">
-          <Link
-            href={`/home${linkSuffix}` as Route}
-            className="lp-cta"
-            onClick={() => haptic('medium')}
-            aria-label="Начать работу"
-          >
-            НАЧАТЬ
-            <span className="lp-cta-glow" aria-hidden />
-          </Link>
-        </div>
-
-        <p className="lp-hint">Работает в Telegram и ВКонтакте</p>
-      </section>
+        {/* единственная кнопка */}
+        <Link
+          href={`/home${linkSuffix}` as Route}
+          className="lp-cta"
+          aria-label="Начать"
+          onClick={() => {
+            setCookie('welcomed', '1'); // пропускаем онбординг
+            haptic('medium');
+          }}
+        >
+          НАЧАТЬ
+          <span className="lp-cta-glow" aria-hidden />
+        </Link>
+      </div>
 
       <style jsx>{`
-        /* Героическая коробка */
-        .lp-hero {
+        .lp {
           position: relative;
-          border: 1px solid var(--card-border);
-          border-radius: 20px;
-          padding: 28px 22px 22px;
-          margin-top: 6vh;
-          background:
-            radial-gradient(120% 180% at 110% -10%, rgba(99,102,241,.18), transparent 60%),
-            radial-gradient(120% 160% at -10% 10%, rgba(59,130,246,.12), transparent 55%),
-            linear-gradient(180deg, #10162a 0%, #0e1426 100%);
-          box-shadow: 0 18px 60px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.03);
+          min-height: 100dvh;
+          padding: 24px 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
+          display: grid;
+          place-items: center;
+          color: var(--text);
+          background: transparent; /* у тебя уже есть .lm-bg */
           overflow: hidden;
         }
-
-        .lp-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          font-weight: 700;
-          letter-spacing: .3px;
-          font-size: 13px;
-          padding: 8px 12px;
-          border-radius: 999px;
-          border: 1px solid rgba(148,163,184,.18);
-          background: rgba(148,163,184,.06);
-          box-shadow: 0 8px 26px rgba(0,0,0,.35);
-          color: var(--subtle);
+        .lp-inner {
+          width: 100%;
+          max-width: 860px;
+          text-align: center;
         }
-
         .lp-title {
-          margin: 10px 0 6px;
-          font-size: clamp(36px, 7vw, 64px);
-          line-height: 1;
+          margin: 0 0 26px;
+          line-height: 1.06;
+          font-size: clamp(42px, 9vw, 90px);
           font-weight: 900;
           letter-spacing: -0.02em;
-          text-shadow: 0 6px 40px rgba(101,115,255,.25);
+          text-wrap: balance;
         }
-
-        .lp-subtitle {
-          margin: 0;
-          color: var(--subtle);
-          font-size: clamp(14px, 2.6vw, 18px);
+        .lp-gpt {
+          background: conic-gradient(
+            from 180deg at 50% 50%,
+            #9aa7ff,
+            #6aa8ff,
+            #a28bff,
+            #ffdb86,
+            #9aa7ff
+          );
+          background-size: 200% 200%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          animation: shimmer 6s ease-in-out infinite;
+          text-shadow: 0 0 28px rgba(141, 160, 255, 0.28);
+          white-space: nowrap;
         }
-
-        .lp-cta-wrap {
-          margin-top: 22px;
-          display: flex;
-          gap: 12px;
+        @keyframes shimmer {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
         }
 
         .lp-cta {
           position: relative;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          padding: 14px 22px;
-          border-radius: 14px;
+          display: inline-grid;
+          place-items: center;
+          padding: 16px 30px;
+          border-radius: 18px;
+          font-weight: 900;
+          letter-spacing: 0.06em;
           text-decoration: none;
-          font-weight: 800;
-          letter-spacing: .3px;
-          color: #eef2ff;
-          background: linear-gradient(135deg, #6573ff 0%, #3aa0ff 100%);
-          border: 1px solid rgba(120,130,255,.55);
+          color: #fff;
+          background:
+            radial-gradient(120% 200% at 0% 0%, rgba(99,102,241,.35), transparent 52%),
+            linear-gradient(135deg, #5a69ff, #3a7bff 48%, #7a5cff);
+          border: 1px solid rgba(110, 134, 255, 0.85);
           box-shadow:
-            0 12px 38px rgba(60,110,255,.35),
-            0 0 0 1px rgba(255,255,255,.06) inset;
-          transform: translateY(0);
-          transition: transform .12s ease, box-shadow .2s ease, filter .2s ease;
-          -webkit-tap-highlight-color: transparent;
+            0 12px 38px rgba(63, 99, 241, 0.38),
+            0 0 0 1px rgba(255,255,255,0.07) inset;
+          transform: translateZ(0);
+          transition: transform 0.08s ease, box-shadow 0.2s ease, filter 0.2s ease;
+          isolation: isolate;
         }
-        .lp-cta:hover { transform: translateY(-1px); }
-        .lp-cta:active { transform: translateY(0); filter: brightness(.98); }
+        .lp-cta:hover {
+          transform: translateY(-1px);
+          box-shadow:
+            0 16px 50px rgba(63, 99, 241, 0.48),
+            0 0 0 1px rgba(255,255,255,0.09) inset;
+          filter: brightness(1.06);
+        }
+        .lp-cta:active { transform: translateY(0); }
 
-        /* Мягкое «дыхание» свечения */
         .lp-cta-glow {
           position: absolute;
-          inset: -12px;
-          border-radius: inherit;
-          background:
-            radial-gradient(60% 60% at 50% 50%, rgba(100,120,255,.35), transparent 70%);
-          filter: blur(14px);
-          animation: pulse 2.8s ease-in-out infinite;
+          inset: -25%;
+          border-radius: 24px;
+          background: radial-gradient(
+            60% 60% at 50% 50%,
+            rgba(120, 150, 255, 0.35),
+            rgba(120, 150, 255, 0.12) 40%,
+            transparent 70%
+          );
+          filter: blur(18px);
+          z-index: -1;
+          animation: pulse 2.6s ease-in-out infinite;
           pointer-events: none;
         }
         @keyframes pulse {
-          0%, 100% { opacity: .55; }
-          50%      { opacity: .9; }
+          0%, 100% { opacity: 0.55; transform: scale(1); }
+          50% { opacity: 0.85; transform: scale(1.03); }
         }
 
-        .lp-hint {
-          margin: 14px 0 0;
-          font-size: 12px;
-          opacity: .45;
-        }
-
-        /* Анимация «ауроры» поверх глобального фона */
-        .lp-aurora {
-          position: fixed;
-          inset: 0;
-          z-index: -1;
+        /* мягкие ореолы на фоне */
+        .lp-orb {
+          position: absolute;
+          width: 60vmin;
+          height: 60vmin;
+          border-radius: 50%;
+          filter: blur(48px);
+          opacity: 0.18;
           pointer-events: none;
-          background:
-            radial-gradient(40% 30% at 20% 10%, rgba(115,130,255,.10), transparent 60%),
-            radial-gradient(50% 40% at 80% 0%, rgba(63,188,255,.10), transparent 60%),
-            radial-gradient(30% 30% at 70% 80%, rgba(168,85,247,.08), transparent 60%);
-          mask-image: radial-gradient(60% 60% at 50% 40%, #000 60%, transparent 100%);
-          animation: auroraShift 22s linear infinite;
+          background: radial-gradient(closest-side, #7380ff, transparent 70%);
         }
-        @keyframes auroraShift {
-          0%   { transform: translate3d(0,0,0) scale(1); }
-          50%  { transform: translate3d(0,-2%,0) scale(1.02); }
-          100% { transform: translate3d(0,0,0) scale(1); }
-        }
+        .orb-tr { top: -18vmin; right: -18vmin; }
+        .orb-bl { bottom: -22vmin; left: -22vmin; }
       `}</style>
     </main>
   );
