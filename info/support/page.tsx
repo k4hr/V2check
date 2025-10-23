@@ -17,9 +17,7 @@ export default function SupportPage() {
       </div>
 
       <h1>Поддержка</h1>
-      <p className="lm-subtitle">
-        Мы стараемся отвечать быстро. Обычно — в течение 1–2 рабочих дней.
-      </p>
+      <p className="lm-subtitle">Обычно отвечаем в течение 1–2 рабочих дней.</p>
 
       <div
         style={{
@@ -32,31 +30,21 @@ export default function SupportPage() {
       >
         <h3 style={{ marginTop: 0 }}>Как с нами связаться</h3>
         <ul>
-          <li>
-            Email: <a href="mailto:support@seimngr">support@seimngr</a>
-          </li>
-          <li>
-            Вопросы по оплате/подписке: укажите ID аккаунта (Telegram/VK) и
-            номер транзакции провайдера.
-          </li>
-          <li>
-            Правовые документы:{' '}
-            <Link href="/info/offer">Оферта</Link> ·{' '}
-            <Link href="/info/privacy">Политика конфиденциальности</Link>
-          </li>
+          <li>Email: <a href="mailto:support@seimngr">support@seimngr</a></li>
+          <li>По платежам укажите ID аккаунта (Telegram/VK) и номер транзакции.</li>
+          <li>Документы: <Link href="/info/offer">Оферта</Link> · <Link href="/info/privacy">Политика</Link></li>
         </ul>
 
-        <h3>Что приложить к обращению</h3>
+        <h3>Что приложить</h3>
         <ul>
-          <li>краткое описание проблемы и шаги для воспроизведения;</li>
-          <li>скриншоты/экранные записи (если есть);</li>
-          <li>ID пользователя (Telegram/VK) и время возникновения проблемы.</li>
+          <li>описание проблемы и шаги для воспроизведения;</li>
+          <li>скриншоты/запись экрана (по возможности);</li>
+          <li>ID пользователя (Telegram/VK) и время возникновения.</li>
         </ul>
       </div>
 
       <p style={{ marginTop: 24, opacity: 0.8 }}>
-        Если вопрос срочный (оплата/доступ), напишите в теме письма
-        <i> «URGENT»</i> — такие обращения обрабатываются в приоритете.
+        Срочно? Добавьте в тему письма <i>URGENT</i> — такие обращения идут в приоритете.
       </p>
     </main>
   );
