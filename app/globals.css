@@ -1,5 +1,3 @@
-/* path: app/globals.css */
-
 /* ===== Палитра и базовая (всегда тёмная) тема ===== */
 :root {
   /* Говорим браузеру и нативным контролам, что UI тёмный */
@@ -210,24 +208,45 @@ html { -webkit-text-size-adjust: 100%; }
 
 .tools-equal { display: grid; gap: 14px; }
 
-/* внутри списков инструментов карточку делаем колонкой,
-   чтобы кнопка легко прижималась к низу */
+/* карточка становится колонкой: шапка, контент, CTA внизу */
 .tools-equal .card {
   flex-direction: column;
   align-items: stretch;
   gap: 12px;
 }
 
-/* сама CTA-кнопка (как правило .list-btn) — одинаковая высота */
+/* фикс для иконок, чтобы верх не «гулял» */
+.tools-equal .card .card__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  flex: 0 0 56px;
+  display: grid;
+  place-items: center;
+}
+
+/* описание ограничиваем 2 строками (чтобы высота карточек была предсказуемой) */
+.tools-equal .card p {
+  margin-top: 6px;
+  opacity: .85;
+  font-size: 14px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* CTA-кнопка — одинаковая высота и прижата к низу карточки */
 .tools-equal .card .list-btn {
-  margin-top: auto;            /* прижать к низу карточки */
+  margin-top: auto;
   min-height: 56px;
-  height: 56px;                /* фиксируем высоту, ничего не «пляшет» */
-  padding: 0 18px;             /* вертикаль высотой, а не паддингами */
-  justify-content: center;     /* текст строго по центру */
+  height: 56px;
+  padding: 0 18px;
+  justify-content: center;
   align-items: center;
   border-radius: 16px;
 }
 
-/* если CTA — это ссылка */
+/* если CTA — это ссылка, убираем подчёркивание */
 .tools-equal .card a.list-btn { text-decoration: none; }
