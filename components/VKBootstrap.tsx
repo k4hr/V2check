@@ -1,3 +1,4 @@
+/* path: components/VKBootstrap.tsx */
 'use client';
 
 import { useEffect } from 'react';
@@ -6,6 +7,7 @@ import bridge from '@vkontakte/vk-bridge';
 declare global {
   interface Window {
     __VK_API_HOST?: string;
+    __VK_PARAMS__?: string;
   }
 }
 
@@ -13,31 +15,74 @@ type Props = { children?: React.ReactNode };
 
 /**
  * Инициализация VK Bridge:
- * - bridge.init + GetConfig → сохраняем api_host в window + cookie (для сервера)
+ * - VKWebAppInit (+ попытка Expand)
+ * - VKWebAppGetConfig → сохраняем api_host в window + cookie (для сервера)
+ * - VKWebAppGetLaunchParams → сохраняем vk_* + sign в cookie vk_params (для подписи на сервере)
  * - подписка на UpdateConfig (если поменяется api_host/схема)
- * - форсим тёмную тему визуально + просим VK задать тёмные бары
+ * - форсим тёмную тему визуально + просим VK окрасить бары
  */
 export default function VKBootstrap({ children }: Props) {
   useEffect(() => {
-    let unsub: ((e: any) => void) | null = null;
+    let subscribedHandler: ((e: any) => void) | null = null;
+
+    const setCookie = (name: string, value: string, maxAgeSec = 86400) => {
+      try {
+        document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSec}; SameSite=Lax`;
+      } catch {}
+    };
 
     const setHost = (host?: string) => {
-      const h = (host || '').trim();
+      const h = String(host || '').trim().replace(/^https?:\/\//i, '').replace(/\/+$/g, '');
       if (!h) return;
       window.__VK_API_HOST = h;
-      // кука на сутки для серверных роутов
+      setCookie('vk_api_host', h, 86400);
+    };
+
+    // Собираем строку "vk_* & sign" в каноническом порядке (vk_* отсортированы, sign в конце)
+    const buildVkParamsString = (obj: Record<string, any>) => {
+      const entries = Object.entries(obj || {}).filter(
+        ([k]) => k === 'sign' || k.startsWith('vk_')
+      ) as [string, any][];
+
+      let sign = '';
+      const vkOnly: [string, string][] = [];
+      for (const [k, v] of entries) {
+        if (k === 'sign') sign = String(v ?? '');
+        else vkOnly.push([k, String(v ?? '')]);
+      }
+      vkOnly.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      const qs = vkOnly.map(([k, v]) => `${k}=${v}`).join('&');
+      return sign ? (qs ? `${qs}&sign=${sign}` : `sign=${sign}`) : qs;
+    };
+
+    const persistLaunchParams = async () => {
       try {
-        document.cookie = `vk_api_host=${encodeURIComponent(h)}; Path=/; Max-Age=86400; SameSite=Lax`;
-      } catch {}
+        const lp: any = await bridge.send('VKWebAppGetLaunchParams').catch(() => ({}));
+        let raw = buildVkParamsString(lp || {});
+        // Fallback: если по каким-то причинам пусто, попробуем собрать из location.hash/query
+        if (!raw) {
+          const all = new URLSearchParams(location.search + location.hash.replace(/^#/, location.search ? '&' : '?'));
+          const tmp: Record<string, string> = {};
+          all.forEach((v, k) => {
+            if (k === 'sign' || k.startsWith('vk_')) tmp[k] = v;
+          });
+          raw = buildVkParamsString(tmp);
+        }
+        if (raw) {
+          window.__VK_PARAMS__ = raw;
+          setCookie('vk_params', raw, 86400); // это кука, с которой сервер будет проверять подпись
+        }
+      } catch {
+        // ignore
+      }
     };
 
     const forceDark = () => {
       try {
         document.documentElement.style.colorScheme = 'dark';
-        // иногда помогает принудительное объявление темы
         document.documentElement.setAttribute('data-force-dark', '1');
       } catch {}
-      // попросим VK окрасить системные бары потемнее (если поддерживает)
+      // Попросим VK окрасить системные бары (если поддерживается)
       bridge
         .send('VKWebAppSetViewSettings', {
           status_bar_style: 'dark',
@@ -49,32 +94,35 @@ export default function VKBootstrap({ children }: Props) {
 
     (async () => {
       try {
-        // инициализация бриджа
         await bridge.send('VKWebAppInit');
+        // иногда помогает, особенно в iOS WebView
+        bridge.send('VKWebAppExpand').catch(() => {});
 
-        // получаем конфиг платформы/окружения
+        // Конфиг окружения
         const cfg: any = await bridge.send('VKWebAppGetConfig').catch(() => ({}));
-        setHost(cfg?.api_host || 'api.vk.ru'); // дефолт — официальный хост
+        setHost(cfg?.api_host || 'api.vk.ru');
         forceDark();
+
+        // Launch params для серверной аутентификации
+        await persistLaunchParams();
       } catch {
-        // если не в VK — просто молчим
+        // не в VK — просто молчим
       }
 
-      // подписываемся на апдейты окружения (смена api_host/темы и т.д.)
+      // Подписка на изменения конфигурации
       const handler = (e: any) => {
         if (e?.detail?.type === 'VKWebAppUpdateConfig') {
           const data = e.detail.data || {};
           if (data.api_host) setHost(data.api_host);
-          // даже если VK прислал светлую схему — оставляем приложение тёмным
-          forceDark();
+          forceDark(); // даже если VK прислал светлую схему — мы остаёмся тёмными
         }
       };
       bridge.subscribe(handler);
-      unsub = handler;
+      subscribedHandler = handler;
     })();
 
     return () => {
-      if (unsub) bridge.unsubscribe(unsub);
+      if (subscribedHandler) bridge.unsubscribe(subscribedHandler);
     };
   }, []);
 
