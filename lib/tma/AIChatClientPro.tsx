@@ -44,6 +44,7 @@ function isProPlusActiveFromResp(data: any): boolean {
   const raw = String(sub?.plan || '').toUpperCase().replace(/\s+|[_-]/g, '');
   return raw === 'PROPLUS' || raw === 'PRO+' || raw.includes('PROPLUS');
 }
+
 // вытаскиваем http(s)-картинки из текста; data: намеренно игнорируем
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
@@ -52,6 +53,7 @@ function extractImageUrlsFromText(text: string): string[] {
   while ((m = re.exec(text)) !== null) urls.add(m[1]);
   return Array.from(urls);
 }
+
 // корректное открытие ссылок внутри TG WebApp / браузера
 function openLink(url: string) {
   try {
@@ -63,6 +65,19 @@ function openLink(url: string) {
 }
 
 type ThreadState = { id?: string; starred: boolean; busy: boolean };
+
+/** Всегда добавляем каноничные заголовки аутентификации для API */
+function authHeaders(): Record<string, string> {
+  const init = TG_INIT();
+  const h: Record<string, string> = {};
+  if (init) {
+    // основной
+    h['x-telegram-init-data'] = init;
+    // совместимость (миддлваре умеет поднимать его в x-telegram-init-data)
+    h['x-init-data'] = init;
+  }
+  return h;
+}
 
 export default function AIChatClientPro(props: AIChatClientProProps) {
   const {
@@ -108,7 +123,14 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     trayRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
   }, [attach.length]);
 
-  // ?id= для прокидывания TG id
+  // revoke object URLs при размонтировании
+  useEffect(() => {
+    return () => {
+      try { attach.forEach(a => URL.revokeObjectURL(a.previewUrl)); } catch {}
+    };
+  }, [attach]);
+
+  // ?id= для прокидывания TG id (debug)
   const idSuffix = useMemo(() => {
     if (!passthroughIdParam) return '';
     try {
@@ -125,8 +147,12 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         let endpoint = '/api/me';
         const headers: Record<string, string> = {};
         const init = TG_INIT();
-        if (init) headers['x-init-data'] = init;
-        else if (DEBUG && idSuffix) endpoint += idSuffix;
+        if (init) {
+          // /api/me у тебя понимает x-init-data через миддлварь — оставляю
+          headers['x-init-data'] = init;
+        } else if (DEBUG && idSuffix) {
+          endpoint += idSuffix;
+        }
 
         const r = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
         const data = await r.json().catch(() => ({}));
@@ -146,7 +172,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       (async () => {
         try {
           const r = await fetch(`/api/chat-threads?id=${encodeURIComponent(tid)}`, {
-            headers: { 'X-Tg-Init-Data': TG_INIT() }
+            headers: authHeaders(),
           });
           const data = await r.json();
           if (data?.ok) {
@@ -181,7 +207,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       if (thread.id && thread.starred) {
         const r = await fetch('/api/chat-threads', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ id: thread.id, starred: false }),
         });
         const data = await r.json();
@@ -196,7 +222,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         const emoji = extractLeadingEmoji(title) || undefined;
         const r = await fetch('/api/chat-threads' + idSuffix, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ toolSlug: mode || 'chat', title, emoji, starred: true }),
         });
         const data = await r.json();
@@ -211,7 +237,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         // есть тред — дожмём звезду
         const r = await fetch('/api/chat-threads', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
           body: JSON.stringify({ id: tid, starred: true }),
         });
         const data = await r.json();
@@ -227,7 +253,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       const payload = { threadId: tid, messages: collectMsgsForSave() };
       const r2 = await fetch('/api/chat-threads/messages' + idSuffix, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(payload),
       });
       const data2 = await r2.json();
@@ -290,7 +316,6 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
         const fd = new FormData();
         fd.append('file', it.file);
-        const initData = TG_INIT();
 
         const ctrl = new AbortController();
         const to = setTimeout(() => ctrl.abort(), 60_000);
@@ -299,7 +324,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           res = await fetch('/api/upload-image' + idSuffix, {
             method: 'POST',
             body: fd,
-            headers: { 'X-Tg-Init-Data': initData },
+            headers: authHeaders(),
             signal: ctrl.signal,
           });
         } finally { clearTimeout(to); }
@@ -449,128 +474,128 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           const isUser = m.role === 'user';
           const hasImages = Array.isArray(m.images) && m.images.length > 0;
 
-        return (
-          <div key={i} style={{
-            margin: '10px 0',
-            display: 'flex',
-            justifyContent: isUser ? 'flex-end' : 'flex-start'
-          }}>
-            <div style={{ maxWidth: '86%' }}>
-              {/* текстовый пузырь */}
-              {m.content && m.content !== '(изображения)' && (
-                <div
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: 14,
-                    lineHeight: 1.5,
-                    background: isUser ? '#24304a' : '#1a2132',
-                    border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
-                    boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
-                    whiteSpace: 'pre-wrap',
-                    fontSize: 16,
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {m.content}
-                </div>
-              )}
-
-              {/* «галерея» изображений ассистента */}
-              {hasImages && (
-                <div
-                  style={{
-                    marginTop: m.content && m.content !== '(изображения)' ? 8 : 0,
-                    padding: 8,
-                    borderRadius: 14,
-                    background: '#101622',
-                    border: '1px solid #2b3552',
-                  }}
-                >
+          return (
+            <div key={i} style={{
+              margin: '10px 0',
+              display: 'flex',
+              justifyContent: isUser ? 'flex-end' : 'flex-start'
+            }}>
+              <div style={{ maxWidth: '86%' }}>
+                {/* текстовый пузырь */}
+                {m.content && m.content !== '(изображения)' && (
                   <div
                     style={{
-                      display: 'grid',
-                      gap: 8,
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                      padding: '10px 12px',
+                      borderRadius: 14,
+                      lineHeight: 1.5,
+                      background: isUser ? '#24304a' : '#1a2132',
+                      border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
+                      boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
+                      whiteSpace: 'pre-wrap',
+                      fontSize: 16,
+                      wordBreak: 'break-word',
                     }}
                   >
-                    {m.images!.map((src, idx) => (
-                      <figure
-                        key={idx}
-                        style={{
-                          margin: 0,
-                          position: 'relative',
-                          borderRadius: 12,
-                          overflow: 'hidden',
-                          border: '1px solid #2b3552',
-                          background: '#0f1422',
-                          aspectRatio: '1 / 1',
-                        }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={src}
-                          alt=""
-                          onClick={() => openLink(src)}
-                          style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                            cursor: 'zoom-in',
-                          }}
-                        />
+                    {m.content}
+                  </div>
+                )}
 
-                        {/* overlay с кнопками */}
-                        <div
+                {/* «галерея» изображений ассистента */}
+                {hasImages && (
+                  <div
+                    style={{
+                      marginTop: m.content && m.content !== '(изображения)' ? 8 : 0,
+                      padding: 8,
+                      borderRadius: 14,
+                      background: '#101622',
+                      border: '1px solid #2b3552',
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'grid',
+                        gap: 8,
+                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+                      }}
+                    >
+                      {m.images!.map((src, idx) => (
+                        <figure
+                          key={idx}
                           style={{
-                            position: 'absolute',
-                            bottom: 6,
-                            right: 6,
-                            display: 'flex',
-                            gap: 6,
+                            margin: 0,
+                            position: 'relative',
+                            borderRadius: 12,
+                            overflow: 'hidden',
+                            border: '1px solid #2b3552',
+                            background: '#0f1422',
+                            aspectRatio: '1 / 1',
                           }}
                         >
-                          <a
-                            href={src}
-                            download
-                            title="Скачать"
-                            style={{
-                              padding: '6px 8px',
-                              borderRadius: 10,
-                              background: 'rgba(0,0,0,.45)',
-                              border: '1px solid rgba(255,255,255,.25)',
-                              color: '#fff',
-                              fontSize: 12,
-                              textDecoration: 'none',
-                              backdropFilter: 'blur(6px)',
-                            }}
-                          >
-                            Скачать
-                          </a>
-                          <button
-                            type="button"
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={src}
+                            alt=""
                             onClick={() => openLink(src)}
-                            title="Открыть"
                             style={{
-                              padding: '6px 8px',
-                              borderRadius: 10,
-                              background: 'rgba(0,0,0,.45)',
-                              border: '1px solid rgba(255,255,255,.25)',
-                              color: '#fff',
-                              fontSize: 12,
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              display: 'block',
+                              cursor: 'zoom-in',
+                            }}
+                          />
+
+                          {/* overlay с кнопками */}
+                          <div
+                            style={{
+                              position: 'absolute',
+                              bottom: 6,
+                              right: 6,
+                              display: 'flex',
+                              gap: 6,
                             }}
                           >
-                            Открыть
-                          </button>
-                        </div>
-                      </figure>
-                    ))}
+                            <a
+                              href={src}
+                              download
+                              title="Скачать"
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 10,
+                                background: 'rgba(0,0,0,.45)',
+                                border: '1px solid rgba(255,255,255,.25)',
+                                color: '#fff',
+                                fontSize: 12,
+                                textDecoration: 'none',
+                                backdropFilter: 'blur(6px)',
+                              }}
+                            >
+                              Скачать
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => openLink(src)}
+                              title="Открыть"
+                              style={{
+                                padding: '6px 8px',
+                                borderRadius: 10,
+                                background: 'rgba(0,0,0,.45)',
+                                border: '1px solid rgba(255,255,255,.25)',
+                                color: '#fff',
+                                fontSize: 12,
+                              }}
+                            >
+                              Открыть
+                            </button>
+                          </div>
+                        </figure>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        );
+          );
         })}
         {(loading || uploading) && (
           <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>Думаю…</div>
