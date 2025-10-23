@@ -89,13 +89,19 @@ export default function ProPlusHub() {
           color: var(--fg, #fff); outline: none; font-size: 16px;
         }
 
-        .grid { display: grid; gap: 16px; margin-top: 16px; }
-
-        /* Карточка фиксированной высоты с сеткой */
-        .pro-card {
-          height: 150px;
+        /* Вариант B: родительская сетка задаёт единую высоту строк */
+        .grid {
           display: grid;
-          grid-template-rows: auto 1fr auto;
+          gap: 16px;
+          margin-top: 16px;
+          grid-auto-rows: 192px; /* единая высота всех карточек */
+        }
+
+        /* Карточка занимает всю отведённую строку и сама — трёхрядная сетка */
+        .pro-card {
+          height: 100%;
+          display: grid;
+          grid-template-rows: minmax(0,auto) 1fr auto; /* контент сверху не распирает */
           padding: 20px; border-radius: 18px; color: #fff;
           background:
             radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.18), rgba(255,255,255,.03)),
@@ -116,20 +122,20 @@ export default function ProPlusHub() {
         }
         .pro-text { line-height: 1.15; min-width: 0; }
 
-        /* Заголовок — меньше и максимум 2 строки (две «полные» строки гарантированно поместятся) */
+        /* Заголовок — максимум 2 строки */
         .pro-title {
           display:block;
           font-weight: 800;
-          font-size: 16px;                /* было 18px */
+          font-size: 16px;
           line-height: 1.2;
           overflow: hidden;
           text-overflow: ellipsis;
           display: -webkit-box;
-          -webkit-line-clamp: 2;          /* до 2 строк */
+          -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
         }
         @media (max-width: 360px) {
-          .pro-title { font-size: 15px; }  /* чуть меньше на очень узких экранах */
+          .pro-title { font-size: 15px; }
         }
 
         /* Описание — до 3 строк */
