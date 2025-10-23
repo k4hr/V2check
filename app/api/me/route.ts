@@ -6,10 +6,6 @@ import {
   getInitDataFrom,
   getTelegramIdStrict,
 } from '@/lib/auth/verifyInitData';
-import {
-  verifyVkMiniAppsLaunchParams,
-  parseVkLaunchParams,
-} from '@/lib/vk/api';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -19,7 +15,46 @@ const VK_SECURE_KEY = process.env.VK_SECURE_KEY || '';
 const ALLOW_BROWSER_DEBUG =
   (process.env.ALLOW_BROWSER_DEBUG || process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG || '').trim() === '1';
 
-// ————— утилиты —————
+/* ================= VK helpers (локальные) ================= */
+import crypto from 'crypto';
+
+function toCanonicalVkQueryString(src: URLSearchParams | Record<string, string>): string {
+  const entries: [string, string][] =
+    src instanceof URLSearchParams ? Array.from(src.entries()) : Object.entries(src);
+  // Берём только vk_* + sign, но sign в подпись не идёт
+  const filtered = entries.filter(([k]) => k === 'sign' || k.startsWith('vk_'));
+  const withoutSign = filtered.filter(([k]) => k !== 'sign');
+  withoutSign.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
+}
+
+function parseVkLaunchParams(raw: string): Record<string, string> {
+  // raw: строка формата "vk_user_id=...&vk_ts=...&sign=..."
+  const sp = new URLSearchParams(raw);
+  const out: Record<string, string> = {};
+  for (const [k, v] of sp.entries()) out[k] = v;
+  return out;
+}
+
+function verifyVkMiniAppsLaunchParams(raw: string, secureKey: string): boolean {
+  try {
+    const sp = new URLSearchParams(raw);
+    const sign = sp.get('sign') || '';
+    if (!sign) return false;
+
+    const data = toCanonicalVkQueryString(sp);
+    const hmac = crypto.createHmac('sha256', secureKey);
+    hmac.update(data);
+    // base64url без паддинга
+    const digest = hmac.digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+
+    return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(sign));
+  } catch {
+    return false;
+  }
+}
+/* ================= /VK helpers ================= */
+
 function extractUnsafeUserFromTg(initData: string): {
   id?: number | string;
   username?: string;
@@ -44,10 +79,11 @@ export async function POST(req: NextRequest) {
   try {
     const url = new URL(req.url);
 
-    // 1) Пытаемся распознать VK (приоритетно, если в заголовке есть vk-параметры)
+    // 1) VK: берём либо из заголовка, либо из куки (middleware / VKBootstrap его кладут)
     const rawVkParams =
       req.headers.get('x-vk-params') ||
-      ''; // middleware прокидывает сюда vk_* и sign
+      req.cookies.get('vk_params')?.value ||
+      '';
 
     if (rawVkParams && VK_SECURE_KEY) {
       const isValid = verifyVkMiniAppsLaunchParams(rawVkParams, VK_SECURE_KEY);
@@ -62,8 +98,8 @@ export async function POST(req: NextRequest) {
 
       const auth: AuthResult = {
         provider: 'vk',
-        key: `vk:${vkUserId}`, // пишем в колонку telegramId (строка) без миграций
-        profile: undefined,    // подробный профиль можно подтягивать через VK API при необходимости
+        key: `vk:${vkUserId}`, // пишем в telegramId (string) без миграций
+        profile: undefined,
         via: 'vk_params',
       };
 
@@ -81,7 +117,7 @@ export async function POST(req: NextRequest) {
 
       const auth: AuthResult = {
         provider: 'telegram',
-        key: telegramId, // совместимость с существующими записями
+        key: telegramId,
         profile: uUnsafe
           ? {
               username: uUnsafe.username,
@@ -95,7 +131,7 @@ export async function POST(req: NextRequest) {
       return await upsertAndReply(auth);
     }
 
-    // 3) Debug-путь из браузера (?id=...&platform=vk|tg) — только если явно разрешён
+    // 3) Debug (?id=...&platform=vk|tg)
     if (ALLOW_BROWSER_DEBUG) {
       const id = url.searchParams.get('id') || '';
       const platform = (url.searchParams.get('platform') || '').toLowerCase();
@@ -110,7 +146,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 4) Ничего не подошло — нет аутентификации
+    // 4) Нет аутентификации
     return NextResponse.json(
       {
         ok: false,
@@ -136,8 +172,6 @@ export const GET = POST;
 async function upsertAndReply(auth: AuthResult) {
   const now = new Date();
 
-  // Пишем в одну и ту же колонку telegramId (string).
-  // Для VK — значение вида "vk:<user_id>"
   const user = await prisma.user.upsert({
     where: { telegramId: auth.key },
     create: {
@@ -154,7 +188,7 @@ async function upsertAndReply(auth: AuthResult) {
       lastSeenAt: now,
     },
     select: {
-      telegramId: true,          // тут будет либо "123456", либо "vk:123456"
+      telegramId: true,
       subscriptionUntil: true,
       plan: true,
     },
@@ -164,8 +198,8 @@ async function upsertAndReply(auth: AuthResult) {
 
   return NextResponse.json({
     ok: true,
-    user: { telegramId: user.telegramId }, // оставляем имя поля для обратной совместимости
-    provider: auth.provider,               // кому нужно различать — берите это поле
+    user: { telegramId: user.telegramId },
+    provider: auth.provider,
     subscription: {
       active,
       expiresAt: user.subscriptionUntil || null,
