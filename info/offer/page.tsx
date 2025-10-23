@@ -208,26 +208,18 @@ export default function OfferPage() {
         <li>Поддержка: <b>support@seimngr</b></li>
       </ul>
 
-      {/* ============ Приложение 1. Тарифы ============ */}
+      {/* Приложение 1. Тарифы */}
       <h2 style={{ marginTop: 32 }}>Приложение 1. Тарифы и стоимость</h2>
       <p>
         Цены подтягиваются из <code>lib/pricing.ts</code>. Для <b>Telegram</b> —{' '}
-        <b>XTR (Stars)</b>, для <b>VK</b> — <b>рубли</b> (копейки). Итоговая
-        сумма у платёжного провайдера может отличаться из-за комиссий и является
-        приоритетной.
+        <b>XTR (Stars)</b>, для <b>VK</b> — <b>рубли</b> (копейки). Итоговая сумма у
+        платёжного провайдера может отличаться из-за комиссий и является приоритетной.
       </p>
 
       {TIERS.map((tier) => (
         <section key={tier} style={{ marginTop: 18 }}>
           <h3>{tier === 'PRO' ? 'Тариф «Pro»' : 'Тариф «Pro+»'}</h3>
-
-          <div
-            style={{
-              overflowX: 'auto',
-              border: '1px solid var(--card-border)',
-              borderRadius: 12,
-            }}
-          >
+          <div style={{ overflowX: 'auto', border: '1px solid var(--card-border)', borderRadius: 12 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: 'rgba(255,255,255,.04)' }}>
@@ -275,7 +267,6 @@ const th: React.CSSProperties = {
   borderBottom: '1px solid var(--card-border)',
   whiteSpace: 'nowrap',
 };
-
 const td: React.CSSProperties = {
   padding: '10px 12px',
   borderBottom: '1px solid var(--card-border)',
