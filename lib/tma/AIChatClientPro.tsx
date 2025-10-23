@@ -44,7 +44,6 @@ function isProPlusActiveFromResp(data: any): boolean {
   const raw = String(sub?.plan || '').toUpperCase().replace(/\s+|[_-]/g, '');
   return raw === 'PROPLUS' || raw === 'PRO+' || raw.includes('PROPLUS');
 }
-
 // вытаскиваем http(s)-картинки из текста; data: намеренно игнорируем
 function extractImageUrlsFromText(text: string): string[] {
   const urls = new Set<string>();
@@ -53,7 +52,6 @@ function extractImageUrlsFromText(text: string): string[] {
   while ((m = re.exec(text)) !== null) urls.add(m[1]);
   return Array.from(urls);
 }
-
 // корректное открытие ссылок внутри TG WebApp / браузера
 function openLink(url: string) {
   try {
@@ -65,19 +63,6 @@ function openLink(url: string) {
 }
 
 type ThreadState = { id?: string; starred: boolean; busy: boolean };
-
-/** Всегда добавляем каноничные заголовки аутентификации для API */
-function authHeaders(): Record<string, string> {
-  const init = TG_INIT();
-  const h: Record<string, string> = {};
-  if (init) {
-    // основной
-    h['x-telegram-init-data'] = init;
-    // совместимость (миддлваре умеет поднимать его в x-telegram-init-data)
-    h['x-init-data'] = init;
-  }
-  return h;
-}
 
 export default function AIChatClientPro(props: AIChatClientProProps) {
   const {
@@ -123,14 +108,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     trayRef.current?.scrollTo({ left: 9e9, behavior: 'smooth' });
   }, [attach.length]);
 
-  // revoke object URLs при размонтировании
-  useEffect(() => {
-    return () => {
-      try { attach.forEach(a => URL.revokeObjectURL(a.previewUrl)); } catch {}
-    };
-  }, [attach]);
-
-  // ?id= для прокидывания TG id (debug)
+  // ?id= для прокидывания TG id
   const idSuffix = useMemo(() => {
     if (!passthroughIdParam) return '';
     try {
@@ -147,12 +125,8 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         let endpoint = '/api/me';
         const headers: Record<string, string> = {};
         const init = TG_INIT();
-        if (init) {
-          // /api/me у тебя понимает x-init-data через миддлварь — оставляю
-          headers['x-init-data'] = init;
-        } else if (DEBUG && idSuffix) {
-          endpoint += idSuffix;
-        }
+        if (init) headers['x-init-data'] = init;
+        else if (DEBUG && idSuffix) endpoint += idSuffix;
 
         const r = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
         const data = await r.json().catch(() => ({}));
@@ -172,7 +146,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       (async () => {
         try {
           const r = await fetch(`/api/chat-threads?id=${encodeURIComponent(tid)}`, {
-            headers: authHeaders(),
+            headers: { 'X-Tg-Init-Data': TG_INIT() }
           });
           const data = await r.json();
           if (data?.ok) {
@@ -207,7 +181,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       if (thread.id && thread.starred) {
         const r = await fetch('/api/chat-threads', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
           body: JSON.stringify({ id: thread.id, starred: false }),
         });
         const data = await r.json();
@@ -222,7 +196,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         const emoji = extractLeadingEmoji(title) || undefined;
         const r = await fetch('/api/chat-threads' + idSuffix, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
           body: JSON.stringify({ toolSlug: mode || 'chat', title, emoji, starred: true }),
         });
         const data = await r.json();
@@ -237,7 +211,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         // есть тред — дожмём звезду
         const r = await fetch('/api/chat-threads', {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
           body: JSON.stringify({ id: tid, starred: true }),
         });
         const data = await r.json();
@@ -253,7 +227,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       const payload = { threadId: tid, messages: collectMsgsForSave() };
       const r2 = await fetch('/api/chat-threads/messages' + idSuffix, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        headers: { 'Content-Type': 'application/json', 'X-Tg-Init-Data': TG_INIT() },
         body: JSON.stringify(payload),
       });
       const data2 = await r2.json();
@@ -316,6 +290,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
 
         const fd = new FormData();
         fd.append('file', it.file);
+        const initData = TG_INIT();
 
         const ctrl = new AbortController();
         const to = setTimeout(() => ctrl.abort(), 60_000);
@@ -324,7 +299,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           res = await fetch('/api/upload-image' + idSuffix, {
             method: 'POST',
             body: fd,
-            headers: authHeaders(),
+            headers: { 'X-Tg-Init-Data': initData },
             signal: ctrl.signal,
           });
         } finally { clearTimeout(to); }
