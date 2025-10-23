@@ -449,128 +449,128 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           const isUser = m.role === 'user';
           const hasImages = Array.isArray(m.images) && m.images.length > 0;
 
-          return (
-            <div key={i} style={{
-              margin: '10px 0',
-              display: 'flex',
-              justifyContent: isUser ? 'flex-end' : 'flex-start'
-            }}>
-              <div style={{ maxWidth: '86%' }}>
-                {/* текстовый пузырь */}
-                {m.content && m.content !== '(изображения)' && (
-                  <div
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 14,
-                      lineHeight: 1.5,
-                      background: isUser ? '#24304a' : '#1a2132',
-                      border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
-                      boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
-                      whiteSpace: 'pre-wrap',
-                      fontSize: 16,
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {m.content}
-                  </div>
-                )}
+        return (
+          <div key={i} style={{
+            margin: '10px 0',
+            display: 'flex',
+            justifyContent: isUser ? 'flex-end' : 'flex-start'
+          }}>
+            <div style={{ maxWidth: '86%' }}>
+              {/* текстовый пузырь */}
+              {m.content && m.content !== '(изображения)' && (
+                <div
+                  style={{
+                    padding: '10px 12px',
+                    borderRadius: 14,
+                    lineHeight: 1.5,
+                    background: isUser ? '#24304a' : '#1a2132',
+                    border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
+                    boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
+                    whiteSpace: 'pre-wrap',
+                    fontSize: 16,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {m.content}
+                </div>
+              )}
 
-                {/* «галерея» изображений ассистента */}
-                {hasImages && (
+              {/* «галерея» изображений ассистента */}
+              {hasImages && (
+                <div
+                  style={{
+                    marginTop: m.content && m.content !== '(изображения)' ? 8 : 0,
+                    padding: 8,
+                    borderRadius: 14,
+                    background: '#101622',
+                    border: '1px solid #2b3552',
+                  }}
+                >
                   <div
                     style={{
-                      marginTop: m.content && m.content !== '(изображения)' ? 8 : 0,
-                      padding: 8,
-                      borderRadius: 14,
-                      background: '#101622',
-                      border: '1px solid #2b3552',
+                      display: 'grid',
+                      gap: 8,
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
                     }}
                   >
-                    <div
-                      style={{
-                        display: 'grid',
-                        gap: 8,
-                        gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
-                      }}
-                    >
-                      {m.images!.map((src, idx) => (
-                        <figure
-                          key={idx}
+                    {m.images!.map((src, idx) => (
+                      <figure
+                        key={idx}
+                        style={{
+                          margin: 0,
+                          position: 'relative',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                          border: '1px solid #2b3552',
+                          background: '#0f1422',
+                          aspectRatio: '1 / 1',
+                        }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt=""
+                          onClick={() => openLink(src)}
                           style={{
-                            margin: 0,
-                            position: 'relative',
-                            borderRadius: 12,
-                            overflow: 'hidden',
-                            border: '1px solid #2b3552',
-                            background: '#0f1422',
-                            aspectRatio: '1 / 1',
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            display: 'block',
+                            cursor: 'zoom-in',
+                          }}
+                        />
+
+                        {/* overlay с кнопками */}
+                        <div
+                          style={{
+                            position: 'absolute',
+                            bottom: 6,
+                            right: 6,
+                            display: 'flex',
+                            gap: 6,
                           }}
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={src}
-                            alt=""
-                            onClick={() => openLink(src)}
+                          <a
+                            href={src}
+                            download
+                            title="Скачать"
                             style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              display: 'block',
-                              cursor: 'zoom-in',
-                            }}
-                          />
-
-                          {/* overlay с кнопками */}
-                          <div
-                            style={{
-                              position: 'absolute',
-                              bottom: 6,
-                              right: 6,
-                              display: 'flex',
-                              gap: 6,
+                              padding: '6px 8px',
+                              borderRadius: 10,
+                              background: 'rgba(0,0,0,.45)',
+                              border: '1px solid rgba(255,255,255,.25)',
+                              color: '#fff',
+                              fontSize: 12,
+                              textDecoration: 'none',
+                              backdropFilter: 'blur(6px)',
                             }}
                           >
-                            <a
-                              href={src}
-                              download
-                              title="Скачать"
-                              style={{
-                                padding: '6px 8px',
-                                borderRadius: 10,
-                                background: 'rgba(0,0,0,.45)',
-                                border: '1px solid rgba(255,255,255,.25)',
-                                color: '#fff',
-                                fontSize: 12,
-                                textDecoration: 'none',
-                                backdropFilter: 'blur(6px)',
-                              }}
-                            >
-                              Скачать
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => openLink(src)}
-                              title="Открыть"
-                              style={{
-                                padding: '6px 8px',
-                                borderRadius: 10,
-                                background: 'rgba(0,0,0,.45)',
-                                border: '1px solid rgba(255,255,255,.25)',
-                                color: '#fff',
-                                fontSize: 12,
-                              }}
-                            >
-                              Открыть
-                            </button>
-                          </div>
-                        </figure>
-                      ))}
-                    </div>
+                            Скачать
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => openLink(src)}
+                            title="Открыть"
+                            style={{
+                              padding: '6px 8px',
+                              borderRadius: 10,
+                              background: 'rgba(0,0,0,.45)',
+                              border: '1px solid rgba(255,255,255,.25)',
+                              color: '#fff',
+                              fontSize: 12,
+                            }}
+                          >
+                            Открыть
+                          </button>
+                        </div>
+                      </figure>
+                    ))}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
-          );
+          </div>
+        );
         })}
         {(loading || uploading) && (
           <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>Думаю…</div>
