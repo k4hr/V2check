@@ -1,68 +1,62 @@
-'use client';
-
+/* path: app/info/support/page.tsx */
 import React from 'react';
+import type { Metadata } from 'next';
 import Link from 'next/link';
+import BackBtn from '@/components/BackBtn';
 
-export const metadata = {
+export const metadata: Metadata = {
   title: 'Поддержка — LiveManager',
   description: 'Как связаться с поддержкой и решить вопрос по LiveManager',
 };
 
 export default function SupportPage() {
   return (
-    <main className="lm-page" style={{ maxWidth: 900 }}>
-      <h1>Поддержка LiveManager</h1>
-      <p className="lm-subtitle">Мы стараемся отвечать быстро и по делу.</p>
+    <main className="lm-page" style={{ maxWidth: 760 }}>
+      <div style={{ position: 'relative', marginBottom: 6 }}>
+        <BackBtn fallback="/cabinet" />
+      </div>
 
-      <h2>Как обратиться</h2>
-      <ul>
-        <li>E-mail: <b>support@seimngr</b></li>
-        <li>
-          Из приложения: пункт «Личный кабинет → Поддержка» (если доступен).
-        </li>
-      </ul>
-
-      <h2>Что приложить к обращению</h2>
-      <ul>
-        <li>Ваш ID в платформе (Telegram/VK) или номер чата/платежа;</li>
-        <li>Скриншоты ошибки/поведения;</li>
-        <li>Дата/время проблемы и шаги воспроизведения;</li>
-        <li>Платёжные подтверждения (при вопросах по оплате/возврату).</li>
-      </ul>
-
-      <h2>Возвраты и биллинг</h2>
-      <p>
-        Правила возврата описаны в{' '}
-        <Link href="/info/offer">Публичной оферте</Link> (раздел «Возвраты и
-        претензии»). Если у вас произошло двойное списание или доступ не был
-        предоставлен по вине Сервиса более 24 часов, напишите нам — проверим и
-        поможем.
+      <h1>Поддержка</h1>
+      <p className="lm-subtitle">
+        Мы стараемся отвечать быстро. Обычно — в течение 1–2 рабочих дней.
       </p>
 
-      <h2>SLA (сроки ответа)</h2>
-      <ul>
-        <li>Обычные обращения: до 48 часов;</li>
-        <li>Инциденты с доступом/оплатой: в приоритете, по возможности — быстрее;</li>
-        <li>Правовые запросы: до 10 рабочих дней.</li>
-      </ul>
+      <div
+        style={{
+          border: '1px solid var(--card-border)',
+          borderRadius: 16,
+          padding: 16,
+          background: 'var(--card-bg)',
+          boxShadow: 'var(--shadow)',
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Как с нами связаться</h3>
+        <ul>
+          <li>
+            Email: <a href="mailto:support@seimngr">support@seimngr</a>
+          </li>
+          <li>
+            Вопросы по оплате/подписке: укажите ID аккаунта (Telegram/VK) и
+            номер транзакции провайдера.
+          </li>
+          <li>
+            Правовые документы:{' '}
+            <Link href="/info/offer">Оферта</Link> ·{' '}
+            <Link href="/info/privacy">Политика конфиденциальности</Link>
+          </li>
+        </ul>
 
-      <h2>Сообщить об уязвимости</h2>
-      <p>
-        Если вы обнаружили проблему безопасности, напишите на{' '}
-        <b>support@seimngr</b> с пометкой <i>Security</i>. Пожалуйста,
-        предоставьте шаги воспроизведения и не публикуйте детали до нашего
-        фикса.
-      </p>
+        <h3>Что приложить к обращению</h3>
+        <ul>
+          <li>краткое описание проблемы и шаги для воспроизведения;</li>
+          <li>скриншоты/экранные записи (если есть);</li>
+          <li>ID пользователя (Telegram/VK) и время возникновения проблемы.</li>
+        </ul>
+      </div>
 
-      <h2>Документы</h2>
-      <ul>
-        <li><Link href="/info/offer">Публичная оферта</Link></li>
-        <li><Link href="/info/privacy">Политика конфиденциальности</Link></li>
-      </ul>
-
-      <p style={{ marginTop: 24, opacity: .8 }}>
-        Поддержка работает в будние дни (время по Москве). В пиковые периоды
-        возможна задержка ответов — мы отвечаем всем без исключения.
+      <p style={{ marginTop: 24, opacity: 0.8 }}>
+        Если вопрос срочный (оплата/доступ), напишите в теме письма
+        <i> «URGENT»</i> — такие обращения обрабатываются в приоритете.
       </p>
     </main>
   );
