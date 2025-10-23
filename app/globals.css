@@ -202,3 +202,32 @@ input, textarea, select,
   font-size: 16px !important;
 }
 html { -webkit-text-size-adjust: 100%; }
+
+/* ===================================================== */
+/* ЕДИНАЯ ВЫСОТА CTA-КНОПОК В КАРТОЧКАХ ИНСТРУМЕНТОВ     */
+/* Активируется только внутри .tools-equal               */
+/* ===================================================== */
+
+.tools-equal { display: grid; gap: 14px; }
+
+/* внутри списков инструментов карточку делаем колонкой,
+   чтобы кнопка легко прижималась к низу */
+.tools-equal .card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+/* сама CTA-кнопка (как правило .list-btn) — одинаковая высота */
+.tools-equal .card .list-btn {
+  margin-top: auto;            /* прижать к низу карточки */
+  min-height: 56px;
+  height: 56px;                /* фиксируем высоту, ничего не «пляшет» */
+  padding: 0 18px;             /* вертикаль высотой, а не паддингами */
+  justify-content: center;     /* текст строго по центру */
+  align-items: center;
+  border-radius: 16px;
+}
+
+/* если CTA — это ссылка */
+.tools-equal .card a.list-btn { text-decoration: none; }
