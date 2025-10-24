@@ -7,13 +7,12 @@ function withFrameHeaders(res: NextResponse) {
     'Content-Security-Policy',
     "frame-ancestors 'self' https://*.vk.com https://*.vk.ru https://vk.com https://vk.ru"
   );
-  res.headers.delete('X-Frame-Options'); // конфликтует с CSP
+  res.headers.delete('X-Frame-Options');
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.headers.set('X-Content-Type-Options', 'nosniff');
   return res;
 }
 
-// Канонизируем vk_* → "k=v&k2=v2" по алфавиту (без sign)
 function canonicalizeVkParams(sp: URLSearchParams): string {
   const entries = Array.from(sp.entries())
     .filter(([k]) => k.startsWith('vk_') || k === 'sign');
@@ -30,7 +29,7 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
 
-    // TG initData (совместимость со старым заголовком)
+    // TG initData (совместимость)
     const tgHeader = requestHeaders.get('x-telegram-init-data');
     const legacyHeader = requestHeaders.get('x-init-data');
     if (!tgHeader && legacyHeader) {
@@ -54,10 +53,6 @@ export function middleware(req: NextRequest) {
   const welcomedQuery = searchParams.get('welcomed') === '1';
   const hasVkParamsCookie = !!req.cookies.get('vk_params')?.value;
 
-  // считаем, что пользователь «поприветствован», если:
-  // - уже есть кука welcomed=1
-  // - или пришёл с welcomed=1 в урле
-  // - или у нас уже есть vk_params (значит пришли из VK и всё ок)
   const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie;
 
   const res = NextResponse.next();
@@ -69,11 +64,11 @@ export function middleware(req: NextRequest) {
       httpOnly: false,
       sameSite: 'none',
       secure: true,
-      maxAge: 60 * 60 * 24 * 365, // 1 год
+      maxAge: 60 * 60 * 24 * 365,
     });
   }
 
-  // Сохраняем vk_* из query в куку (hash сервер не видит)
+  // Сохраняем vk_* из query (hash сервер не видит)
   const hasVkParamsInQuery = Array.from(searchParams.keys())
     .some((k) => k.startsWith('vk_') || k === 'sign');
   if (hasVkParamsInQuery) {
@@ -84,7 +79,7 @@ export function middleware(req: NextRequest) {
         httpOnly: false,
         sameSite: 'none',
         secure: true,
-        maxAge: 60 * 60 * 24, // сутки
+        maxAge: 60 * 60 * 24,
       });
     }
   }
