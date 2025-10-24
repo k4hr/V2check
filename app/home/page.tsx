@@ -24,7 +24,7 @@ function haptic(type:'light'|'medium'='light'){
 
 export default function HomePage(){
   // если пользователь впервые — создадим cookie из автоопределения
-  useEffect(()=>{ try{ ensureLocaleCookie(); }catch{} }, []);
+  useEffect(()=>{ try{ ensureLocaleCookie({ sameSite: 'none', secure: true } as any); }catch{} }, []);
 
   const [open,setOpen]=useState(false);
   const currentLocale=useMemo<Locale>(()=>readLocale(),[]);
@@ -39,14 +39,20 @@ export default function HomePage(){
     if(open) window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
   },[currentLocale,open]);
 
-  const linkSuffix=useMemo(()=>{
-    try{
-      const u=new URL(window.location.href);
-      const id=u.searchParams.get('id');
-      return id?`?id=${encodeURIComponent(id)}`:'';
-    }catch{ return ''; }
-  },[]);
-  const href=(p:string)=>`${p}${linkSuffix}` as Route;
+  // ВСЕГДА тащим welcomed=1 + сохраняем id (если был)
+  const linkSuffix = useMemo(() => {
+    try {
+      const u = new URL(window.location.href);
+      const sp = new URLSearchParams(u.search);
+      sp.set('welcomed', '1');
+      const id = u.searchParams.get('id');
+      if (id) sp.set('id', id);
+      const s = sp.toString();
+      return s ? `?${s}` : '';
+    } catch { return '?welcomed=1'; }
+  }, []);
+
+  const href = (p:string) => `${p}${linkSuffix}` as Route;
 
   async function onSave(){
     if(saving) return;
