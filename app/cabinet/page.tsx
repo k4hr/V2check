@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readLocale, type Locale, STRINGS } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
+import { authHeaders, ensureVkParams } from '@/lib/utils/authHeaders';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
@@ -51,9 +52,7 @@ function parseUserFromInitCookie(): MeResp['user'] {
     return u ? (JSON.parse(u) as any) : null;
   } catch { return null; }
 }
-function getInitDataFromCookie(): string {
-  return getCookie('tg_init_data');
-}
+function getInitDataFromCookie(): string { return getCookie('tg_init_data'); }
 function haptic(type: 'light' | 'medium' = 'light') {
   try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
 }
@@ -122,9 +121,11 @@ export default function CabinetPage() {
   const [statusText, setStatusText] = useState(T.notActive);
   const [loading, setLoading] = useState(false);
 
+  // admin
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminInfo, setAdminInfo] = useState<string>('');
 
+  // debug id
   const debugId = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -133,18 +134,9 @@ export default function CabinetPage() {
     } catch { return ''; }
   }, []);
 
-  const hrefPro = useMemo(
-    () => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'),
-    [debugId]
-  );
-  const hrefFav = useMemo(
-    () => (debugId ? { pathname: '/cabinet/favorites' as const, query: { id: debugId } } : '/cabinet/favorites'),
-    [debugId]
-  );
-  const hrefAdmin = useMemo(
-    () => (debugId ? { pathname: '/cabinet/admin' as const, query: { id: debugId } } : '/cabinet/admin'),
-    [debugId]
-  );
+  const hrefPro   = useMemo(() => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'), [debugId]);
+  const hrefFav   = useMemo(() => (debugId ? { pathname: '/cabinet/favorites' as const, query: { id: debugId } } : '/cabinet/favorites'), [debugId]);
+  const hrefAdmin = useMemo(() => (debugId ? { pathname: '/cabinet/admin' as const, query: { id: debugId } } : '/cabinet/admin'), [debugId]);
 
   useEffect(() => {
     try {
@@ -157,15 +149,32 @@ export default function CabinetPage() {
     setLoading(true);
     try {
       let endpoint = '/api/me';
-      const headers: Record<string, string> = {};
-      if (initData) headers['x-init-data'] = initData;
-      else if (DEBUG && debugId) endpoint += `?id=${encodeURIComponent(debugId)}`;
+      if (!initData && DEBUG && debugId) endpoint += `?id=${encodeURIComponent(debugId)}`;
 
-      const resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
-      const data: MeResp = await resp.json();
+      // всегда строим заголовки через helper,
+      // он сам добавит X-Vk-Params / X-Tg-Init-Data если они доступны
+      let headers = authHeaders(
+        initData ? { 'X-Telegram-Init-Data': initData, 'X-Init-Data': initData } : {}
+      );
 
-      providerRef.current = data?.provider as any;
+      let resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
 
+      // если мы в VK и прилетела 401 — дотянем launch-параметры и попробуем ещё раз
+      if (platform === 'vk' && resp.status === 401) {
+        const got = await ensureVkParams(); // вернёт true, если записал/нашёл vk_params
+        if (got) {
+          headers = authHeaders(
+            initData ? { 'X-Telegram-Init-Data': initData, 'X-Init-Data': initData } : {}
+          );
+          resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
+        }
+      }
+
+      const data: MeResp = await resp.json().catch(() => ({ ok: false }));
+
+      if (data?.provider) providerRef.current = data.provider;
+
+      // для VK сервер возвращает только telegramId — поле используем как «id …»
       if (data?.user) setUser(prev => prev ?? data.user);
 
       const sub = data?.subscription;
@@ -175,9 +184,9 @@ export default function CabinetPage() {
 
       if (isActive) {
         const untilTxt = untilStr ? formatDate(new Date(untilStr)) : null;
-        if (planNorm === 'pro')      setStatusText(T.proActive(untilTxt));
+        if (planNorm === 'pro') setStatusText(T.proActive(untilTxt));
         else if (planNorm === 'pro+') setStatusText(T.proPlusActive(untilTxt));
-        else                          setStatusText(T.activeGeneric(untilTxt));
+        else setStatusText(T.activeGeneric(untilTxt));
       } else {
         setStatusText(T.notActive);
       }
@@ -188,42 +197,31 @@ export default function CabinetPage() {
     }
   }
 
-  // Берём имя из VK даже если detectPlatform ошибся.
-  async function tryFillVkName() {
+  // При VK добираем нормальным именем через bridge (чисто косметика)
+  async function loadVkProfileIfPossible() {
+    if (providerRef.current !== 'vk' || platform !== 'vk') return;
     try {
-      const w: any = window;
-      const bridge = w.vkBridge || w.bridge;
-      const can = !!(bridge?.send) || typeof w.VKWebAppGetUserInfo === 'function';
-      // Минимальный признак, что это действительно запуск из VK (есть vk_params в окне/куке/URL)
-      const looksLikeVk =
-        !!w.__VK_PARAMS__ ||
-        /(?:^|[?#&])vk_/.test(location.search + location.hash) ||
-        /(?:^|;\s*)vk_params=/.test(document.cookie);
-
-      if (!can || !looksLikeVk) return;
-
-      let info: any;
-      if (bridge?.send) info = await bridge.send('VKWebAppGetUserInfo');
-      else info = await w.VKWebAppGetUserInfo();
-
-      if (info && (info.first_name || info.last_name)) {
+      const mod = await import('@vkontakte/vk-bridge');
+      const bridge = (mod.default || mod) as any;
+      const info = await bridge.send('VKWebAppGetUserInfo').catch(() => null);
+      if (info && (info.first_name || info.last_name || info.screen_name)) {
         setUser(u => ({
           ...(u || {}),
           first_name: info.first_name || u?.first_name,
           last_name: info.last_name || u?.last_name,
+          username: info.screen_name || u?.username,
         }));
       }
-    } catch { /* ignore */ }
+    } catch {}
   }
 
   async function checkAdmin(initData?: string) {
     try {
-      const headers: Record<string, string> = {};
-      if (initData) headers['x-init-data'] = initData;
-
       let url = '/api/admin/check';
       if (!initData && DEBUG && debugId) url += `?id=${encodeURIComponent(debugId)}`;
-
+      const headers = authHeaders(
+        initData ? { 'X-Telegram-Init-Data': initData, 'X-Init-Data': initData } : {}
+      );
       const r = await fetch(url, { method: 'GET', headers, cache: 'no-store' });
       const data: AdminCheck = await r.json().catch(() => ({ ok: false }));
       setIsAdmin(Boolean(data?.admin));
@@ -253,24 +251,31 @@ export default function CabinetPage() {
     setUser(u);
 
     const initData = WebApp?.initData || getInitDataFromCookie();
-    if (initData) {
-      loadMe(initData).then(tryFillVkName);
-      checkAdmin(initData);
-    } else if (DEBUG) {
-      loadMe().then(tryFillVkName);
-      checkAdmin();
-    } else {
-      loadMe().then(tryFillVkName);
-      setIsAdmin(false);
-    }
+    (async () => {
+      // если VK — попробуем заранее подтянуть vk_params (уменьшит вероятность 401)
+      if (platform === 'vk') { try { await ensureVkParams(); } catch {} }
+      if (initData) {
+        await loadMe(initData);
+      } else if (DEBUG) {
+        await loadMe();
+      } else {
+        await loadMe(); // VK без Telegram — всё равно попробуем по vk_params
+        setIsAdmin(false);
+      }
+      await loadVkProfileIfPossible();
+      await checkAdmin(initData);
+    })();
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debugId, locale, platform]);
 
+  // В приветствии: если нет имени — показываем id из user.telegramId для VK
   const hello =
-    ((user?.first_name || '') + (user?.last_name ? ` ${user.last_name}` : '')).trim() ||
+    (user?.first_name || '') +
+      (user?.last_name ? ` ${user.last_name}` : '') ||
     (user?.username ? `@${user.username}` : '') ||
-    // на самый крайний случай — показываем ID из поля telegramId (vk:123…)
-    (user?.telegramId ? `${String(user.telegramId).replace(/^vk:/, 'id ')}` : '');
+    (user?.telegramId ? `id ${String(user.telegramId).replace(/^vk:/,'')}` : '') ||
+    '';
 
   return (
     <main>
