@@ -1,4 +1,3 @@
-/* path: middleware.ts */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -7,19 +6,18 @@ function withFrameHeaders(res: NextResponse) {
     'Content-Security-Policy',
     "frame-ancestors 'self' https://*.vk.com https://*.vk.ru https://vk.com https://vk.ru"
   );
-  res.headers.delete('X-Frame-Options'); // конфликтует с CSP
+  res.headers.delete('X-Frame-Options');
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.headers.set('X-Content-Type-Options', 'nosniff');
   return res;
 }
 
-// Собираем строку "vk_* (отсортированы) & sign(в конце)"
+// Канонизируем vk_* → "k=v&k2=v2" по алфавиту (без sign)
 function canonicalizeVkParams(sp: URLSearchParams): string {
-  const all = Array.from(sp.entries()).filter(([k]) => k.startsWith('vk_') || k === 'sign');
-  const sign = sp.get('sign') || '';
-  const vkOnly = all.filter(([k]) => k !== 'sign').sort(([a], [b]) => a.localeCompare(b));
-  const qs = vkOnly.map(([k, v]) => `${k}=${v}`).join('&');
-  return sign ? (qs ? `${qs}&sign=${sign}` : `sign=${sign}`) : qs;
+  const entries = Array.from(sp.entries()).filter(([k]) => k.startsWith('vk_') || k === 'sign');
+  const withoutSign = entries.filter(([k]) => k !== 'sign');
+  withoutSign.sort(([a], [b]) => a.localeCompare(b));
+  return withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
 }
 
 export function middleware(req: NextRequest) {
@@ -30,14 +28,12 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
 
-    // TG initData (совместимость со старым заголовком)
+    // TG совместимость
     const tgHeader = requestHeaders.get('x-telegram-init-data');
     const legacyHeader = requestHeaders.get('x-init-data');
-    if (!tgHeader && legacyHeader) {
-      requestHeaders.set('x-telegram-init-data', legacyHeader);
-    }
+    if (!tgHeader && legacyHeader) requestHeaders.set('x-telegram-init-data', legacyHeader);
 
-    // VK: если клиент не прислал x-vk-params — подложим из куки
+    // VK: подложим из куки, если нет заголовка
     if (!requestHeaders.get('x-vk-params')) {
       const fromCookie = req.cookies.get('vk_params')?.value;
       if (fromCookie) requestHeaders.set('x-vk-params', fromCookie);
@@ -48,7 +44,6 @@ export function middleware(req: NextRequest) {
   }
 
   // -------------------- Страницы --------------------
-  // Онбординг (как у тебя было)
   const welcomed = req.cookies.get('welcomed')?.value === '1';
   const isOnboarding = pathname === '/' || pathname === '/country';
 
@@ -66,20 +61,20 @@ export function middleware(req: NextRequest) {
     return withFrameHeaders(NextResponse.redirect(url));
   }
 
-  // Сохраняем vk_* + sign из query в куку (hash сервер не видит)
-  const hasVkParams = Array.from(searchParams.keys())
-    .some((k) => k.startsWith('vk_') || k === 'sign');
+  // Сохраняем vk_* из query в куку (hash сервер не видит)
+  const hasVkParams = Array.from(searchParams.keys()).some((k) => k.startsWith('vk_') || k === 'sign');
 
   const res = NextResponse.next();
   if (hasVkParams) {
     const canonical = canonicalizeVkParams(searchParams);
     if (canonical) {
+      // критично: SameSite=None; Secure — иначе в iframe кука не поедет
       res.cookies.set('vk_params', canonical, {
         path: '/',
         httpOnly: false,
-        sameSite: 'lax',
-        maxAge: 60 * 60 * 24, // сутки
-        // secure: true, // включи в проде https
+        sameSite: 'none',
+        secure: true,
+        maxAge: 60 * 60 * 24,
       });
     }
   }
