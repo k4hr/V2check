@@ -7,6 +7,13 @@ import { useEffect, useMemo } from 'react';
 import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
 
+function setWelcomedCookie() {
+  try {
+    // SameSite=None; Secure — чтобы кука стабильно жила в webview
+    document.cookie = `welcomed=1; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=None; Secure`;
+  } catch {}
+}
+
 export default function ProSelectPage() {
   const locale: Locale = readLocale();
   const S = STRINGS[locale];
@@ -74,6 +81,9 @@ export default function ProSelectPage() {
     },
   };
 
+  // Кука welcomed сразу, чтобы middleware не редиректил назад
+  useEffect(setWelcomedCookie, []);
+
   // Определяем платформу один раз на клиенте
   const platform = useMemo(() => detectPlatform(), []);
 
@@ -87,27 +97,31 @@ export default function ProSelectPage() {
         w?.Telegram?.WebApp?.ready?.();
         w?.Telegram?.WebApp?.expand?.();
       } else if (platform === 'vk') {
-        // Пытаемся проинициализировать VK Mini App
         const bridge = (w as any).vkBridge;
         if (bridge?.send) {
           bridge.send('VKWebAppInit').catch(() => {});
           bridge.send('VKWebAppExpand').catch(() => {});
         } else if (typeof w.VKWebAppInit === 'function') {
           w.VKWebAppInit();
-          // Для старых бриджей отдельного expand может не быть — ок
           try { w.VKWebAppExpand?.(); } catch {}
         }
       }
     } catch {}
   }, [locale, platform]);
 
-  // Хвост для передачи id (если он у тебя используется)
+  // Хвост для ссылок: протаскиваем welcomed=1 и id (если был)
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
+      const sp = new URLSearchParams(u.search);
+      sp.set('welcomed', '1');
       const id = u.searchParams.get('id');
-      return id ? `?id=${encodeURIComponent(id)}` : '';
-    } catch { return ''; }
+      if (id) sp.set('id', id);
+      const s = sp.toString();
+      return s ? `?${s}` : '?welcomed=1';
+    } catch {
+      return '?welcomed=1';
+    }
   }, []);
 
   // База ссылок в зависимости от платформы
@@ -115,14 +129,14 @@ export default function ProSelectPage() {
 
   return (
     <main className="lm-wrap">
-      <button
-        type="button"
-        onClick={() => history.length > 1 ? history.back() : (location.href = '/home')}
+      {/* Назад всегда на /home с сохранением хвоста */}
+      <Link
+        href={`/home${linkSuffix}` as Route}
         className="card"
-        style={{ maxWidth: 140, padding: '10px 12px', marginBottom: 12 }}
+        style={{ maxWidth: 140, padding: '10px 12px', marginBottom: 12, textDecoration: 'none' }}
       >
         ← {S.back}
-      </button>
+      </Link>
 
       <h1 style={{ textAlign:'center' }}>{L[locale].choosePlan}</h1>
       <p className="lm-subtitle" style={{ textAlign:'center' }}>
@@ -279,7 +293,7 @@ export default function ProSelectPage() {
         .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(255,255,255,.06); }
         .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
 
-        /* Колонка Pro+ — фон как у «золотой» кнопки, контент всегда сверху */
+        /* Колонка Pro+ — фон как у «золотой» кнопки */
         .cell--proplus,
         .cell--proplus-head {
           background: linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%);
@@ -287,7 +301,7 @@ export default function ProSelectPage() {
         }
         .cell--proplus-head { font-weight: 800; }
 
-        /* Чипы поверх фона */
+        /* Чипы */
         .chip {
           display: inline-flex; align-items: center; justify-content: center;
           min-width: 24px; height: 24px; padding: 0 8px;
