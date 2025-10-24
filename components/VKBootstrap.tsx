@@ -19,7 +19,6 @@ export default function VKBootstrap({ children }: Props) {
 
     const setCookie = (name: string, value: string, maxAgeSec = 86400) => {
       try {
-        // важно: в iframe у m.vk.com нужны None+Secure
         document.cookie =
           `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSec}; SameSite=None; Secure`;
       } catch {}
@@ -36,7 +35,6 @@ export default function VKBootstrap({ children }: Props) {
       const entries = Object.entries(obj || {}).filter(
         ([k]) => k === 'sign' || k.startsWith('vk_')
       ) as [string, any][];
-
       let sign = '';
       const vkOnly: [string, string][] = [];
       for (const [k, v] of entries) {
@@ -63,6 +61,8 @@ export default function VKBootstrap({ children }: Props) {
         if (raw) {
           window.__VK_PARAMS__ = raw;
           setCookie('vk_params', raw, 86400);
+          // важно: отмечаем онбординг пройденным
+          setCookie('welcomed', '1', 60 * 60 * 24 * 365);
         }
       } catch {}
     };
@@ -70,7 +70,6 @@ export default function VKBootstrap({ children }: Props) {
     const forceDark = () => {
       try {
         document.documentElement.style.colorScheme = 'dark';
-        document.documentElement.setAttribute('data-force-dark', '1');
       } catch {}
       bridge
         .send('VKWebAppSetViewSettings', {
