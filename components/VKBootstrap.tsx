@@ -1,3 +1,4 @@
+/* path: components/VKBootstrap.tsx */
 'use client';
 
 import { useEffect } from 'react';
@@ -18,9 +19,7 @@ export default function VKBootstrap({ children }: Props) {
 
     const setCookie = (name: string, value: string, maxAgeSec = 86400) => {
       try {
-        // Для iframe VK (m.vk.com) нужны None + Secure
-        document.cookie =
-          `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSec}; SameSite=None; Secure`;
+        document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSec}; SameSite=None; Secure`;
       } catch {}
     };
 
@@ -31,48 +30,33 @@ export default function VKBootstrap({ children }: Props) {
       setCookie('vk_api_host', h, 86400);
     };
 
-    // Собираем "vk_* + sign" в каноническом порядке (vk_* отсортированы, sign в конце)
     const buildVkParamsString = (obj: Record<string, any>) => {
-      const entries = Object.entries(obj || {}).filter(
-        ([k]) => k === 'sign' || k.startsWith('vk_')
-      ) as [string, any][];
-
+      const pairs: [string, string][] = [];
       let sign = '';
-      const vkOnly: [string, string][] = [];
-      for (const [k, v] of entries) {
+      for (const [k, v] of Object.entries(obj || {})) {
         if (k === 'sign') sign = String(v ?? '');
-        else vkOnly.push([k, String(v ?? '')]);
+        else if (k.startsWith('vk_')) pairs.push([k, String(v ?? '')]);
       }
-      vkOnly.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-      const qs = vkOnly.map(([k, v]) => `${k}=${v}`).join('&');
+      pairs.sort(([a],[b]) => a.localeCompare(b));
+      const qs = pairs.map(([k,v]) => `${k}=${v}`).join('&');
       return sign ? (qs ? `${qs}&sign=${sign}` : `sign=${sign}`) : qs;
     };
 
     const persistLaunchParams = async () => {
       try {
-        // 1) Нормальный путь: bridge даёт launch params
         const lp: any = await bridge.send('VKWebAppGetLaunchParams').catch(() => ({}));
         let raw = buildVkParamsString(lp || {});
-        // 2) Фолбэк: собираем из query+hash (на m.vk.com параметры часто в hash)
         if (!raw) {
-          const all = new URLSearchParams(
-            location.search + location.hash.replace(/^#/, location.search ? '&' : '?')
-          );
+          const all = new URLSearchParams(location.search + location.hash.replace(/^#/, location.search ? '&' : '?'));
           const tmp: Record<string, string> = {};
-          all.forEach((v, k) => {
-            if (k === 'sign' || k.startsWith('vk_')) tmp[k] = v;
-          });
+          all.forEach((v, k) => { if (k === 'sign' || k.startsWith('vk_')) tmp[k] = v; });
           raw = buildVkParamsString(tmp);
         }
         if (raw) {
           window.__VK_PARAMS__ = raw;
           setCookie('vk_params', raw, 86400);
-          // Помечаем «welcomed», чтобы сервер больше не редиректил и не отрезал hash
-          setCookie('welcomed', '1', 60 * 60 * 24 * 365);
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     };
 
     const forceDark = () => {
@@ -80,13 +64,11 @@ export default function VKBootstrap({ children }: Props) {
         document.documentElement.style.colorScheme = 'dark';
         document.documentElement.setAttribute('data-force-dark', '1');
       } catch {}
-      bridge
-        .send('VKWebAppSetViewSettings', {
-          status_bar_style: 'dark',
-          action_bar_color: '#0b1220',
-          navigation_bar_color: '#0b1220',
-        })
-        .catch(() => {});
+      bridge.send('VKWebAppSetViewSettings', {
+        status_bar_style: 'dark',
+        action_bar_color: '#0b1220',
+        navigation_bar_color: '#0b1220',
+      }).catch(() => {});
     };
 
     (async () => {
@@ -97,20 +79,12 @@ export default function VKBootstrap({ children }: Props) {
         setHost(cfg?.api_host || 'api.vk.ru');
         forceDark();
         await persistLaunchParams();
-      } catch {
-        // не в VK — молчим
-      }
+      } catch {}
 
       const handler = (e: any) => {
         if (e?.detail?.type === 'VKWebAppUpdateConfig') {
           const data = e.detail.data || {};
-          if (data.api_host) {
-            const host = String(data.api_host).trim().replace(/^https?:\/\//i, '').replace(/\/+$/g, '');
-            if (host) {
-              window.__VK_API_HOST = host;
-              setCookie('vk_api_host', host, 86400);
-            }
-          }
+          if (data.api_host) setHost(data.api_host);
           forceDark();
         }
       };
@@ -118,9 +92,7 @@ export default function VKBootstrap({ children }: Props) {
       subscribedHandler = handler;
     })();
 
-    return () => {
-      if (subscribedHandler) bridge.unsubscribe(subscribedHandler);
-    };
+    return () => { if (subscribedHandler) bridge.unsubscribe(subscribedHandler); };
   }, []);
 
   return <>{children}</>;
