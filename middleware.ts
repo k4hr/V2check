@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 function withFrameHeaders(res: NextResponse) {
-  // В iframe VK Mini Apps нужен frame-ancestors с *.vk.com/*.vk.ru (m.vk.com сюда тоже входит)
+  // Разрешаем встраивание в webview VK (включая m.vk.com)
   res.headers.set(
     'Content-Security-Policy',
     "frame-ancestors 'self' https://*.vk.com https://*.vk.ru https://vk.com https://vk.ru"
@@ -23,8 +23,6 @@ function canonicalizeVkParams(sp: URLSearchParams): string {
 }
 
 function isVkReferrer(req: NextRequest): boolean {
-  // Сервер видит только origin реферера (Referrer-Policy уже стоит).
-  // Этого достаточно, чтобы понять, что приходим из VK (включая m.vk.com).
   const ref = req.headers.get('referer') || req.headers.get('referrer') || '';
   return /\bhttps?:\/\/(?:[^/]+\.)?vk\.(com|ru)\b/i.test(ref);
 }
@@ -60,9 +58,65 @@ export function middleware(req: NextRequest) {
   const welcomedCookie = req.cookies.get('welcomed')?.value === '1';
   const welcomedQuery = searchParams.get('welcomed') === '1';
   const hasVkParamsCookie = !!req.cookies.get('vk_params')?.value;
-
-  // Доп. признак: пришли из VK (m.vk.com/new.vk.com/vk.com)
   const fromVk = isVkReferrer(req);
 
-  // Считаем пользователя «поприветствованным», если:
-  // - уже есть кука welcomed=1
+  // Считаем «welcomed», если:
+  //  - уже есть кука welcomed=1
+  //  - или пришёл ?welcomed=1
+  //  - или уже есть vk_params
+  //  - или видим заход из доменов VK (чтобы не потерять hash на первом редиректе)
+  const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie || fromVk;
+
+  const res = NextResponse.next();
+
+  // Если есть признак входа из VK/или welcomed=1/или уже есть vk_params — ставим welcomed=1
+  if ((welcomedQuery || hasVkParamsCookie || fromVk) && !welcomedCookie) {
+    res.cookies.set('welcomed', '1', {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'none', // важно для iframe VK
+      secure: true,
+      maxAge: 60 * 60 * 24 * 365, // 1 год
+    });
+  }
+
+  // Сохраняем vk_* из query в куку (hash сервер не видит)
+  const hasVkParamsInQuery = Array.from(searchParams.keys())
+    .some((k) => k.startsWith('vk_') || k === 'sign');
+  if (hasVkParamsInQuery) {
+    const canonical = canonicalizeVkParams(searchParams);
+    if (canonical) {
+      res.cookies.set('vk_params', canonical, {
+        path: '/',
+        httpOnly: false,
+        sameSite: 'none',
+        secure: true,
+        maxAge: 60 * 60 * 24, // сутки
+      });
+    }
+  }
+
+  // Онбординг
+  if (!welcomed && !isOnboarding) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/';
+    url.search = search;
+    return withFrameHeaders(NextResponse.redirect(url));
+  }
+
+  if (welcomed && isOnboarding) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/home';
+    url.search = search;
+    return withFrameHeaders(NextResponse.redirect(url));
+  }
+
+  return withFrameHeaders(res);
+}
+
+export const config = {
+  matcher: [
+    '/api/:path*',
+    '/((?!_next|favicon.ico|assets|public|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|txt|xml)).*)',
+  ],
+};
