@@ -7,12 +7,13 @@ function withFrameHeaders(res: NextResponse) {
     'Content-Security-Policy',
     "frame-ancestors 'self' https://*.vk.com https://*.vk.ru https://vk.com https://vk.ru"
   );
-  res.headers.delete('X-Frame-Options');
+  res.headers.delete('X-Frame-Options'); // конфликтует с CSP
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.headers.set('X-Content-Type-Options', 'nosniff');
   return res;
 }
 
+// Канонизируем vk_* → "k=v&k2=v2" по алфавиту (без sign)
 function canonicalizeVkParams(sp: URLSearchParams): string {
   const entries = Array.from(sp.entries())
     .filter(([k]) => k.startsWith('vk_') || k === 'sign');
@@ -29,7 +30,7 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
 
-    // TG совместимость
+    // TG initData (совместимость со старым заголовком)
     const tgHeader = requestHeaders.get('x-telegram-init-data');
     const legacyHeader = requestHeaders.get('x-init-data');
     if (!tgHeader && legacyHeader) {
@@ -47,14 +48,47 @@ export function middleware(req: NextRequest) {
   }
 
   // ---------- Страницы ----------
+  const isOnboarding = pathname === '/' || pathname === '/country';
+
   const welcomedCookie = req.cookies.get('welcomed')?.value === '1';
   const welcomedQuery = searchParams.get('welcomed') === '1';
   const hasVkParamsCookie = !!req.cookies.get('vk_params')?.value;
 
+  // считаем, что пользователь «поприветствован», если:
+  // - уже есть кука welcomed=1
+  // - или пришёл с welcomed=1 в урле
+  // - или у нас уже есть vk_params (значит пришли из VK и всё ок)
   const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie;
-  const isOnboarding = pathname === '/' || pathname === '/country';
 
-  // если не «welcomed», мы на любую страницу кроме онбординга — отправляем на /
+  const res = NextResponse.next();
+
+  // если увидели welcomed=1 в урле или уже есть vk_params — ставим куку welcomed=1
+  if ((welcomedQuery || hasVkParamsCookie) && !welcomedCookie) {
+    res.cookies.set('welcomed', '1', {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'none',
+      secure: true,
+      maxAge: 60 * 60 * 24 * 365, // 1 год
+    });
+  }
+
+  // Сохраняем vk_* из query в куку (hash сервер не видит)
+  const hasVkParamsInQuery = Array.from(searchParams.keys())
+    .some((k) => k.startsWith('vk_') || k === 'sign');
+  if (hasVkParamsInQuery) {
+    const canonical = canonicalizeVkParams(searchParams);
+    if (canonical) {
+      res.cookies.set('vk_params', canonical, {
+        path: '/',
+        httpOnly: false,
+        sameSite: 'none',
+        secure: true,
+        maxAge: 60 * 60 * 24, // сутки
+      });
+    }
+  }
+
   if (!welcomed && !isOnboarding) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
@@ -62,31 +96,11 @@ export function middleware(req: NextRequest) {
     return withFrameHeaders(NextResponse.redirect(url));
   }
 
-  // если уже «welcomed», не держим на онбординге
   if (welcomed && isOnboarding) {
     const url = req.nextUrl.clone();
     url.pathname = '/home';
     url.search = search;
     return withFrameHeaders(NextResponse.redirect(url));
-  }
-
-  // Сохраняем vk_* из query в куку (hash сервер не видит)
-  const hasVkParamsInQuery = Array.from(searchParams.keys())
-    .some((k) => k.startsWith('vk_') || k === 'sign');
-
-  const res = NextResponse.next();
-  if (hasVkParamsInQuery) {
-    const canonical = canonicalizeVkParams(searchParams);
-    if (canonical) {
-      // эти куки должны жить как third-party
-      res.cookies.set('vk_params', canonical, {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'none',
-        secure: true,
-        maxAge: 60 * 60 * 24,
-      });
-    }
   }
 
   return withFrameHeaders(res);
