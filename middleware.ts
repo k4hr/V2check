@@ -1,4 +1,4 @@
-// middleware.ts
+/* path: middleware.ts */
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -13,13 +13,13 @@ function withFrameHeaders(res: NextResponse) {
   return res;
 }
 
-// Канонизируем vk_* → "k=v&k2=v2" по алфавиту (без sign)
+// Собираем строку "vk_* (отсортированы) & sign(в конце)"
 function canonicalizeVkParams(sp: URLSearchParams): string {
-  const entries = Array.from(sp.entries())
-    .filter(([k]) => k.startsWith('vk_') || k === 'sign');
-  const withoutSign = entries.filter(([k]) => k !== 'sign');
-  withoutSign.sort(([a], [b]) => a.localeCompare(b));
-  return withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
+  const all = Array.from(sp.entries()).filter(([k]) => k.startsWith('vk_') || k === 'sign');
+  const sign = sp.get('sign') || '';
+  const vkOnly = all.filter(([k]) => k !== 'sign').sort(([a], [b]) => a.localeCompare(b));
+  const qs = vkOnly.map(([k, v]) => `${k}=${v}`).join('&');
+  return sign ? (qs ? `${qs}&sign=${sign}` : `sign=${sign}`) : qs;
 }
 
 export function middleware(req: NextRequest) {
@@ -66,7 +66,7 @@ export function middleware(req: NextRequest) {
     return withFrameHeaders(NextResponse.redirect(url));
   }
 
-  // Сохраняем vk_* из query в куку (hash сервер не видит)
+  // Сохраняем vk_* + sign из query в куку (hash сервер не видит)
   const hasVkParams = Array.from(searchParams.keys())
     .some((k) => k.startsWith('vk_') || k === 'sign');
 
@@ -79,6 +79,7 @@ export function middleware(req: NextRequest) {
         httpOnly: false,
         sameSite: 'lax',
         maxAge: 60 * 60 * 24, // сутки
+        // secure: true, // включи в проде https
       });
     }
   }
