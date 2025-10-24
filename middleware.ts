@@ -1,30 +1,26 @@
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 function withFrameHeaders(res: NextResponse) {
-  // Разрешаем встраивание в webview VK (включая m.vk.com)
   res.headers.set(
     'Content-Security-Policy',
     "frame-ancestors 'self' https://*.vk.com https://*.vk.ru https://vk.com https://vk.ru"
   );
-  res.headers.delete('X-Frame-Options'); // конфликтует с CSP
+  res.headers.delete('X-Frame-Options');
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.headers.set('X-Content-Type-Options', 'nosniff');
   return res;
 }
 
-// Канонизируем vk_* → "k=v&k2=v2" по алфавиту (без sign)
 function canonicalizeVkParams(sp: URLSearchParams): string {
   const entries = Array.from(sp.entries())
     .filter(([k]) => k.startsWith('vk_') || k === 'sign');
   const withoutSign = entries.filter(([k]) => k !== 'sign');
   withoutSign.sort(([a], [b]) => a.localeCompare(b));
-  return withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
-}
-
-function isVkReferrer(req: NextRequest): boolean {
-  const ref = req.headers.get('referer') || req.headers.get('referrer') || '';
-  return /\bhttps?:\/\/(?:[^/]+\.)?vk\.(com|ru)\b/i.test(ref);
+  const qs = withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
+  const sign = sp.get('sign');
+  return sign ? (qs ? `${qs}&sign=${sign}` : `sign=${sign}`) : qs;
 }
 
 export function middleware(req: NextRequest) {
@@ -35,17 +31,29 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
 
-    // TG initData (совместимость со старым заголовком)
-    const tgHeader = requestHeaders.get('x-telegram-init-data');
+    // нормализуем варианты заголовков от клиента
+    const tgHeader =
+      requestHeaders.get('x-telegram-init-data') ||
+      requestHeaders.get('x-tg-init-data') ||
+      requestHeaders.get('X-Telegram-Init-Data') ||
+      requestHeaders.get('X-Tg-Init-Data') ||
+      '';
+
     const legacyHeader = requestHeaders.get('x-init-data');
     if (!tgHeader && legacyHeader) {
       requestHeaders.set('x-telegram-init-data', legacyHeader);
+    } else if (tgHeader) {
+      requestHeaders.set('x-telegram-init-data', tgHeader);
     }
 
-    // VK: если клиент не прислал x-vk-params — подложим из куки
+    // X-Vk-Params — из заголовка или из куки
     if (!requestHeaders.get('x-vk-params')) {
       const fromCookie = req.cookies.get('vk_params')?.value;
       if (fromCookie) requestHeaders.set('x-vk-params', fromCookie);
+    } else {
+      // нормализуем регистр
+      const v = requestHeaders.get('x-vk-params')!;
+      requestHeaders.set('x-vk-params', v);
     }
 
     const res = NextResponse.next({ request: { headers: requestHeaders } });
@@ -58,29 +66,21 @@ export function middleware(req: NextRequest) {
   const welcomedCookie = req.cookies.get('welcomed')?.value === '1';
   const welcomedQuery = searchParams.get('welcomed') === '1';
   const hasVkParamsCookie = !!req.cookies.get('vk_params')?.value;
-  const fromVk = isVkReferrer(req);
-
-  // Считаем «welcomed», если:
-  //  - уже есть кука welcomed=1
-  //  - или пришёл ?welcomed=1
-  //  - или уже есть vk_params
-  //  - или видим заход из доменов VK (чтобы не потерять hash на первом редиректе)
-  const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie || fromVk;
+  const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie;
 
   const res = NextResponse.next();
 
-  // Если есть признак входа из VK/или welcomed=1/или уже есть vk_params — ставим welcomed=1
-  if ((welcomedQuery || hasVkParamsCookie || fromVk) && !welcomedCookie) {
+  if ((welcomedQuery || hasVkParamsCookie) && !welcomedCookie) {
     res.cookies.set('welcomed', '1', {
       path: '/',
       httpOnly: false,
-      sameSite: 'none', // важно для iframe VK
+      sameSite: 'none',
       secure: true,
-      maxAge: 60 * 60 * 24 * 365, // 1 год
+      maxAge: 60 * 60 * 24 * 365,
     });
   }
 
-  // Сохраняем vk_* из query в куку (hash сервер не видит)
+  // Сохраняем vk_* из query (hash сервер не видит)
   const hasVkParamsInQuery = Array.from(searchParams.keys())
     .some((k) => k.startsWith('vk_') || k === 'sign');
   if (hasVkParamsInQuery) {
@@ -91,12 +91,11 @@ export function middleware(req: NextRequest) {
         httpOnly: false,
         sameSite: 'none',
         secure: true,
-        maxAge: 60 * 60 * 24, // сутки
+        maxAge: 60 * 60 * 24,
       });
     }
   }
 
-  // Онбординг
   if (!welcomed && !isOnboarding) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
