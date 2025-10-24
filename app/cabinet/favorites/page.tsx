@@ -17,6 +17,12 @@ type Fav = {
   updatedAt: string; // ISO
 };
 
+function setWelcomedCookie() {
+  try {
+    document.cookie = `welcomed=1; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=None; Secure`;
+  } catch {}
+}
+
 function localeToBCP47(l: Locale): string {
   switch (l) {
     case 'ru': return 'ru-RU';
@@ -41,10 +47,25 @@ function formatDT(iso: string, l: Locale) {
 }
 
 export default function FavoritesPage() {
+  useEffect(setWelcomedCookie, []);
+
   const locale: Locale = readLocale();
   const L = STRINGS[locale] ?? STRINGS.ru;
   const _ = (key: keyof typeof L, fallback?: string) =>
     (L as any)[key] ?? (STRINGS.ru as any)[key] ?? fallback ?? String(key);
+
+  // suffix для всех внутренних ссылок (welcomed=1 + переносим id)
+  const linkSuffix = useMemo(() => {
+    try {
+      const u = new URL(window.location.href);
+      const sp = new URLSearchParams(u.search);
+      sp.set('welcomed', '1');
+      const id = u.searchParams.get('id');
+      if (id) sp.set('id', id);
+      const s = sp.toString();
+      return s ? `?${s}` : '?welcomed=1';
+    } catch { return '?welcomed=1'; }
+  }, []);
 
   useEffect(() => {
     try {
@@ -86,7 +107,8 @@ export default function FavoritesPage() {
 
       const threads = Array.isArray(data.threads) ? data.threads : [];
       const mapped: Fav[] = threads.map((t: any) => {
-        const idSuffix = qs ? `&${qs.slice(1)}` : '';
+        // после ?thread=… добавляем &welcomed=1 (+ debug id если есть)
+        const idSuffix = `&welcomed=1${qs ? `&${qs.slice(1)}` : ''}`;
         const when = String(t.updatedAt || t.lastUsedAt || new Date().toISOString());
         return {
           id: String(t.id),
@@ -121,12 +143,10 @@ export default function FavoritesPage() {
       {err && <p style={{ color: 'crimson', textAlign: 'center' }}>{err}</p>}
 
       {items.length === 0 ? (
-        // ПУСТОЕ СОСТОЯНИЕ БЕЗ РАМКИ (просто текст)
         <p style={{ textAlign: 'center', opacity: .75, margin: '16px auto', maxWidth: 680 }}>
           {emptyText}
         </p>
       ) : (
-        // Список избранных с правым столбцом даты/времени
         <div style={{ margin: '0 auto', maxWidth: 680, display: 'grid', gap: 8 }}>
           {items.map((it) => {
             const raw = (it.url || '').trim();
@@ -186,7 +206,7 @@ export default function FavoritesPage() {
               );
             }
 
-            const safeInternal: Route = (isInternal ? raw : '/cabinet') as Route;
+            const safeInternal: Route = (isInternal ? (raw + (raw.includes('?') ? '&' : '?') + linkSuffix.slice(1)) : `/cabinet${linkSuffix}`) as Route;
             return (
               <Link key={it.id} href={safeInternal} className="list-btn" style={commonStyle}>
                 {CardInner}
@@ -198,7 +218,7 @@ export default function FavoritesPage() {
 
       <div style={{ height: 16 }} />
 
-      <Link href="/cabinet" className="list-btn" style={{ textDecoration: 'none' }}>
+      <Link href={`/cabinet${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
         <span className="list-btn__left">
           <span className="list-btn__emoji">◀</span>
           <b>{backToCabinet}</b>
