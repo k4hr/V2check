@@ -1,4 +1,4 @@
-// app/api/me/route.ts
+/* path: app/api/me/route.ts */
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
@@ -15,21 +15,19 @@ const VK_SECURE_KEY = process.env.VK_SECURE_KEY || '';
 const ALLOW_BROWSER_DEBUG =
   (process.env.ALLOW_BROWSER_DEBUG || process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG || '').trim() === '1';
 
-/* ================= VK helpers (локальные) ================= */
 import crypto from 'crypto';
 
+// ——— VK helpers ———
 function toCanonicalVkQueryString(src: URLSearchParams | Record<string, string>): string {
   const entries: [string, string][] =
     src instanceof URLSearchParams ? Array.from(src.entries()) : Object.entries(src);
-  // Берём только vk_* + sign, но sign в подпись не идёт
   const filtered = entries.filter(([k]) => k === 'sign' || k.startsWith('vk_'));
   const withoutSign = filtered.filter(([k]) => k !== 'sign');
-  withoutSign.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  withoutSign.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)); // сортируем ТОЛЬКО vk_*
   return withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
 }
 
 function parseVkLaunchParams(raw: string): Record<string, string> {
-  // raw: строка формата "vk_user_id=...&vk_ts=...&sign=..."
   const sp = new URLSearchParams(raw);
   const out: Record<string, string> = {};
   for (const [k, v] of sp.entries()) out[k] = v;
@@ -45,15 +43,13 @@ function verifyVkMiniAppsLaunchParams(raw: string, secureKey: string): boolean {
     const data = toCanonicalVkQueryString(sp);
     const hmac = crypto.createHmac('sha256', secureKey);
     hmac.update(data);
-    // base64url без паддинга
     const digest = hmac.digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
-
     return crypto.timingSafeEqual(Buffer.from(digest), Buffer.from(sign));
   } catch {
     return false;
   }
 }
-/* ================= /VK helpers ================= */
+// ——— /VK helpers ———
 
 function extractUnsafeUserFromTg(initData: string): {
   id?: number | string;
@@ -74,12 +70,11 @@ type AuthResult =
   | { provider: 'telegram'; key: string; profile?: { username?: string; firstName?: string; lastName?: string }; via: string }
   | { provider: 'vk';       key: string; profile?: { username?: string; firstName?: string; lastName?: string }; via: string };
 
-// ————— основная ручка —————
 export async function POST(req: NextRequest) {
   try {
     const url = new URL(req.url);
 
-    // 1) VK: берём либо из заголовка, либо из куки (middleware / VKBootstrap его кладут)
+    // 1) VK: берём либо из заголовка, либо из куки
     const rawVkParams =
       req.headers.get('x-vk-params') ||
       req.cookies.get('vk_params')?.value ||
@@ -98,7 +93,7 @@ export async function POST(req: NextRequest) {
 
       const auth: AuthResult = {
         provider: 'vk',
-        key: `vk:${vkUserId}`, // пишем в telegramId (string) без миграций
+        key: `vk:${vkUserId}`, // кладём в поле telegramId как строку (без миграций)
         profile: undefined,
         via: 'vk_params',
       };
@@ -106,7 +101,7 @@ export async function POST(req: NextRequest) {
       return await upsertAndReply(auth);
     }
 
-    // 2) Telegram initData (как было)
+    // 2) Telegram initData
     const initData = getInitDataFrom(req);
     if (initData) {
       if (!BOT_TOKEN || !verifyInitData(initData, BOT_TOKEN)) {
@@ -165,10 +160,8 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Для удобства — GET зеркалит POST
 export const GET = POST;
 
-// ————— helper: upsert user и ответ —————
 async function upsertAndReply(auth: AuthResult) {
   const now = new Date();
 
