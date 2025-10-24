@@ -1,3 +1,4 @@
+// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
@@ -12,9 +13,9 @@ function withFrameHeaders(res: NextResponse) {
   return res;
 }
 
-// Канонизируем vk_* → "k=v&k2=v2" по алфавиту (без sign)
 function canonicalizeVkParams(sp: URLSearchParams): string {
-  const entries = Array.from(sp.entries()).filter(([k]) => k.startsWith('vk_') || k === 'sign');
+  const entries = Array.from(sp.entries())
+    .filter(([k]) => k.startsWith('vk_') || k === 'sign');
   const withoutSign = entries.filter(([k]) => k !== 'sign');
   withoutSign.sort(([a], [b]) => a.localeCompare(b));
   return withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
@@ -24,16 +25,18 @@ export function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
   const search = req.nextUrl.search;
 
-  // -------------------- API --------------------
+  // ---------- API ----------
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
 
     // TG совместимость
     const tgHeader = requestHeaders.get('x-telegram-init-data');
     const legacyHeader = requestHeaders.get('x-init-data');
-    if (!tgHeader && legacyHeader) requestHeaders.set('x-telegram-init-data', legacyHeader);
+    if (!tgHeader && legacyHeader) {
+      requestHeaders.set('x-telegram-init-data', legacyHeader);
+    }
 
-    // VK: подложим из куки, если нет заголовка
+    // VK: если клиент не прислал x-vk-params — подложим из куки
     if (!requestHeaders.get('x-vk-params')) {
       const fromCookie = req.cookies.get('vk_params')?.value;
       if (fromCookie) requestHeaders.set('x-vk-params', fromCookie);
@@ -43,10 +46,15 @@ export function middleware(req: NextRequest) {
     return withFrameHeaders(res);
   }
 
-  // -------------------- Страницы --------------------
-  const welcomed = req.cookies.get('welcomed')?.value === '1';
+  // ---------- Страницы ----------
+  const welcomedCookie = req.cookies.get('welcomed')?.value === '1';
+  const welcomedQuery = searchParams.get('welcomed') === '1';
+  const hasVkParamsCookie = !!req.cookies.get('vk_params')?.value;
+
+  const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie;
   const isOnboarding = pathname === '/' || pathname === '/country';
 
+  // если не «welcomed», мы на любую страницу кроме онбординга — отправляем на /
   if (!welcomed && !isOnboarding) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
@@ -54,6 +62,7 @@ export function middleware(req: NextRequest) {
     return withFrameHeaders(NextResponse.redirect(url));
   }
 
+  // если уже «welcomed», не держим на онбординге
   if (welcomed && isOnboarding) {
     const url = req.nextUrl.clone();
     url.pathname = '/home';
@@ -62,13 +71,14 @@ export function middleware(req: NextRequest) {
   }
 
   // Сохраняем vk_* из query в куку (hash сервер не видит)
-  const hasVkParams = Array.from(searchParams.keys()).some((k) => k.startsWith('vk_') || k === 'sign');
+  const hasVkParamsInQuery = Array.from(searchParams.keys())
+    .some((k) => k.startsWith('vk_') || k === 'sign');
 
   const res = NextResponse.next();
-  if (hasVkParams) {
+  if (hasVkParamsInQuery) {
     const canonical = canonicalizeVkParams(searchParams);
     if (canonical) {
-      // критично: SameSite=None; Secure — иначе в iframe кука не поедет
+      // эти куки должны жить как third-party
       res.cookies.set('vk_params', canonical, {
         path: '/',
         httpOnly: false,
@@ -78,6 +88,7 @@ export function middleware(req: NextRequest) {
       });
     }
   }
+
   return withFrameHeaders(res);
 }
 
