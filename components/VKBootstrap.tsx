@@ -1,3 +1,4 @@
+/* path: components/VKBootstrap.tsx */
 'use client';
 
 import { useEffect } from 'react';
@@ -12,16 +13,13 @@ declare global {
 
 type Props = { children?: React.ReactNode };
 
-/**
- * Инициализация VK Bridge + сохранение vk_params в куку
- * ВАЖНО: куки — SameSite=None; Secure (так как работаем в iframe VK: третья сторона).
- */
 export default function VKBootstrap({ children }: Props) {
   useEffect(() => {
     let subscribedHandler: ((e: any) => void) | null = null;
 
     const setCookie = (name: string, value: string, maxAgeSec = 86400) => {
       try {
+        // важно: в iframe у m.vk.com нужны None+Secure
         document.cookie =
           `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSec}; SameSite=None; Secure`;
       } catch {}
@@ -34,7 +32,6 @@ export default function VKBootstrap({ children }: Props) {
       setCookie('vk_api_host', h, 86400);
     };
 
-    // Собираем строку "vk_* & sign" в каноническом порядке
     const buildVkParamsString = (obj: Record<string, any>) => {
       const entries = Object.entries(obj || {}).filter(
         ([k]) => k === 'sign' || k.startsWith('vk_')
@@ -58,12 +55,13 @@ export default function VKBootstrap({ children }: Props) {
         if (!raw) {
           const all = new URLSearchParams(location.search + location.hash.replace(/^#/, location.search ? '&' : '?'));
           const tmp: Record<string, string> = {};
-          all.forEach((v, k) => { if (k === 'sign' || k.startsWith('vk_')) tmp[k] = v; });
+          all.forEach((v, k) => {
+            if (k === 'sign' || k.startsWith('vk_')) tmp[k] = v;
+          });
           raw = buildVkParamsString(tmp);
         }
         if (raw) {
           window.__VK_PARAMS__ = raw;
-          // критично: SameSite=None; Secure
           setCookie('vk_params', raw, 86400);
         }
       } catch {}
@@ -92,6 +90,7 @@ export default function VKBootstrap({ children }: Props) {
         forceDark();
         await persistLaunchParams();
       } catch {}
+
       const handler = (e: any) => {
         if (e?.detail?.type === 'VKWebAppUpdateConfig') {
           const data = e.detail.data || {};
@@ -103,7 +102,9 @@ export default function VKBootstrap({ children }: Props) {
       subscribedHandler = handler;
     })();
 
-    return () => { if (subscribedHandler) bridge.unsubscribe(subscribedHandler); };
+    return () => {
+      if (subscribedHandler) bridge.unsubscribe(subscribedHandler);
+    };
   }, []);
 
   return <>{children}</>;
