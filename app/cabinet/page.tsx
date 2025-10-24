@@ -2,6 +2,7 @@
 'use client';
 
 import Link from 'next/link';
+import type { Route } from 'next';
 import { useEffect, useMemo, useState } from 'react';
 import { readLocale, type Locale, STRINGS } from '@/lib/i18n';
 
@@ -19,13 +20,18 @@ type MeResp = {
     active?: boolean;
     expiresAt?: string | null;
     till?: string | null;
-    plan?: string | null; // ожидаем 'pro', 'pro+', 'pro-plus', 'pro_plus', 'proplus'
+    plan?: string | null;
   } | null;
 };
 
 type AdminCheck = { ok: boolean; admin?: boolean; id?: string | null; via?: string; error?: string };
 
 /* ------------ helpers ------------- */
+function setWelcomedCookie() {
+  try {
+    document.cookie = `welcomed=1; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=None; Secure`;
+  } catch {}
+}
 function getCookie(name: string): string {
   try {
     const rows = document.cookie ? document.cookie.split('; ') : [];
@@ -53,10 +59,6 @@ function getInitDataFromCookie(): string {
 function haptic(type: 'light' | 'medium' = 'light') {
   try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
 }
-function goBackFallback() {
-  if (document.referrer && window.history.length > 1) history.back();
-  else window.location.href = '/home';
-}
 function formatDate(d: Date) {
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -73,6 +75,9 @@ function normalizePlan(plan?: string | null): 'pro' | 'pro+' | null {
 /* ---------------------------------- */
 
 export default function CabinetPage() {
+  // всегда считаем, что пользователь «приветствован» внутри VK WebView
+  useEffect(setWelcomedCookie, []);
+
   const locale: Locale = readLocale();
   const L = STRINGS[locale] ?? STRINGS.ru;
   const _ = (key: keyof typeof L, fallback?: string) =>
@@ -120,7 +125,20 @@ export default function CabinetPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminInfo, setAdminInfo] = useState<string>('');
 
-  // debug id из URL (для браузерного режима)
+  // общий хвост для всех внутренних ссылок: welcomed=1 + сохраняем id
+  const linkSuffix = useMemo(() => {
+    try {
+      const u = new URL(window.location.href);
+      const sp = new URLSearchParams(u.search);
+      sp.set('welcomed', '1');
+      const id = u.searchParams.get('id');
+      if (id) sp.set('id', id);
+      const s = sp.toString();
+      return s ? `?${s}` : '?welcomed=1';
+    } catch { return '?welcomed=1'; }
+  }, []);
+
+  // id для debug-запросов (не влияет на навигацию)
   const debugId = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -130,18 +148,9 @@ export default function CabinetPage() {
   }, []);
 
   // typedRoutes-совместимые href
-  const hrefPro = useMemo(
-    () => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'),
-    [debugId]
-  );
-  const hrefFav = useMemo(
-    () => (debugId ? { pathname: '/cabinet/favorites' as const, query: { id: debugId } } : '/cabinet/favorites'),
-    [debugId]
-  );
-  const hrefAdmin = useMemo(
-    () => (debugId ? { pathname: '/cabinet/admin' as const, query: { id: debugId } } : '/cabinet/admin'),
-    [debugId]
-  );
+  const hrefPro   = useMemo<Route>(() => (`/pro${linkSuffix}` as Route),   [linkSuffix]);
+  const hrefFav   = useMemo<Route>(() => (`/cabinet/favorites${linkSuffix}` as Route), [linkSuffix]);
+  const hrefAdmin = useMemo<Route>(() => (`/cabinet/admin${linkSuffix}` as Route),     [linkSuffix]);
 
   useEffect(() => {
     // синхронизируем <html lang/dir>
@@ -214,11 +223,16 @@ export default function CabinetPage() {
     // TWA BackButton
     try {
       tg?.BackButton?.show?.();
-      const back = () => { haptic('light'); goBackFallback(); };
+      const back = () => {
+        haptic('light');
+        // если history пуст — идём на домашку с welcomed=1
+        if (document.referrer && window.history.length > 1) history.back();
+        else window.location.href = `/home${linkSuffix}`;
+      };
       tg?.BackButton?.onClick?.(back);
       return () => { tg?.BackButton?.hide?.(); tg?.BackButton?.offClick?.(back); };
     } catch {}
-  }, []);
+  }, [linkSuffix]);
 
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
@@ -251,24 +265,24 @@ export default function CabinetPage() {
 
         {/* Верхняя панель: Назад + (условно) Admin */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-          <button
-            type="button"
-            onClick={() => { haptic('light'); goBackFallback(); }}
+          <Link
+            href={`/home${linkSuffix}` as Route}
             className="list-btn"
             style={{
-              width: 120,
+              width: 140,
               padding: '10px 14px',
               borderRadius: 12,
               background: '#171a21',
               border: '1px solid var(--border)',
               display: 'flex',
               alignItems: 'center',
-              gap: 8
+              gap: 8,
+              textDecoration: 'none'
             }}
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
             <span style={{ fontWeight: 600 }}>{T.back}</span>
-          </button>
+          </Link>
 
           {isAdmin ? (
             <Link
