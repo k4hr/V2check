@@ -1,24 +1,32 @@
-// middleware.ts
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 function withFrameHeaders(res: NextResponse) {
+  // В iframe VK Mini Apps нужен frame-ancestors с *.vk.com/*.vk.ru (m.vk.com сюда тоже входит)
   res.headers.set(
     'Content-Security-Policy',
     "frame-ancestors 'self' https://*.vk.com https://*.vk.ru https://vk.com https://vk.ru"
   );
-  res.headers.delete('X-Frame-Options');
+  res.headers.delete('X-Frame-Options'); // конфликтует с CSP
   res.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.headers.set('X-Content-Type-Options', 'nosniff');
   return res;
 }
 
+// Канонизируем vk_* → "k=v&k2=v2" по алфавиту (без sign)
 function canonicalizeVkParams(sp: URLSearchParams): string {
   const entries = Array.from(sp.entries())
     .filter(([k]) => k.startsWith('vk_') || k === 'sign');
   const withoutSign = entries.filter(([k]) => k !== 'sign');
   withoutSign.sort(([a], [b]) => a.localeCompare(b));
   return withoutSign.map(([k, v]) => `${k}=${v}`).join('&');
+}
+
+function isVkReferrer(req: NextRequest): boolean {
+  // Сервер видит только origin реферера (Referrer-Policy уже стоит).
+  // Этого достаточно, чтобы понять, что приходим из VK (включая m.vk.com).
+  const ref = req.headers.get('referer') || req.headers.get('referrer') || '';
+  return /\bhttps?:\/\/(?:[^/]+\.)?vk\.(com|ru)\b/i.test(ref);
 }
 
 export function middleware(req: NextRequest) {
@@ -29,7 +37,7 @@ export function middleware(req: NextRequest) {
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
 
-    // TG initData (совместимость)
+    // TG initData (совместимость со старым заголовком)
     const tgHeader = requestHeaders.get('x-telegram-init-data');
     const legacyHeader = requestHeaders.get('x-init-data');
     if (!tgHeader && legacyHeader) {
@@ -53,57 +61,8 @@ export function middleware(req: NextRequest) {
   const welcomedQuery = searchParams.get('welcomed') === '1';
   const hasVkParamsCookie = !!req.cookies.get('vk_params')?.value;
 
-  const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie;
+  // Доп. признак: пришли из VK (m.vk.com/new.vk.com/vk.com)
+  const fromVk = isVkReferrer(req);
 
-  const res = NextResponse.next();
-
-  // если увидели welcomed=1 в урле или уже есть vk_params — ставим куку welcomed=1
-  if ((welcomedQuery || hasVkParamsCookie) && !welcomedCookie) {
-    res.cookies.set('welcomed', '1', {
-      path: '/',
-      httpOnly: false,
-      sameSite: 'none',
-      secure: true,
-      maxAge: 60 * 60 * 24 * 365,
-    });
-  }
-
-  // Сохраняем vk_* из query (hash сервер не видит)
-  const hasVkParamsInQuery = Array.from(searchParams.keys())
-    .some((k) => k.startsWith('vk_') || k === 'sign');
-  if (hasVkParamsInQuery) {
-    const canonical = canonicalizeVkParams(searchParams);
-    if (canonical) {
-      res.cookies.set('vk_params', canonical, {
-        path: '/',
-        httpOnly: false,
-        sameSite: 'none',
-        secure: true,
-        maxAge: 60 * 60 * 24,
-      });
-    }
-  }
-
-  if (!welcomed && !isOnboarding) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/';
-    url.search = search;
-    return withFrameHeaders(NextResponse.redirect(url));
-  }
-
-  if (welcomed && isOnboarding) {
-    const url = req.nextUrl.clone();
-    url.pathname = '/home';
-    url.search = search;
-    return withFrameHeaders(NextResponse.redirect(url));
-  }
-
-  return withFrameHeaders(res);
-}
-
-export const config = {
-  matcher: [
-    '/api/:path*',
-    '/((?!_next|favicon.ico|assets|public|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|txt|xml)).*)',
-  ],
-};
+  // Считаем пользователя «поприветствованным», если:
+  // - уже есть кука welcomed=1
