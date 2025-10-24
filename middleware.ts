@@ -28,7 +28,7 @@ export function middleware(req: NextRequest) {
   const { pathname, searchParams } = req.nextUrl;
   const search = req.nextUrl.search;
 
-  // --- API: прокидываем заголовки для аутентификации ---
+  // ---------- API: пробрасываем заголовки ----------
   if (pathname.startsWith('/api')) {
     const requestHeaders = new Headers(req.headers);
 
@@ -40,17 +40,13 @@ export function middleware(req: NextRequest) {
       requestHeaders.get('X-Tg-Init-Data') ||
       requestHeaders.get('x-init-data') || // исторический
       '';
+    if (tgHeader) requestHeaders.set('x-telegram-init-data', tgHeader);
 
-    if (tgHeader) {
-      requestHeaders.set('x-telegram-init-data', tgHeader);
-    }
-
-    // VK launch params — из заголовка или куки
+    // VK launch params — из заголовка или из куки
     if (!requestHeaders.get('x-vk-params')) {
       const fromCookie = req.cookies.get('vk_params')?.value;
       if (fromCookie) requestHeaders.set('x-vk-params', fromCookie);
     } else {
-      // нормализуем регистр ключа
       requestHeaders.set('x-vk-params', requestHeaders.get('x-vk-params')!);
     }
 
@@ -58,27 +54,40 @@ export function middleware(req: NextRequest) {
     return withFrameHeaders(res);
   }
 
-  // --- Страницы ---
+  // ---------- Страницы ----------
   const isOnboarding = pathname === '/' || pathname === '/country';
 
-  // Признак входа из VK по рефереру (важно для m.vk.com, где vk_* в hash)
+  // 1) Признаки запуска во фрейме VK
   const referer = req.headers.get('referer') || '';
-  const fromVk = /(^https?:\/\/)?([a-z0-9.-]*\.)?vk\.(com|ru)\//i.test(referer);
+  const ua = req.headers.get('user-agent') || '';
+  const secFetchSite = (req.headers.get('sec-fetch-site') || '').toLowerCase();
 
-  const welcomedCookie     = req.cookies.get('welcomed')?.value === '1';
-  const welcomedQuery      = searchParams.get('welcomed') === '1';
-  const hasVkParamsCookie  = !!req.cookies.get('vk_params')?.value;
+  const fromVkRef = /(^https?:\/\/)?([a-z0-9.-]*\.)?vk\.(com|ru)\//i.test(referer);
+  const vkUA = /(VK.*App|VKClient|VKB|OKApp|YaBrowser\/.*SearchPartner)/i.test(ua);
+  const embeddedCrossSite = secFetchSite === 'cross-site';
 
-  // Считаем «приветствованным», если:
-  // - уже есть welcomed=1 (кука или query)
-  // - уже есть vk_params (значит ранее запускались из VK)
-  // - пришли из домена vk.com/vk.ru (iframe m.vk.com → hash недоступен серверу)
-  const welcomed = welcomedCookie || welcomedQuery || hasVkParamsCookie || fromVk;
+  // 2) Наши прежние признаки
+  const welcomedCookie    = req.cookies.get('welcomed')?.value === '1';
+  const welcomedQuery     = searchParams.get('welcomed') === '1';
+  const hasVkParamsCookie = !!req.cookies.get('vk_params')?.value;
+
+  // 3) Считаем визит «приветствованным», если ЛЮБОЕ из условий:
+  // - уже есть welcomed=1 (кука/урл)
+  // - уже есть vk_params
+  // - запрос пришёл как cross-site (мы внутри iframe на чужом домене)
+  // - явные признаки VK по рефереру или User-Agent
+  const welcomed =
+    welcomedCookie ||
+    welcomedQuery ||
+    hasVkParamsCookie ||
+    embeddedCrossSite ||
+    fromVkRef ||
+    vkUA;
 
   const res = NextResponse.next();
 
-  // Если увидели welcomed=1 в урле, есть vk_params или пришли из VK — ставим welcomed=1
-  if ((welcomedQuery || hasVkParamsCookie || fromVk) && !welcomedCookie) {
+  // Если есть любой из признаков VK/iframe — ставим welcomed=1 (для следующих переходов)
+  if ((welcomedQuery || hasVkParamsCookie || embeddedCrossSite || fromVkRef || vkUA) && !welcomedCookie) {
     res.cookies.set('welcomed', '1', {
       path: '/',
       httpOnly: false,
