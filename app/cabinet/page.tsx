@@ -2,16 +2,19 @@
 'use client';
 
 import Link from 'next/link';
-import type { Route } from 'next';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { readLocale, type Locale, STRINGS } from '@/lib/i18n';
+import { detectPlatform } from '@/lib/platform';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
 type MeResp = {
   ok: boolean;
   error?: string;
+  provider?: 'vk' | 'telegram';
+  via?: string;
   user?: {
+    telegramId?: string;
     first_name?: string;
     last_name?: string;
     username?: string;
@@ -27,11 +30,6 @@ type MeResp = {
 type AdminCheck = { ok: boolean; admin?: boolean; id?: string | null; via?: string; error?: string };
 
 /* ------------ helpers ------------- */
-function setWelcomedCookie() {
-  try {
-    document.cookie = `welcomed=1; Path=/; Max-Age=${60 * 60 * 24 * 365}; SameSite=None; Secure`;
-  } catch {}
-}
 function getCookie(name: string): string {
   try {
     const rows = document.cookie ? document.cookie.split('; ') : [];
@@ -59,6 +57,10 @@ function getInitDataFromCookie(): string {
 function haptic(type: 'light' | 'medium' = 'light') {
   try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
 }
+function goBackFallback() {
+  if (document.referrer && window.history.length > 1) history.back();
+  else window.location.href = '/home';
+}
 function formatDate(d: Date) {
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -75,11 +77,11 @@ function normalizePlan(plan?: string | null): 'pro' | 'pro+' | null {
 /* ---------------------------------- */
 
 export default function CabinetPage() {
-  // всегда считаем, что пользователь «приветствован» внутри VK WebView
-  useEffect(setWelcomedCookie, []);
-
   const locale: Locale = readLocale();
   const L = STRINGS[locale] ?? STRINGS.ru;
+  const platform = useMemo(() => detectPlatform(), []);
+  const providerRef = useRef<'vk' | 'telegram' | undefined>(undefined);
+
   const _ = (key: keyof typeof L, fallback?: string) =>
     (L as any)[key] ?? (STRINGS.ru as any)[key] ?? fallback ?? String(key);
 
@@ -125,20 +127,7 @@ export default function CabinetPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminInfo, setAdminInfo] = useState<string>('');
 
-  // общий хвост для всех внутренних ссылок: welcomed=1 + сохраняем id
-  const linkSuffix = useMemo(() => {
-    try {
-      const u = new URL(window.location.href);
-      const sp = new URLSearchParams(u.search);
-      sp.set('welcomed', '1');
-      const id = u.searchParams.get('id');
-      if (id) sp.set('id', id);
-      const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1';
-    } catch { return '?welcomed=1'; }
-  }, []);
-
-  // id для debug-запросов (не влияет на навигацию)
+  // debug id из URL (для браузерного режима)
   const debugId = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -147,13 +136,20 @@ export default function CabinetPage() {
     } catch { return ''; }
   }, []);
 
-  // typedRoutes-совместимые href
-  const hrefPro   = useMemo<Route>(() => (`/pro${linkSuffix}` as Route),   [linkSuffix]);
-  const hrefFav   = useMemo<Route>(() => (`/cabinet/favorites${linkSuffix}` as Route), [linkSuffix]);
-  const hrefAdmin = useMemo<Route>(() => (`/cabinet/admin${linkSuffix}` as Route),     [linkSuffix]);
+  const hrefPro = useMemo(
+    () => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'),
+    [debugId]
+  );
+  const hrefFav = useMemo(
+    () => (debugId ? { pathname: '/cabinet/favorites' as const, query: { id: debugId } } : '/cabinet/favorites'),
+    [debugId]
+  );
+  const hrefAdmin = useMemo(
+    () => (debugId ? { pathname: '/cabinet/admin' as const, query: { id: debugId } } : '/cabinet/admin'),
+    [debugId]
+  );
 
   useEffect(() => {
-    // синхронизируем <html lang/dir>
     try {
       document.documentElement.lang = locale;
       document.documentElement.dir = locale === 'fa' ? 'rtl' : 'ltr';
@@ -171,6 +167,10 @@ export default function CabinetPage() {
       const resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
       const data: MeResp = await resp.json();
 
+      // запомним провайдера (vk/tg)
+      providerRef.current = data?.provider;
+
+      // user с сервера (для VK тут обычно только telegramId)
       if (data?.user) setUser(prev => prev ?? data.user);
 
       const sub = data?.subscription;
@@ -180,14 +180,9 @@ export default function CabinetPage() {
 
       if (isActive) {
         const untilTxt = untilStr ? formatDate(new Date(untilStr)) : null;
-
-        if (planNorm === 'pro') {
-          setStatusText(T.proActive(untilTxt));
-        } else if (planNorm === 'pro+') {
-          setStatusText(T.proPlusActive(untilTxt));
-        } else {
-          setStatusText(T.activeGeneric(untilTxt));
-        }
+        if (planNorm === 'pro')      setStatusText(T.proActive(untilTxt));
+        else if (planNorm === 'pro+') setStatusText(T.proPlusActive(untilTxt));
+        else                          setStatusText(T.activeGeneric(untilTxt));
       } else {
         setStatusText(T.notActive);
       }
@@ -195,6 +190,33 @@ export default function CabinetPage() {
       setStatusText(T.notActive);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Если провайдер VK — подтащим имя через vk-bridge
+  async function loadVkProfileIfPossible() {
+    if (providerRef.current !== 'vk') return;
+    if (platform !== 'vk') return; // в браузере по debugId бриджа может не быть
+    try {
+      const w: any = window;
+      const bridge = w.vkBridge || w.bridge;
+      const hasBridge = !!(bridge?.send) || typeof w.VKWebAppGetUserInfo === 'function';
+      if (!hasBridge) return;
+
+      let info: any;
+      if (bridge?.send) info = await bridge.send('VKWebAppGetUserInfo');
+      else info = await w.VKWebAppGetUserInfo(); // старый путь
+
+      if (info && (info.first_name || info.last_name || info.screen_name)) {
+        setUser(u => ({
+          ...(u || {}),
+          first_name: info.first_name || u?.first_name,
+          last_name: info.last_name || u?.last_name,
+          username: info.screen_name || u?.username,
+        }));
+      }
+    } catch {
+      /* ignore */
     }
   }
 
@@ -223,35 +245,34 @@ export default function CabinetPage() {
     // TWA BackButton
     try {
       tg?.BackButton?.show?.();
-      const back = () => {
-        haptic('light');
-        // если history пуст — идём на домашку с welcomed=1
-        if (document.referrer && window.history.length > 1) history.back();
-        else window.location.href = `/home${linkSuffix}`;
-      };
+      const back = () => { haptic('light'); goBackFallback(); };
       tg?.BackButton?.onClick?.(back);
       return () => { tg?.BackButton?.hide?.(); tg?.BackButton?.offClick?.(back); };
     } catch {}
-  }, [linkSuffix]);
+  }, []);
 
   useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
     let u = WebApp?.initDataUnsafe?.user || null;
-    if (!u) u = parseUserFromInitCookie();
+    if (!u) u = parseUserFromInitCookie(); // это только для Telegram
     setUser(u);
 
     const initData = WebApp?.initData || getInitDataFromCookie();
     if (initData) {
-      loadMe(initData);
+      // телеграм-путь
+      loadMe(initData).then(loadVkProfileIfPossible);
       checkAdmin(initData);
     } else if (DEBUG) {
-      loadMe();
+      // браузерный debugId
+      loadMe().then(loadVkProfileIfPossible);
       checkAdmin();
     } else {
+      // VK без Telegram initData
+      loadMe().then(loadVkProfileIfPossible);
       setIsAdmin(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debugId, locale]);
+  }, [debugId, locale, platform]);
 
   const hello =
     (user?.first_name || '') +
@@ -265,24 +286,24 @@ export default function CabinetPage() {
 
         {/* Верхняя панель: Назад + (условно) Admin */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-          <Link
-            href={`/home${linkSuffix}` as Route}
+          <button
+            type="button"
+            onClick={() => { haptic('light'); goBackFallback(); }}
             className="list-btn"
             style={{
-              width: 140,
+              width: 120,
               padding: '10px 14px',
               borderRadius: 12,
               background: '#171a21',
               border: '1px solid var(--border)',
               display: 'flex',
               alignItems: 'center',
-              gap: 8,
-              textDecoration: 'none'
+              gap: 8
             }}
           >
             <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
             <span style={{ fontWeight: 600 }}>{T.back}</span>
-          </Link>
+          </button>
 
           {isAdmin ? (
             <Link
