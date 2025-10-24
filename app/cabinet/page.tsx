@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { readLocale, type Locale, STRINGS } from '@/lib/i18n';
-import { detectPlatform } from '@/lib/platform';
+import { detectPlatform, type Platform } from '@/lib/platform';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
@@ -79,7 +79,9 @@ function normalizePlan(plan?: string | null): 'pro' | 'pro+' | null {
 export default function CabinetPage() {
   const locale: Locale = readLocale();
   const L = STRINGS[locale] ?? STRINGS.ru;
-  const platform = useMemo(() => detectPlatform(), []);
+
+  // ПЛАТФОРМА — как состояние, чтобы можно было форсить VK
+  const [platform, setPlatform] = useState<Platform>(detectPlatform());
   const providerRef = useRef<'vk' | 'telegram' | undefined>(undefined);
 
   const _ = (key: keyof typeof L, fallback?: string) =>
@@ -156,6 +158,13 @@ export default function CabinetPage() {
     } catch {}
   }, [locale]);
 
+  // Если есть кука vk_params — это точный сигнал Mini Apps → форсим VK
+  useEffect(() => {
+    try {
+      if (document.cookie.includes('vk_params=')) setPlatform('vk');
+    } catch {}
+  }, []);
+
   async function loadMe(initData?: string) {
     setLoading(true);
     try {
@@ -169,6 +178,11 @@ export default function CabinetPage() {
 
       // запомним провайдера (vk/tg)
       providerRef.current = data?.provider;
+
+      // если сервер говорит «vk», а платформа не vk — форсим vk
+      if (data?.provider === 'vk' && platform !== 'vk') {
+        setPlatform('vk');
+      }
 
       // user с сервера (для VK тут обычно только telegramId)
       if (data?.user) setUser(prev => prev ?? data.user);
@@ -272,7 +286,15 @@ export default function CabinetPage() {
       setIsAdmin(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debugId, locale, platform]);
+  }, [debugId, locale]);
+
+  // Когда платформа СМЕНИЛАСЬ на 'vk' (форс по cookie/provider) — попробуем снова дотянуть профиль
+  useEffect(() => {
+    if (platform === 'vk') {
+      loadVkProfileIfPossible();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform]);
 
   const hello =
     (user?.first_name || '') +
