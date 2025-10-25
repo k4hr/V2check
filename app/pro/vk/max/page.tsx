@@ -3,8 +3,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Plan } from '@/lib/pricing';
+import { getVkRubKopecks } from '@/lib/pricing';
 import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
 
+// Локализованные титулы для PRO+
 const TITLES_RU: Record<Plan, string> = {
   WEEK: 'Pro+ — Неделя',
   MONTH: 'Pro+ — Месяц',
@@ -18,18 +20,17 @@ const TITLES_EN: Record<Plan, string> = {
   YEAR: 'Pro+ — Year',
 };
 
-// Рубли для VK (отображение)
-const PRICES_RUB: Record<Plan, number> = {
-  WEEK: 249,
-  MONTH: 749,
-  HALF_YEAR: 3699,
-  YEAR: 6499,
-};
-
 export default function ProVkMaxPage() {
   const locale: Locale = readLocale();
   const S = STRINGS[locale];
   const TITLES = locale === 'en' ? TITLES_EN : TITLES_RU;
+
+  // Цены из новой схемы (копейки)
+  const PRICES_KOP = useMemo(() => getVkRubKopecks('PROPLUS'), []);
+  const fmt = useMemo(
+    () => new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }),
+    [locale]
+  );
 
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -38,7 +39,6 @@ export default function ProVkMaxPage() {
   useEffect(() => {
     const w: any = window;
     try { document.documentElement.lang = locale; } catch {}
-    // Мягкая инициализация VK Mini Apps
     try {
       if (w.vkBridge?.send) {
         w.vkBridge.send('VKWebAppInit').catch(() => {});
@@ -50,7 +50,6 @@ export default function ProVkMaxPage() {
     } catch {}
   }, [locale]);
 
-  // Прокидываем id из query без изменений (совместимость)
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -66,34 +65,23 @@ export default function ProVkMaxPage() {
     setInfo(null);
 
     try {
-      // Твоя серверная ручка должна вернуть либо pay_url, либо параметры для vkBridge
       const res = await fetch(`/api/vk/create-order?tier=PROPLUS&plan=${plan}${linkSuffix}`, { method: 'POST' });
       const data = await res.json();
 
-      if (!data?.ok) {
-        throw new Error(data?.error || 'VK_CREATE_ORDER_FAILED');
-      }
+      if (!data?.ok) throw new Error(data?.error || 'VK_CREATE_ORDER_FAILED');
 
       const w: any = window;
       const bridge = w.vkBridge;
 
-      // Вариант 1: прямая ссылка на оплату
       if (data.redirect_url) {
         window.location.href = data.redirect_url;
         return;
       }
-
-      // Вариант 2: открыть оплату через VKWebAppOpenPayForm
       if (bridge?.send && data.openPayForm) {
         await bridge.send('VKWebAppOpenPayForm', data.openPayForm);
-        setInfo(locale === 'en'
-          ? 'Payment window opened in VK.'
-          : 'Окно оплаты открыто во ВКонтакте.'
-        );
+        setInfo(locale === 'en' ? 'Payment window opened in VK.' : 'Окно оплаты открыто во ВКонтакте.');
         return;
       }
-
-      // Фоллбэк
       setInfo(locale === 'en'
         ? 'Order created. If payment didn’t open, check VK payments.'
         : 'Заказ создан. Если окно оплаты не появилось — проверьте платежи VK.'
@@ -105,7 +93,7 @@ export default function ProVkMaxPage() {
     }
   }
 
-  const entries = Object.entries(PRICES_RUB) as [Plan, number][];
+  const entries = useMemo(() => Object.entries(PRICES_KOP) as [Plan, number][], [PRICES_KOP]);
 
   const T = {
     back: S.back || 'Назад',
@@ -128,22 +116,23 @@ export default function ProVkMaxPage() {
         {info && <p className="info">{info}</p>}
 
         <div className="list">
-          {entries.map(([plan, amountRub]) => {
+          {entries.map(([plan, amountKop]) => {
             const can = !busy || busy === plan;
+            const pretty = fmt.format(Math.round(amountKop / 100));
             return (
               <button
                 key={plan}
                 disabled={!can}
                 onClick={() => buyVK(plan)}
                 className="row"
-                aria-label={`${TITLES[plan]} — ${amountRub} ₽`}
+                aria-label={`${TITLES[plan]} — ${pretty}`}
               >
                 <span className="left">
                   <span className="dot">✨</span>
                   <b className="name">{TITLES[plan]}</b>
                 </span>
                 <span className="right">
-                  <span className="price">{amountRub} ₽</span>
+                  <span className="price">{pretty}</span>
                   <span className="chev">›</span>
                 </span>
               </button>
