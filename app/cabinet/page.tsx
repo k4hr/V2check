@@ -134,9 +134,14 @@ export default function CabinetPage() {
     } catch { return ''; }
   }, []);
 
-  const hrefPro   = useMemo(() => (debugId ? { pathname: '/pro' as const, query: { id: debugId } } : '/pro'), [debugId]);
-  const hrefFav   = useMemo(() => (debugId ? { pathname: '/cabinet/favorites' as const, query: { id: debugId } } : '/cabinet/favorites'), [debugId]);
-  const hrefAdmin = useMemo(() => (debugId ? { pathname: '/cabinet/admin' as const, query: { id: debugId } } : '/cabinet/admin'), [debugId]);
+  // добавляем welcomed=1 во все ссылки + прокидываем id если он есть
+  const baseQuery = useMemo(() => {
+    return debugId ? { welcomed: '1', id: debugId } : { welcomed: '1' };
+  }, [debugId]);
+
+  const hrefPro   = useMemo(() => ({ pathname: '/pro' as const,              query: baseQuery }), [baseQuery]);
+  const hrefFav   = useMemo(() => ({ pathname: '/cabinet/favorites' as const, query: baseQuery }), [baseQuery]);
+  const hrefAdmin = useMemo(() => ({ pathname: '/cabinet/admin' as const,     query: baseQuery }), [baseQuery]);
 
   useEffect(() => {
     try {
