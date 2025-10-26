@@ -36,13 +36,18 @@ export default function Page(): ReactElement {
     try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
   }, []);
 
-  // пробрасываем ?id=
+  // пробрасываем welcomed=1 и ?id= (если есть)
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
+      const sp = new URLSearchParams(u.search);
+      sp.set('welcomed', '1');
       const id = u.searchParams.get('id');
-      return id ? `?id=${encodeURIComponent(id)}` : '';
-    } catch { return ''; }
+      if (id) sp.set('id', id);
+      return `?${sp.toString()}`;
+    } catch {
+      return '?welcomed=1';
+    }
   }, []);
 
   // Префил из ?q=
@@ -140,7 +145,7 @@ export default function Page(): ReactElement {
 
   return (
     <main className="lm-wrap">
-      <BackBtn fallback="/home" />
+      <BackBtn fallback={`/home${linkSuffix}` as Route} />
 
       <h1
         style={{
