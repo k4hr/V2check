@@ -5,6 +5,7 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useEffect, useMemo, useState } from 'react';
 import { STRINGS, readLocale, setLocaleEverywhere, ensureLocaleCookie, type Locale } from '@/lib/i18n';
+import { detectPlatform } from '@/lib/platform';
 
 const LOCALES = [
   { code: 'ru' as const, label: 'Русский',     flag: '🇷🇺' },
@@ -31,6 +32,9 @@ export default function HomePage(){
   const [pendingLocale,setPendingLocale]=useState<Locale>(currentLocale);
   const [saving,setSaving]=useState(false);
   const L=STRINGS[currentLocale];
+
+  // определяем платформу, чтобы скрыть кнопку смены языка во ВК
+  const platform = useMemo(() => detectPlatform(), []);
 
   useEffect(()=>{
     const w:any=window;
@@ -115,58 +119,63 @@ export default function HomePage(){
         </Link>
       </div>
 
-      <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
-        <button
-          type="button"
-          onClick={()=>{setOpen(v=>!v);haptic('light');}}
-          className="ghost-link"
-          style={{textDecoration:'none'}}
-          aria-expanded={open}
-        >
-          🌐 {L.changeLang}
-        </button>
-      </div>
-
-      {open && (
-        <div style={{marginTop:12,border:'1px dashed #4a4e6a',background:'#141823',borderRadius:14,padding:14,maxWidth:560,marginLeft:'auto',marginRight:'auto'}}>
-          <div style={{marginBottom:10,opacity:.8,fontSize:12,letterSpacing:.2}}>{L.chooseLang}</div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8}}>
-            {LOCALES.map(l=>{
-              const active=pendingLocale===l.code;
-              return (
-                <button
-                  key={l.code}
-                  onClick={()=>setPendingLocale(l.code)}
-                  className="list-btn"
-                  style={{
-                    display:'flex',alignItems:'center',gap:10,borderRadius:12,padding:'10px 12px',
-                    background:active?'#1e2434':'#171a21',
-                    border:active?'1px solid #6573ff':'1px solid var(--card-border)',
-                    boxShadow:active?'0 0 0 3px rgba(101,115,255,.15) inset':'none'
-                  }}
-                >
-                  <span style={{width:22,textAlign:'center'}}>{l.flag}</span>
-                  <span style={{fontWeight:600}}>{l.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:12}}>
-            <button type="button" onClick={onCancel} className="list-btn" style={{padding:'10px 14px',borderRadius:12,background:'#1a1f2b',border:'1px solid var(--card-border)'}}>
-              {STRINGS[currentLocale].cancel}
-            </button>
+      {/* Кнопка «Сменить язык» и блок выбора — скрываем ТОЛЬКО во ВК */}
+      {platform !== 'vk' && (
+        <>
+          <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
             <button
               type="button"
-              onClick={onSave}
-              disabled={saving || pendingLocale===currentLocale}
-              className="list-btn"
-              style={{padding:'10px 14px',borderRadius:12,background:saving?'#2a3150':'#2e3560',border:'1px solid #4b57b3',opacity: saving ? 0.7 : 1}}
+              onClick={()=>{setOpen(v=>!v);haptic('light');}}
+              className="ghost-link"
+              style={{textDecoration:'none'}}
+              aria-expanded={open}
             >
-              {STRINGS[currentLocale].save}
+              🌐 {L.changeLang}
             </button>
           </div>
-        </div>
+
+          {open && (
+            <div style={{marginTop:12,border:'1px dashed #4a4e6a',background:'#141823',borderRadius:14,padding:14,maxWidth:560,marginLeft:'auto',marginRight:'auto'}}>
+              <div style={{marginBottom:10,opacity:.8,fontSize:12,letterSpacing:.2}}>{L.chooseLang}</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8}}>
+                {LOCALES.map(l=>{
+                  const active=pendingLocale===l.code;
+                  return (
+                    <button
+                      key={l.code}
+                      onClick={()=>setPendingLocale(l.code)}
+                      className="list-btn"
+                      style={{
+                        display:'flex',alignItems:'center',gap:10,borderRadius:12,padding:'10px 12px',
+                        background:active?'#1e2434':'#171a21',
+                        border:active?'1px solid #6573ff':'1px solid var(--card-border)',
+                        boxShadow:active?'0 0 0 3px rgba(101,115,255,.15) inset':'none'
+                      }}
+                    >
+                      <span style={{width:22,textAlign:'center'}}>{l.flag}</span>
+                      <span style={{fontWeight:600}}>{l.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:12}}>
+                <button type="button" onClick={onCancel} className="list-btn" style={{padding:'10px 14px',borderRadius:12,background:'#1a1f2b',border:'1px solid var(--card-border)'}}>
+                  {STRINGS[currentLocale].cancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={onSave}
+                  disabled={saving || pendingLocale===currentLocale}
+                  className="list-btn"
+                  style={{padding:'10px 14px',borderRadius:12,background:saving?'#2a3150':'#2e3560',border:'1px solid #4b57b3',opacity: saving ? 0.7 : 1}}
+                >
+                  {STRINGS[currentLocale].save}
+                </button>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </main>
   );
