@@ -6,7 +6,6 @@ import type { Route } from 'next';
 import { useEffect, useMemo, useState } from 'react';
 import { STRINGS, readLocale, setLocaleEverywhere, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
-import RaffleBanner from '@/components/RaffleBanner';
 
 const LOCALES = [
   { code: 'ru' as const, label: 'Русский',     flag: '🇷🇺' },
