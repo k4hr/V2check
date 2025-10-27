@@ -23,12 +23,7 @@ function haptic(type:'light'|'medium'='light'){
   try{ (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);}catch{}
 }
 
-/** Даты розыгрыша — поменяй при необходимости */
-const RAFFLE_START = '2025-10-25T00:00:00Z';
-const RAFFLE_END   = '2025-11-10T23:59:59Z';
-
 export default function HomePage(){
-  // если пользователь впервые — создадим cookie из автоопределения
   useEffect(()=>{ try{ ensureLocaleCookie({ sameSite: 'none', secure: true } as any); }catch{} }, []);
 
   const [open,setOpen]=useState(false);
@@ -36,8 +31,6 @@ export default function HomePage(){
   const [pendingLocale,setPendingLocale]=useState<Locale>(currentLocale);
   const [saving,setSaving]=useState(false);
   const L=STRINGS[currentLocale];
-
-  // определяем платформу, чтобы скрыть кнопку смены языка во ВК
   const platform = useMemo(() => detectPlatform(), []);
 
   useEffect(()=>{
@@ -47,7 +40,6 @@ export default function HomePage(){
     if(open) window.scrollTo({top:document.body.scrollHeight,behavior:'smooth'});
   },[currentLocale,open]);
 
-  // ВСЕГДА тащим welcomed=1 + сохраняем id (если был)
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -67,7 +59,6 @@ export default function HomePage(){
     setSaving(true);
     setLocaleEverywhere(pendingLocale);
     haptic('medium');
-    // перезагрузка для надёжного применения
     const url=new URL(window.location.href);
     url.searchParams.set('_lng',String(Date.now()));
     window.location.replace(url.toString());
@@ -79,11 +70,7 @@ export default function HomePage(){
       <h1 style={{textAlign:'center'}}>{L.appTitle}</h1>
       <p className="lm-subtitle" style={{textAlign:'center'}}>{L.subtitle}</p>
 
-      {/* Баннер розыгрыша */}
-      <RaffleBanner startAt={RAFFLE_START} endAt={RAFFLE_END} />
-
       <div className="lm-grid" style={{marginTop:16}}>
-        {/* CHATGPT 5 — золотая, по центру, без иконки и бейджа */}
         <Link
           href={href('/home/ChatGPT')}
           className="card"
@@ -107,26 +94,22 @@ export default function HomePage(){
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Покупка подписки — оставляем ваши страницы оплаты */}
         <Link href={href('/pro')} className="card card--pro" style={{textDecoration:'none'}}>
           <span className="card__left"><span className="card__icon">⭐</span><span className="card__title">{L.buy} <span className="badge">{L.pro} / {L.proplus}</span></span></span>
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Ежедневные задачи — ХАБ Pro */}
         <Link href={href('/home/pro')} className="card card--pro" style={{textDecoration:'none'}}>
           <span className="card__left"><span className="card__icon">🧰</span><span className="card__title">{L.daily} <span className="badge">{L.pro}</span></span></span>
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Эксперт-центр — ХАБ Pro+ */}
         <Link href={href('/home/pro-plus')} className="card card--proplus" style={{textDecoration:'none'}}>
           <span className="card__left"><span className="card__icon">🚀</span><span className="card__title">{L.expert} <span className="badge badge--gold">{L.proplus}</span></span></span>
           <span className="card__chev">›</span>
         </Link>
       </div>
 
-      {/* Кнопка «Сменить язык» и блок выбора — скрываем ТОЛЬКО во ВК */}
       {platform !== 'vk' && (
         <>
           <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
