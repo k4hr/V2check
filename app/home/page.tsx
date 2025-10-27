@@ -6,6 +6,7 @@ import type { Route } from 'next';
 import { useEffect, useMemo, useState } from 'react';
 import { STRINGS, readLocale, setLocaleEverywhere, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
+import RaffleBanner from '@/components/RaffleBanner';
 
 const LOCALES = [
   { code: 'ru' as const, label: 'Русский',     flag: '🇷🇺' },
@@ -22,6 +23,10 @@ const LOCALES = [
 function haptic(type:'light'|'medium'='light'){
   try{ (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);}catch{}
 }
+
+/** Даты розыгрыша — поменяй при необходимости */
+const RAFFLE_START = '2025-10-25T00:00:00Z';
+const RAFFLE_END   = '2025-11-10T23:59:59Z';
 
 export default function HomePage(){
   // если пользователь впервые — создадим cookie из автоопределения
@@ -74,6 +79,9 @@ export default function HomePage(){
     <main>
       <h1 style={{textAlign:'center'}}>{L.appTitle}</h1>
       <p className="lm-subtitle" style={{textAlign:'center'}}>{L.subtitle}</p>
+
+      {/* Баннер розыгрыша */}
+      <RaffleBanner startAt={RAFFLE_START} endAt={RAFFLE_END} />
 
       <div className="lm-grid" style={{marginTop:16}}>
         {/* CHATGPT 5 — золотая, по центру, без иконки и бейджа */}
