@@ -5,31 +5,32 @@ import crypto from 'crypto';
 function normalizeApiBase(input?: string | null): string {
   let s = (input || '').trim();
 
-  // если пусто — дефолт
+  // дефолт
   if (!s) return 'https://securepay.tinkoff.ru/v2';
 
-  // протокол-Relative -> https
+  // протокол-relative -> https
   if (s.startsWith('//')) s = 'https:' + s;
 
-  // если без схемы — добавим https://
+  // без схемы -> https://
   if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
 
   // убираем хвостовые слэши
   s = s.replace(/\/+$/g, '');
 
-  // если уже указан /v2 в конце — оставим один
+  // если уже есть /v2 — оставим один
   if (/\/v2$/i.test(s)) return s;
 
   return s + '/v2';
 }
 
-// Поддержка двух имён переменных на всякий случай
-const API_BASE = normalizeApiBase(
-  process.env.TINKOFF_API || process.env.TINKOFF_API_URL
-);
+// Поддерживаем оба имени переменной на всякий случай
+const API_BASE = normalizeApiBase(process.env.TINKOFF_API || process.env.TINKOFF_API_URL);
 
+// ОБЯЗАТЕЛЬНЫЕ креды
 const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY!;
 const PASSWORD     = process.env.TINKOFF_PASSWORD!;
+
+type Dict = Record<string, any>;
 
 type TinkoffInitReq = {
   Amount: number;      // в копейках
@@ -37,8 +38,7 @@ type TinkoffInitReq = {
   Description?: string;
   SuccessURL?: string;
   FailURL?: string;
-  // Доп. поля (Receipt и пр.) можно прокидывать как есть:
-  [k: string]: any;
+  [k: string]: any;    // Receipt и пр.
 };
 
 type TinkoffInitRes = {
@@ -48,28 +48,23 @@ type TinkoffInitRes = {
   ErrorCode?: string;
   Message?: string;
   Details?: string;
-  // Плюс любые другие поля
   [k: string]: any;
 };
 
-type Dict = Record<string, any>;
-
 /** Формирование токена по правилам Tinkoff */
 export function makeToken(params: Dict): string {
-  // Исключаем Token и "сложные" поля (Receipt/DATA) из подписи
   const excluded = new Set(['Token', 'Receipt', 'DATA']);
   const entries = Object.entries(params)
     .filter(([k, v]) => !excluded.has(k) && v !== undefined && v !== null)
-    .sort(([a], [b]) => a.localeCompare(b, 'en')); // сортировка ключей
-
+    .sort(([a], [b]) => a.localeCompare(b, 'en'));
   const concat = entries.map(([, v]) => String(v)).join('') + PASSWORD;
   return crypto.createHash('sha256').update(concat).digest('hex');
 }
 
 /** Универсальный POST к Tinkoff API */
 async function call<T>(path: string, body: Dict): Promise<T> {
-  const url =
-    API_BASE + (path.startsWith('/') ? path : '/' + path); // API_BASE уже оканчивается на /v2
+  // API_BASE уже оканчивается на /v2 — делаем “/v2/<Path>”
+  const url = `${API_BASE.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`;
 
   const payload = { ...body, TerminalKey: TERMINAL_KEY };
   const Token = makeToken(payload);
@@ -81,25 +76,25 @@ async function call<T>(path: string, body: Dict): Promise<T> {
     cache: 'no-store',
   });
 
-  // Иногда сервер возвращает text/plain при ошибке
   const text = await res.text();
-  const json = (() => {
-    try { return JSON.parse(text); } catch { return null; }
-  })();
+  let json: any;
+  try { json = JSON.parse(text); } catch { json = null; }
 
   if (!res.ok) {
+    // небольшой лог поможет ловить конфиги/URL
+    console.error('[TPAY CALL FAIL]', { url, status: res.status, text });
     throw new Error(`Tinkoff ${path} HTTP ${res.status}: ${text}`);
   }
 
   return (json ?? ({} as any)) as T;
 }
 
-/** Инициализация платежа */
+/** Инициализация платежа — строго /v2/Init */
 export async function tpayInit(req: TinkoffInitReq) {
   return call<TinkoffInitRes>('Init', req);
 }
 
-/** Получение статуса платежа */
+/** Получение статуса — /v2/GetState */
 export async function tpayGetState(paymentId: string | number) {
   return call('GetState', { PaymentId: paymentId });
 }
