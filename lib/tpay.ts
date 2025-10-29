@@ -1,7 +1,7 @@
 // lib/tpay.ts
 import crypto from 'crypto';
 
-/** Нормализация базового URL API — всегда HTTPS и c /v2 на конце */
+/** Нормализация базового URL API — всегда HTTPS и с /v2 на конце */
 function normalizeApiBase(input?: string | null): string {
   let s = (input || '').trim();
 
@@ -23,8 +23,11 @@ function normalizeApiBase(input?: string | null): string {
   return s + '/v2';
 }
 
-// Поддерживаем оба имени переменной на всякий случай
-const API_BASE = normalizeApiBase(process.env.TINKOFF_API || process.env.TINKOFF_API_URL);
+// Поддерживаем оба имени переменной на всякий случай.
+// Если переменная не задана — дефолт в normalizeApiBase добавит /v2.
+export const API_BASE = normalizeApiBase(
+  process.env.TINKOFF_API || process.env.TINKOFF_API_URL || 'https://securepay.tinkoff.ru'
+);
 
 // ОБЯЗАТЕЛЬНЫЕ креды
 const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY!;
@@ -81,7 +84,7 @@ async function call<T>(path: string, body: Dict): Promise<T> {
   try { json = JSON.parse(text); } catch { json = null; }
 
   if (!res.ok) {
-    // небольшой лог поможет ловить конфиги/URL
+    // лог поможет отследить неверный URL/параметры
     console.error('[TPAY CALL FAIL]', { url, status: res.status, text });
     throw new Error(`Tinkoff ${path} HTTP ${res.status}: ${text}`);
   }
