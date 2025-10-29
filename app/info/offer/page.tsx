@@ -206,6 +206,7 @@ export default function OfferPage() {
       <ul>
         <li>Исполнитель: <b>«LiveManager»</b></li>
         <li>Поддержка: <b>support@seimngr</b></li>
+        <li>ИНН: <b>290221242314</b></li>
       </ul>
 
       {/* Приложение 1. Тарифы */}
