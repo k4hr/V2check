@@ -29,7 +29,7 @@ function Star({ size = 16 }: { size?: number }) {
   );
 }
 
-// ----- форматирование и скидки (только для оплаты картой) -----
+/* ---------- форматирование и скидки (только для оплаты картой) ---------- */
 function formatRUB(kopecks: number, locale: 'ru' | 'en'): string {
   const rub = Math.floor(kopecks / 100);
   const fmt = new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU');
@@ -43,12 +43,11 @@ const CARD_DISCOUNT: Partial<Record<Plan, number>> = {
   YEAR: 0.70,
 };
 
-// округление вниз до ближайшего числа, заканчивающегося на 9
+// округление ВНИЗ до ближайшего числа, заканчивающегося на 9
 function roundDownToNine(rub: number): number {
   if (rub <= 9) return 9;
   return Math.floor((rub - 9) / 10) * 10 + 9;
 }
-
 function discountRubForPlan(plan: Plan, kopecks: number): number {
   const rub = Math.floor(kopecks / 100);
   const d = CARD_DISCOUNT[plan] ?? 0;
@@ -68,16 +67,13 @@ export default function ProMaxPage() {
 
   // цены
   const pricesStars = useMemo(() => getPrices(tier), []);
-  const pricesRubK = useMemo(() => getVkRubKopecks(tier), []);
-  const pricesRubDiscounted = useMemo(() => {
-    const out: Record<Plan, number> = {
-      WEEK: discountRubForPlan('WEEK', pricesRubK.WEEK),
-      MONTH: discountRubForPlan('MONTH', pricesRubK.MONTH),
-      HALF_YEAR: discountRubForPlan('HALF_YEAR', pricesRubK.HALF_YEAR),
-      YEAR: discountRubForPlan('YEAR', pricesRubK.YEAR),
-    };
-    return out;
-  }, [pricesRubK]);
+  const pricesRubK  = useMemo(() => getVkRubKopecks(tier), []);
+  const pricesRubDiscounted = useMemo(() => ({
+    WEEK:      discountRubForPlan('WEEK',      pricesRubK.WEEK),
+    MONTH:     discountRubForPlan('MONTH',     pricesRubK.MONTH),
+    HALF_YEAR: discountRubForPlan('HALF_YEAR', pricesRubK.HALF_YEAR),
+    YEAR:      discountRubForPlan('YEAR',      pricesRubK.YEAR),
+  }), [pricesRubK]);
 
   useEffect(() => {
     const tg: any = (window as any)?.Telegram?.WebApp;
@@ -98,7 +94,6 @@ export default function ProMaxPage() {
       const res = await fetch(`/api/createInvoice?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, link, error } = await res.json();
       if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
-
       const tg: any = (window as any).Telegram?.WebApp;
       if (tg?.openInvoice) tg.openInvoice(link, () => {});
       else if (tg?.openTelegramLink) tg.openTelegramLink(link);
@@ -117,7 +112,6 @@ export default function ProMaxPage() {
       const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, url, error, message } = await res.json();
       if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
-
       const tg: any = (window as any).Telegram?.WebApp;
       if (tg?.openLink) tg.openLink(url, { try_instant_view: false });
       else window.location.href = url;
@@ -135,13 +129,8 @@ export default function ProMaxPage() {
     title: locale === 'en' ? 'LiveManager Pro+ — payment' : 'LiveManager Pro+ — оплата',
     starsHeader: locale === 'en' ? 'Pay in Telegram Stars' : 'Оплата в Telegram Stars',
     cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
-    cardNote: locale === 'en'
-      ? 'Secure payment via YooKassa'
-      : 'Безопасная оплата через ЮKassa',
-    sale: (p: Plan) => {
-      const map = { MONTH: '-30%', HALF_YEAR: '-50%', YEAR: '-70%', WEEK: '' } as Record<Plan, string>;
-      return map[p];
-    },
+    cardNote: locale === 'en' ? 'Secure payment via YooKassa' : 'Безопасная оплата через ЮKassa',
+    sale: (p: Plan) => ({ MONTH: '-30%', HALF_YEAR: '-50%', YEAR: '-70%', WEEK: '' }[p] || ''),
   };
 
   return (
@@ -159,12 +148,13 @@ export default function ProMaxPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Card / RUB — СВЕРХУ со скидками */}
+        {/* Card / RUB — СВЕРХУ (отдельные блоки) */}
         <h3 className="section">{T.cardHeader}</h3>
         <div className="card-grid">
           {(Object.keys(pricesRubK) as Plan[]).map((p) => {
-            const newRub = pricesRubDiscounted[p];
             const oldRub = Math.floor(pricesRubK[p] / 100);
+            const newRub = pricesRubDiscounted[p];
+            const hasSale = !!CARD_DISCOUNT[p];
             return (
               <button
                 key={p}
@@ -176,23 +166,26 @@ export default function ProMaxPage() {
                 <div className="card-left">
                   <span className="bank">💳</span>
                   <b className="name">{TITLES[p]}</b>
-                  {CARD_DISCOUNT[p] ? <span className="sale">{T.sale(p)}</span> : null}
                 </div>
-                <div className="card-right">
-                  {CARD_DISCOUNT[p] ? (
+
+                {hasSale ? (
+                  <span className="sale">{T.sale(p)}</span>
+                ) : (
+                  <span className="sale sale--empty" aria-hidden />
+                )}
+
+                <div className="price-wrap">
+                  {hasSale ? (
                     <>
-                      <span className="price price--new">
-                        {formatRUB(newRub * 100, locale)}
-                      </span>
-                      <del className="price price--old">
-                        {formatRUB(oldRub * 100, locale)}
-                      </del>
+                      <span className="price-new">{formatRUB(newRub * 100, locale)}</span>
+                      <del className="price-old">{formatRUB(oldRub * 100, locale)}</del>
                     </>
                   ) : (
-                    <span className="price">{formatRUB(oldRub * 100, locale)}</span>
+                    <span className="price-new">{formatRUB(oldRub * 100, locale)}</span>
                   )}
-                  <span className="chev">›</span>
                 </div>
+
+                <span className="chev">›</span>
               </button>
             );
           })}
@@ -239,7 +232,7 @@ export default function ProMaxPage() {
           display:flex; align-items:center; gap:8px;
         }
 
-        /* Stars list */
+        /* Stars list (низ) */
         .list { display: grid; gap: 12px; }
         .row {
           width: 100%; border: 1px solid #333; border-radius: 14px;
@@ -248,40 +241,56 @@ export default function ProMaxPage() {
         }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
         .dot { font-size: 18px; }
-        .name { white-space: nowrap; }
         .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* Card block */
+        /* Card block (три области: лево — бейдж — цены) */
         .card-grid { display: grid; gap: 10px; }
         .card-row {
-          width: 100%; border: 1px solid rgba(120,170,255,.25); border-radius: 14px;
-          padding: 14px 16px; display: grid; grid-template-columns: 1fr auto;
-          align-items: center; column-gap: 12px;
+          position: relative;
+          width: 100%;
+          border: 1px solid rgba(120,170,255,.25);
+          border-radius: 14px;
+          padding: 14px 16px;
+          display: grid;
+          grid-template-columns: 1fr auto auto auto;
+          grid-template-areas: "left sale price chev";
+          align-items: center;
+          column-gap: 12px;
           background: radial-gradient(120% 140% at 10% 0%, rgba(76,130,255,.12), rgba(255,255,255,.03));
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
         }
-        .card-left { display:flex; align-items:center; gap:10px; min-width:0; }
+        .card-left { grid-area:left; display:flex; align-items:center; gap:10px; min-width:0; }
         .bank {
           width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
           background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
         }
-        .sale {
-          margin-left: 8px;
-          padding: 2px 6px;
-          border-radius: 8px;
-          font-size: 12px;
-          background: rgba(76,130,255,.18);
-          border: 1px solid rgba(120,170,255,.35);
-        }
-        .card-right { display:flex; justify-content:flex-end; align-items:center; gap:10px; font-variant-numeric: tabular-nums; }
-        .price { white-space: nowrap; }
-        .price--old { opacity:.55; text-decoration: line-through; }
-        .price--new { font-weight: 800; }
-        .subnote { opacity:.7; margin-top: -4px; }
 
+        .sale { grid-area:sale; padding: 4px 8px; border-radius: 10px; font-size: 12px;
+          background: rgba(76,130,255,.18); border: 1px solid rgba(120,170,255,.35); white-space: nowrap; }
+        .sale--empty { visibility: hidden; padding: 0; border: 0; }
+
+        .price-wrap { grid-area:price; display:flex; flex-direction:column; align-items:flex-end; line-height:1.05; }
+        .price-new { font-weight: 800; }
+        .price-old { opacity:.55; text-decoration: line-through; font-size: 13px; }
+
+        .subnote { opacity:.7; margin-top: -4px; }
         button:disabled { opacity:.6; }
+
+        /* Адаптив: если экран узкий, ставим бейдж под названием */
+        @media (max-width: 380px) {
+          .card-row {
+            grid-template-columns: 1fr auto;
+            grid-template-areas:
+              "left chev"
+              "sale chev"
+              "price chev";
+            row-gap: 6px;
+          }
+          .price-wrap { align-items: flex-start; }
+          .price-old { align-self:flex-start; }
+        }
       `}</style>
     </main>
   );
