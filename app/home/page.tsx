@@ -2,11 +2,14 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import type { Route } from 'next';
 import { useEffect, useMemo, useState } from 'react';
 import { STRINGS, readLocale, setLocaleEverywhere, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
+
+// Новости: данные и компонент (вынесены)
+import { NEWS, type NewsItem } from './news';
+import NewsSection from './NewsSection';
 
 const LOCALES = [
   { code: 'ru' as const, label: 'Русский',     flag: '🇷🇺' },
@@ -24,70 +27,6 @@ function haptic(type:'light'|'medium'='light'){
   try{ (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);}catch{}
 }
 
-/** -------- Новости: типы и заглушки -------- */
-type NewsItem = {
-  id: string;
-  title: string;
-  tag?: string;           // например: "-70%", "Розыгрыш", "Апдейт"
-  image: string;          // абсолютный или относительный URL
-  href: string;           // куда ведём (внутренняя/внешняя)
-  locale?: 'ru' | 'en';   // можно помечать локаль; без неё — показываем всем
-};
-
-const NEWS_FALLBACK: NewsItem[] = [
-  {
-    id: 'sale-pro',
-    title: 'Скидки на подписку Pro / Pro+',
-    tag: '-70%',
-    image: '/news/pro-sale.jpg',         // положи в public/news/…
-    href: '/pro'
-  },
-  {
-    id: 'giveaway',
-    title: 'Розыгрыш трёх Pro+ на месяц',
-    tag: 'Розыгрыш',
-    image: '/news/giveaway.jpg',
-    href: '/news/giveaway'
-  },
-  {
-    id: 'update-oct',
-    title: 'Обновление: оплата картой (ЮKassa)',
-    tag: 'Апдейт',
-    image: '/news/yookassa.jpg',
-    href: '/changelog#payments'
-  }
-];
-
-/** Подгружаем новости с API, если есть, иначе используем заглушки */
-async function loadNews(): Promise<NewsItem[]> {
-  try{
-    const res = await fetch('/api/news', { method:'GET' });
-    if(!res.ok) throw new Error('no api');
-    const data = await res.json();
-    if (!Array.isArray(data)) return NEWS_FALLBACK;
-    // лёгкая валидация структуры
-    return data.filter(Boolean).map((x:any):NewsItem => ({
-      id: String(x.id ?? cryptoRandomId()),
-      title: String(x.title ?? 'Новости'),
-      tag: x.tag ? String(x.tag) : undefined,
-      image: String(x.image ?? '/news/placeholder.jpg'),
-      href: String(x.href ?? '/news'),
-      locale: x.locale === 'en' ? 'en' : x.locale === 'ru' ? 'ru' : undefined,
-    }));
-  }catch{
-    return NEWS_FALLBACK;
-  }
-}
-
-// минимальный генератор id без зависимостей
-function cryptoRandomId(){
-  try{
-    const a = new Uint8Array(8);
-    crypto.getRandomValues(a);
-    return Array.from(a, b=>b.toString(16).padStart(2,'0')).join('');
-  }catch{ return String(Date.now()); }
-}
-
 export default function HomePage(){
   useEffect(()=>{ try{ ensureLocaleCookie({ sameSite: 'none', secure: true } as any); }catch{} }, []);
 
@@ -97,10 +36,6 @@ export default function HomePage(){
   const [saving,setSaving]=useState(false);
   const L=STRINGS[currentLocale];
   const platform = useMemo(() => detectPlatform(), []);
-
-  // -------- состояние новостей --------
-  const [news, setNews] = useState<NewsItem[]>([]);
-  useEffect(()=>{ loadNews().then(setNews).catch(()=>setNews(NEWS_FALLBACK)); }, []);
 
   useEffect(()=>{
     const w:any=window;
@@ -134,10 +69,10 @@ export default function HomePage(){
   }
   function onCancel(){ setPendingLocale(currentLocale); setOpen(false); haptic('light'); }
 
-  // фильтруем новости по локали (если указана)
-  const visibleNews = useMemo(
-    () => news.filter(n => !n.locale || n.locale === (currentLocale === 'en' ? 'en' : 'ru')),
-    [news, currentLocale]
+  // Новости: фильтруем по локали (если у карточки указана locale)
+  const visibleNews: NewsItem[] = useMemo(
+    () => NEWS.filter(n => !n.locale || n.locale === (currentLocale === 'en' ? 'en' : 'ru')),
+    [currentLocale]
   );
 
   return (
@@ -243,91 +178,11 @@ export default function HomePage(){
         </>
       )}
 
-      {/* ---------- Блок новостей (снизу) ---------- */}
-      <section className="news">
-        <div className="news__head">
-          <h2 className="news__title">{currentLocale === 'en' ? 'News & promos' : 'Новости и акции'}</h2>
-          <Link href="/news" className="news__more">{currentLocale === 'en' ? 'All news' : 'Все новости'} ›</Link>
-        </div>
-
-        <div className="news__list" role="list">
-          {visibleNews.map(item => (
-            <Link key={item.id} href={item.href as Route} className="news-card" role="listitem">
-              <div className="news-card__media">
-                {/* fill-responsive обложка */}
-                <Image
-                  src={item.image}
-                  alt={item.title}
-                  fill
-                  sizes="(max-width: 640px) 75vw, 320px"
-                  priority={false}
-                  style={{objectFit:'cover'}}
-                />
-                {item.tag ? <span className="news-card__tag">{item.tag}</span> : null}
-              </div>
-              <div className="news-card__body">
-                <div className="news-card__title">{item.title}</div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      <style jsx>{`
-        /* ---------- Новости ---------- */
-        .news { margin: 26px auto 10px; max-width: 980px; padding: 0 10px; }
-        .news__head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 0 2px 10px; }
-        .news__title { margin:0; font-size: 18px; opacity:.95; }
-        .news__more { font-size: 13px; opacity:.8; text-decoration:none; }
-
-        .news__list {
-          display: grid;
-          grid-auto-flow: column;
-          grid-auto-columns: 80%;
-          gap: 12px;
-          overflow-x: auto;
-          scroll-snap-type: x mandatory;
-          padding-bottom: 2px;
-        }
-        .news-card {
-          position: relative;
-          display: grid;
-          grid-template-rows: 160px auto;
-          border-radius: 14px;
-          overflow: hidden;
-          min-height: 220px;
-          background: #0f1320;
-          border: 1px solid rgba(255,255,255,.06);
-          text-decoration: none;
-          color: inherit;
-          scroll-snap-align: start;
-        }
-        .news-card__media { position: relative; height: 160px; }
-        .news-card__tag {
-          position: absolute; left: 10px; top: 10px;
-          padding: 4px 8px; border-radius: 10px;
-          background: rgba(120,170,255,.22);
-          border: 1px solid rgba(120,170,255,.35);
-          font-size: 12px; white-space: nowrap;
-          backdrop-filter: blur(2px);
-        }
-        .news-card__body { padding: 10px 12px; display:flex; align-items:center; }
-        .news-card__title { font-weight: 700; line-height: 1.25; }
-
-        /* Широкие экраны — грид 3–4 колонки */
-        @media (min-width: 760px) {
-          .news__list {
-            grid-auto-flow: initial;
-            grid-auto-columns: initial;
-            grid-template-columns: repeat(3, minmax(0,1fr));
-            overflow: visible;
-          }
-          .news-card { grid-template-rows: 180px auto; min-height: 230px; }
-        }
-        @media (min-width: 1000px) {
-          .news__list { grid-template-columns: repeat(4, minmax(0,1fr)); }
-        }
-      `}</style>
+      {/* ---------- Блок новостей (вынесен в компонент) ---------- */}
+      <NewsSection
+        locale={currentLocale === 'en' ? 'en' : 'ru'}
+        items={visibleNews}
+      />
     </main>
   );
 }
