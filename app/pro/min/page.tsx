@@ -29,7 +29,7 @@ function Star({ size = 16 }: { size?: number }) {
   );
 }
 
-/* скидки под карту те же */
+/* скидки только для оплаты картой */
 function formatRUB(kopecks: number, locale: 'ru' | 'en'): string {
   const rub = Math.floor(kopecks / 100);
   const fmt = new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU');
@@ -104,7 +104,18 @@ export default function ProMinPage() {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, { method: 'POST' });
+      const email = (typeof localStorage !== 'undefined' ? localStorage.getItem('lm_email') : '') || '';
+      if (!/\S+@\S+\.\S+/.test(email)) {
+        setMsg('Укажите e-mail для чека');
+        const ret = encodeURIComponent(location.pathname);
+        window.location.href = `/pay/email?return=${ret}`;
+        return;
+      }
+      const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
       const { ok, url, error, message } = await res.json();
       if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
       const tg: any = (window as any).Telegram?.WebApp;
@@ -131,11 +142,7 @@ export default function ProMinPage() {
   return (
     <main>
       <div className="safe">
-        <button
-          type="button"
-          onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))}
-          className="back"
-        >
+        <button type="button" onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))} className="back">
           <span>←</span><b>{T.back}</b>
         </button>
 
@@ -143,32 +150,21 @@ export default function ProMinPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Card / RUB — СВЕРХУ (отдельные блоки) */}
+        {/* Card / RUB — СВЕРХУ */}
         <h3 className="section">{T.cardHeader}</h3>
         <div className="card-grid">
           {(Object.keys(pricesRubK) as Plan[]).map((p) => {
             const oldRub = Math.floor(pricesRubK[p] / 100);
             const newRub = pricesRubDiscounted[p];
             const hasSale = !!CARD_DISCOUNT[p];
+            const can = !busy || busy === p;
             return (
-              <button
-                key={p}
-                type="button"
-                className="card-row"
-                disabled={!!busy && busy !== p}
-                onClick={() => buyCard(p)}
-              >
+              <button key={p} type="button" className="card-row" disabled={!can} onClick={() => buyCard(p)}>
                 <div className="card-left">
                   <span className="bank">💳</span>
                   <b className="name">{TITLES[p]}</b>
                 </div>
-
-                {hasSale ? (
-                  <span className="sale">{T.sale(p)}</span>
-                ) : (
-                  <span className="sale sale--empty" aria-hidden />
-                )}
-
+                {hasSale ? <span className="sale">{T.sale(p)}</span> : <span className="sale sale--empty" aria-hidden />}
                 <div className="price-wrap">
                   {hasSale ? (
                     <>
@@ -179,7 +175,6 @@ export default function ProMinPage() {
                     <span className="price-new">{formatRUB(oldRub * 100, locale)}</span>
                   )}
                 </div>
-
                 <span className="chev">›</span>
               </button>
             );
@@ -193,13 +188,7 @@ export default function ProMinPage() {
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
             return (
-              <button
-                key={key}
-                disabled={!can}
-                onClick={() => buyStars(key)}
-                className="row"
-                aria-label={`${TITLES[key]} — ${cfg.amount} ⭐`}
-              >
+              <button key={key} disabled={!can} onClick={() => buyStars(key)} className="row" aria-label={`${TITLES[key]} — ${cfg.amount} ⭐`}>
                 <span className="left">
                   <span className="dot">🟣</span>
                   <b className="name">{TITLES[key]}</b>
@@ -216,72 +205,42 @@ export default function ProMinPage() {
       </div>
 
       <style jsx>{`
-        .safe { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding: 20px; }
-        .title { text-align: center; margin: 6px 0 2px; }
-        .section { margin: 6px 2px 2px; opacity: .9; }
-        .err { color: #ff4d6d; text-align: center; }
-        .info { opacity: .7; text-align: center; }
-        .back {
-          width: 120px; padding: 10px 14px; border-radius: 12px;
-          background:#171a21; border:1px solid var(--border);
-          display:flex; align-items:center; gap:8px;
-        }
+        .safe { max-width: 600px; margin: 0 auto; display:flex; flex-direction:column; gap:14px; padding:20px; }
+        .title { text-align:center; margin:6px 0 2px; }
+        .section { margin:6px 2px 2px; opacity:.9; }
+        .err { color:#ff4d6d; text-align:center; }
+        .info { opacity:.7; text-align:center; }
+        .back { width:120px; padding:10px 14px; border-radius:12px; background:#171a21; border:1px solid var(--border); display:flex; align-items:center; gap:8px; }
 
-        /* Stars list (низ) */
-        .list { display: grid; gap: 12px; }
-        .row {
-          width: 100%; border: 1px solid #333; border-radius: 14px;
-          padding: 14px 18px; display: grid; grid-template-columns: 1fr auto;
-          align-items: center; column-gap: 12px; background: #121621;
-        }
+        /* Stars */
+        .list { display:grid; gap:12px; }
+        .row { width:100%; border:1px solid #333; border-radius:14px; padding:14px 18px; display:grid; grid-template-columns:1fr auto; align-items:center; column-gap:12px; background:#121621; }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
         .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
         /* Card block */
-        .card-grid { display: grid; gap: 10px; }
+        .card-grid { display:grid; gap:10px; }
         .card-row {
-          position: relative;
-          width: 100%;
-          border: 1px solid rgba(120,170,255,.25);
-          border-radius: 14px;
-          padding: 14px 16px;
-          display: grid;
-          grid-template-columns: 1fr auto auto auto;
-          grid-template-areas: "left sale price chev";
-          align-items: center;
-          column-gap: 12px;
+          position:relative; width:100%; border:1px solid rgba(120,170,255,.25); border-radius:14px; padding:14px 16px;
+          display:grid; grid-template-columns:1fr auto auto auto; grid-template-areas:"left sale price chev"; align-items:center; column-gap:12px;
           background: radial-gradient(120% 140% at 10% 0%, rgba(76,130,255,.12), rgba(255,255,255,.03));
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
         }
         .card-left { grid-area:left; display:flex; align-items:center; gap:10px; min-width:0; }
-        .bank {
-          width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
-          background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
-        }
-
-        .sale { grid-area:sale; padding: 4px 8px; border-radius: 10px; font-size: 12px;
-          background: rgba(76,130,255,.18); border: 1px solid rgba(120,170,255,.35); white-space: nowrap; }
-        .sale--empty { visibility: hidden; padding: 0; border: 0; }
-
+        .bank { width:30px; height:30px; border-radius:10px; display:grid; place-items:center; background: rgba(120,170,255,.16); border:1px solid rgba(120,170,255,.22); }
+        .sale { grid-area:sale; padding:4px 8px; border-radius:10px; font-size:12px; background:rgba(76,130,255,.18); border:1px solid rgba(120,170,255,.35); white-space:nowrap; }
+        .sale--empty { visibility:hidden; padding:0; border:0; }
         .price-wrap { grid-area:price; display:flex; flex-direction:column; align-items:flex-end; line-height:1.05; }
-        .price-new { font-weight: 800; }
-        .price-old { opacity:.55; text-decoration: line-through; font-size: 13px; }
-
-        .subnote { opacity:.7; margin-top: -4px; }
+        .price-new { font-weight:800; }
+        .price-old { opacity:.55; text-decoration:line-through; font-size:13px; }
+        .subnote { opacity:.7; margin-top:-4px; }
         button:disabled { opacity:.6; }
 
-        @media (max-width: 380px) {
-          .card-row {
-            grid-template-columns: 1fr auto;
-            grid-template-areas:
-              "left chev"
-              "sale chev"
-              "price chev";
-            row-gap: 6px;
-          }
-          .price-wrap { align-items: flex-start; }
+        @media (max-width:380px){
+          .card-row { grid-template-columns:1fr auto; grid-template-areas:"left chev" "sale chev" "price chev"; row-gap:6px; }
+          .price-wrap { align-items:flex-start; }
         }
       `}</style>
     </main>
