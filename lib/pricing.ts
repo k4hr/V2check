@@ -1,6 +1,6 @@
 // lib/pricing.ts
 
-// БАЗОВЫЕ ТИПЫ (как было)
+// БАЗОВЫЕ ТИПЫ
 export type Tier = 'PRO' | 'PROPLUS';
 export type Plan = 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR';
 
@@ -13,10 +13,10 @@ export type PricingItem = {
   days: number;    // 7/30/180/365
 };
 
-// СУТКИ В ДНЯХ (как было)
+// СУТКИ В ДНЯХ
 const DAYS = { WEEK: 7, MONTH: 30, HALF_YEAR: 180, YEAR: 365 } as const;
 
-// ЦЕНЫ В STARS (как было, не трогаем)
+// ЦЕНЫ В STARS
 export const PRICES: Record<Tier, Record<Plan, PricingItem>> = {
   PRO: {
     WEEK:      { label:'Неделя',  title:'LiveManager Pro — Неделя',  description:'Доступ на 7 дней',   amount:129,  stars:129,  days:DAYS.WEEK },
@@ -33,44 +33,47 @@ export const PRICES: Record<Tier, Record<Plan, PricingItem>> = {
 } as const;
 
 // ---------- ДОБАВЛЕНО ДЛЯ ВК (РУБЛИ) ----------
-// Чтобы не лезть в конвертацию Stars→RUB и не плодить зависимостей,
-// задаём фиксированные цены для VK в РУБЛЯХ (в КОПЕЙКАХ — целые числа).
-// По умолчанию они совпадают по цифре со Stars (399 Stars → 399 ₽),
-// можно скорректировать через ENV (см. ниже).
-
-// Базовые RUB-цены (КОПЕЙКИ), по умолчанию равные числу Stars * 100.
+// Базовые RUB-цены (КОПЕЙКИ)
 const VK_RUB_BASE: Record<Tier, Record<Plan, number>> = {
   PRO: {
-    WEEK:      12900,
-    MONTH:     39900,
-    HALF_YEAR: 199900,
-    YEAR:      349900,
+    WEEK: 12900, MONTH: 39900, HALF_YEAR: 199900, YEAR: 349900,
   },
   PROPLUS: {
-    WEEK:      24900,
-    MONTH:     74900,
-    HALF_YEAR: 369900,
-    YEAR:      649900,
+    WEEK: 24900, MONTH: 74900, HALF_YEAR: 369900, YEAR: 649900,
   },
 } as const;
 
-// Переопределения цен из ENV (копейки).
-// Пример: NEXT_PUBLIC_PRICE_RUB_PRO_MONTH=45900
-function envRubOverride(tier: Tier, plan: Plan): number | null {
-  const key = `NEXT_PUBLIC_PRICE_RUB_${tier}_${plan}`;
-  const raw = (process.env as any)?.[key];
-  if (!raw) return null;
-  const n = Number(raw);
+// Хелпер: парс строки в копейки
+const parseKopecks = (v: string | undefined): number | null => {
+  if (v == null || v === '') return null;
+  const n = Number(v);
   return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
-}
+};
+
+// ВАЖНО: только ЛИТЕРАЛЬНЫЕ обращения к NEXT_PUBLIC_* —
+// они будут заинлайнены сборщиком и не потребуют 'process' в рантайме.
+const ENV_PRICE_RUB: Record<Tier, Record<Plan, number | null>> = {
+  PRO: {
+    WEEK:      parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PRO_WEEK),
+    MONTH:     parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PRO_MONTH),
+    HALF_YEAR: parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PRO_HALF_YEAR),
+    YEAR:      parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PRO_YEAR),
+  },
+  PROPLUS: {
+    WEEK:      parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PROPLUS_WEEK),
+    MONTH:     parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PROPLUS_MONTH),
+    HALF_YEAR: parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PROPLUS_HALF_YEAR),
+    YEAR:      parseKopecks(process.env.NEXT_PUBLIC_PRICE_RUB_PROPLUS_YEAR),
+  },
+} as const;
 
 // Итоговые цены VK в копейках (учитывают ENV-override).
 export function getVkRubKopecks(tier: Tier): Record<Plan, number> {
   return {
-    WEEK:      envRubOverride(tier, 'WEEK')      ?? VK_RUB_BASE[tier].WEEK,
-    MONTH:     envRubOverride(tier, 'MONTH')     ?? VK_RUB_BASE[tier].MONTH,
-    HALF_YEAR: envRubOverride(tier, 'HALF_YEAR') ?? VK_RUB_BASE[tier].HALF_YEAR,
-    YEAR:      envRubOverride(tier, 'YEAR')      ?? VK_RUB_BASE[tier].YEAR,
+    WEEK:      ENV_PRICE_RUB[tier].WEEK      ?? VK_RUB_BASE[tier].WEEK,
+    MONTH:     ENV_PRICE_RUB[tier].MONTH     ?? VK_RUB_BASE[tier].MONTH,
+    HALF_YEAR: ENV_PRICE_RUB[tier].HALF_YEAR ?? VK_RUB_BASE[tier].HALF_YEAR,
+    YEAR:      ENV_PRICE_RUB[tier].YEAR      ?? VK_RUB_BASE[tier].YEAR,
   };
 }
 
@@ -108,7 +111,7 @@ export function getPriceFor(
   };
 }
 
-// ---------- СТАРЫЕ ВСПОМОГАТЕЛЬНЫЕ (как было) ----------
+// ---------- ВСПОМОГАТЕЛЬНЫЕ ----------
 export function resolveTier(t: string | null | undefined): Tier {
   const s = String(t || '').toUpperCase();
   return s === 'PROPLUS' || s === 'PLUS' || s === 'MAX' ? 'PROPLUS' : 'PRO';
