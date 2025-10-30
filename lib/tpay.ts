@@ -1,6 +1,8 @@
 // lib/tpay.ts
 import crypto from 'crypto';
-import { dispatcherFor } from '@/lib/proxy'; // ⬅ добавили
+import { dispatcherFor } from '@/lib/proxy';
+
+type Dict = Record<string, any>;
 
 /** Нормализация базового URL API — всегда HTTPS и c /v2 на конце */
 function normalizeApiBase(input?: string | null): string {
@@ -13,18 +15,16 @@ function normalizeApiBase(input?: string | null): string {
   return s + '/v2';
 }
 
-// 💡 дефолт явно без /v2, normalizeApiBase добавит сам
+// дефолт явно без /v2 — normalizeApiBase добавит
 export const API_BASE = normalizeApiBase(
   process.env.TINKOFF_API || process.env.TINKOFF_API_URL || 'https://securepay.tinkoff.ru'
 );
 
 const TERMINAL_KEY = process.env.TINKOFF_TERMINAL_KEY!;
-const PASSWORD = process.env.TINKOFF_PASSWORD!;
+const PASSWORD     = process.env.TINKOFF_PASSWORD!;
 
-type Dict = Record<string, any>;
-
-type TinkoffInitReq = {
-  Amount: number;
+export type TinkoffInitReq = {
+  Amount: number;         // копейки
   OrderId: string;
   Description?: string;
   SuccessURL?: string;
@@ -32,7 +32,7 @@ type TinkoffInitReq = {
   [k: string]: any;
 };
 
-type TinkoffInitRes = {
+export type TinkoffInitRes = {
   Success: boolean;
   PaymentId?: number;
   PaymentURL?: string;
@@ -56,7 +56,7 @@ async function call<T>(path: string, body: Dict): Promise<T> {
   const payload = { ...body, TerminalKey: TERMINAL_KEY };
   const Token = makeToken(payload);
 
-  // ⬇ используем dispatcher только для Tinkoff
+  // ключ: добавляем dispatcher только для tinkoff/tbank
   const dispatcher = dispatcherFor(url);
 
   const res = await fetch(url, {
@@ -64,7 +64,8 @@ async function call<T>(path: string, body: Dict): Promise<T> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ ...payload, Token }),
     cache: 'no-store',
-    dispatcher, // ⬅ вот он
+    // @ts-ignore — у fetch(undici) есть опция dispatcher
+    dispatcher,
   });
 
   const text = await res.text();
@@ -90,7 +91,7 @@ export async function tpayGetState(paymentId: string | number) {
 export function verifyWebhookToken(body: Dict): boolean {
   try {
     const token = String(body?.Token || '');
-    const calc = makeToken(body);
+    const calc  = makeToken(body);
     return token === calc;
   } catch {
     return false;
@@ -99,6 +100,6 @@ export function verifyWebhookToken(body: Dict): boolean {
 
 export function ensureEnv() {
   if (!TERMINAL_KEY || !PASSWORD) {
-    throw new Error('Tinkoff env vars missing: TINKOFF_TERMINAL_KEY / TINKOFF_PASSWORD');
+    throw new Error('TINKOFF_TERMINAL_KEY / TINKOFF_PASSWORD отсутствуют');
   }
 }
