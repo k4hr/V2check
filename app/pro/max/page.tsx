@@ -3,7 +3,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Plan, Tier } from '@/lib/pricing';
-import { getPrices } from '@/lib/pricing';
+import { getPrices, getVkRubKopecks } from '@/lib/pricing';
 import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
 
 const tier: Tier = 'PROPLUS';
@@ -29,6 +29,12 @@ function Star({ size = 16 }: { size?: number }) {
   );
 }
 
+function formatRUB(kopecks: number, locale: 'ru' | 'en'): string {
+  const rub = Math.floor(kopecks / 100);
+  const fmt = new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU');
+  return fmt.format(rub) + ' ₽';
+}
+
 export default function ProMaxPage() {
   const locale: Locale = readLocale();
   const S = STRINGS[locale];
@@ -38,10 +44,9 @@ export default function ProMaxPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const [planTon, setPlanTon] = useState<Plan>('WEEK');
-  const [busyTon, setBusyTon] = useState(false);
-
-  const prices = useMemo(() => getPrices(tier), []);
+  // цены
+  const pricesStars = useMemo(() => getPrices(tier), []);
+  const pricesRub   = useMemo(() => getVkRubKopecks(tier), []);
 
   useEffect(() => {
     const tg: any = (window as any)?.Telegram?.WebApp;
@@ -50,22 +55,7 @@ export default function ProMaxPage() {
       tg?.BackButton?.show?.();
       const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
       tg?.BackButton?.onClick?.(back);
-
-      const onClosed = (d: any) => {
-        if (d?.status === 'paid') {
-          try { tg?.HapticFeedback?.impactOccurred?.('medium'); } catch {}
-          setInfo(locale === 'en' ? 'Payment confirmed. Updating status…' : 'Оплата подтверждена. Обновляем статус…');
-          setTimeout(() => { window.location.href = '/cabinet'; }, 400);
-        } else {
-          setInfo(locale === 'en'
-            ? 'Payment window closed. If you paid, check your status in the account.'
-            : 'Окно оплаты закрыто. Если оплата прошла — проверьте статус в кабинете.'
-          );
-        }
-        setBusy(null);
-      };
-      tg?.onEvent?.('invoiceClosed', onClosed);
-      return () => { tg?.BackButton?.hide?.(); tg?.offEvent?.('invoiceClosed', onClosed); };
+      return () => { tg?.BackButton?.hide?.(); tg?.BackButton?.offClick?.(back); };
     } catch {}
     try { document.documentElement.lang = locale; } catch {}
   }, [locale]);
@@ -89,52 +79,35 @@ export default function ProMaxPage() {
     }
   }
 
-  async function buyTon() {
-    if (busyTon) return;
-    setBusyTon(true); setMsg(null); setInfo(null);
+  async function buyCard(plan: Plan) {
+    if (busy) return;
+    setBusy(plan); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/pay/ton/create?tier=${tier}&plan=${planTon}`, { method: 'POST' });
-      const { ok, payton, universal, error } = await res.json();
-      if (!ok || (!payton && !universal)) throw new Error(error || 'TON_DEEPLINK_FAILED');
+      // сервер должен вернуть ссылку ЮKassa/шлюза
+      const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, { method: 'POST' });
+      const { ok, url, error, message } = await res.json();
+      if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
 
-      const tg: any = (window as any)?.Telegram?.WebApp;
-
-      if (typeof payton === 'string' && payton.startsWith('ton://')) {
-        try {
-          window.location.href = payton;
-          setTimeout(() => {
-            if (universal) {
-              if (tg?.openLink) tg.openLink(universal);
-              else window.location.href = universal;
-            }
-          }, 400);
-          return;
-        } catch {}
-      }
-
-      if (universal) {
-        if (tg?.openLink) tg.openLink(universal);
-        else window.location.href = universal;
-        return;
-      }
-
-      throw new Error('NO_LINK_TO_OPEN');
+      const tg: any = (window as any).Telegram?.WebApp;
+      if (tg?.openLink) tg.openLink(url, { try_instant_view: false });
+      else window.location.href = url;
     } catch (e: any) {
-      setMsg(String(e?.message || 'Ошибка при подготовке TON-ссылки.'));
+      setMsg(String(e?.message || 'Ошибка при подготовке оплаты картой.'));
     } finally {
-      setBusyTon(false);
+      setTimeout(() => setBusy(null), 800);
     }
   }
 
-  const entries = Object.entries(prices) as [Plan, typeof prices[Plan]][];
+  const entries = Object.entries(pricesStars) as [Plan, typeof pricesStars[Plan]][];
 
   const T = {
     back: S.back || 'Назад',
     title: locale === 'en' ? 'LiveManager Pro+ — payment' : 'LiveManager Pro+ — оплата',
-    tonTitle: locale === 'en' ? 'Pay with TON' : 'Оплатить TON',
-    tonSub: locale === 'en' ? 'Direct transfer via ton:// link' : 'Прямой перевод в кошелёк по ton:// ссылке',
-    tonBtnBusy: locale === 'en' ? 'Preparing link…' : 'Готовим ссылку…',
-    tonBtn: (suffix: string) => (locale === 'en' ? `Pay (${suffix})` : `Оплатить (${suffix})`),
+    starsHeader: locale === 'en' ? 'Pay in Telegram Stars' : 'Оплата в Telegram Stars',
+    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
+    cardNote: locale === 'en'
+      ? 'Secure payment via YooKassa'
+      : 'Безопасная оплата через ЮKassa',
   };
 
   return (
@@ -152,6 +125,8 @@ export default function ProMaxPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
+        {/* Stars */}
+        <h3 className="section">{T.starsHeader}</h3>
         <div className="list">
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
@@ -177,42 +152,35 @@ export default function ProMaxPage() {
           })}
         </div>
 
-        <div className="crypto-card">
-          <div className="crypto-header">
-            <span className="crypto-icon">💠</span>
-            <div className="crypto-text">
-              <b className="crypto-title">{T.tonTitle}</b>
-              <small className="crypto-sub">{T.tonSub}</small>
-            </div>
-          </div>
-
-          <div className="seg">
-            {(['WEEK','MONTH','HALF_YEAR','YEAR'] as Plan[]).map(p => (
-              <button
-                key={p}
-                className={`seg__btn ${planTon === p ? 'is-active' : ''}`}
-                onClick={() => setPlanTon(p)}
-                type="button"
-              >
-                {TITLES[p].split('— ')[1]}
-              </button>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={buyTon}
-            disabled={busyTon}
-            className="crypto-cta"
-          >
-            {busyTon ? T.tonBtnBusy : T.tonBtn(TITLES[planTon].split('— ')[1])}
-          </button>
+        {/* Card / RUB */}
+        <h3 className="section">{T.cardHeader}</h3>
+        <div className="card-grid">
+          {(Object.keys(pricesRub) as Plan[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className="card-row"
+              disabled={!!busy && busy !== p}
+              onClick={() => buyCard(p)}
+            >
+              <div className="card-left">
+                <span className="bank">💳</span>
+                <b className="name">{TITLES[p]}</b>
+              </div>
+              <div className="card-right">
+                <span className="price">{formatRUB(pricesRub[p], locale)}</span>
+                <span className="chev">›</span>
+              </div>
+            </button>
+          ))}
         </div>
+        <small className="subnote">{T.cardNote}</small>
       </div>
 
       <style jsx>{`
         .safe { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; padding: 20px; }
         .title { text-align: center; margin: 6px 0 2px; }
+        .section { margin: 6px 2px 2px; opacity: .9; }
         .err { color: #ff4d6d; text-align: center; }
         .info { opacity: .7; text-align: center; }
         .back {
@@ -220,6 +188,8 @@ export default function ProMaxPage() {
           background:#171a21; border:1px solid var(--border);
           display:flex; align-items:center; gap:8px;
         }
+
+        /* Stars list */
         .list { display: grid; gap: 12px; }
         .row {
           width: 100%; border: 1px solid #333; border-radius: 14px;
@@ -227,45 +197,31 @@ export default function ProMaxPage() {
           align-items: center; column-gap: 12px; background: #121621;
         }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
+        .dot { font-size: 18px; }
         .name { white-space: nowrap; }
         .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        .crypto-card {
-          margin-top: 6px;
-          padding: 14px;
-          border-radius: 16px;
-          background: radial-gradient(120% 140% at 10% 0%, rgba(255,210,120,.18), rgba(255,255,255,.03));
-          border: 1px solid rgba(255,210,120,.30);
+        /* Card block */
+        .card-grid { display: grid; gap: 10px; }
+        .card-row {
+          width: 100%; border: 1px solid rgba(120,170,255,.25); border-radius: 14px;
+          padding: 14px 16px; display: grid; grid-template-columns: 1fr auto;
+          align-items: center; column-gap: 12px;
+          background: radial-gradient(120% 140% at 10% 0%, rgba(76,130,255,.12), rgba(255,255,255,.03));
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
-          display:flex; flex-direction:column; gap:12px;
-          color:#fff;
         }
-        .crypto-header { display:flex; gap:10px; align-items:center; }
-        .crypto-icon {
-          width:34px; height:34px; border-radius:10px; display:grid; place-items:center;
-          background: rgba(255,210,120,.24); border: 1px solid rgba(255,210,120,.36);
-          color:#fff;
+        .card-left { display:flex; align-items:center; gap:10px; min-width:0; }
+        .bank {
+          width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
+          background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
         }
-        .crypto-text { line-height: 1.15; }
-        .crypto-title { display:block; white-space: nowrap; color:#fff; font-weight: 800; letter-spacing: .2px; }
-        .crypto-sub { display:block; margin-top: 4px; color: rgba(255,255,255,.85); font-size: 13px; }
+        .card-right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
+        .price { white-space: nowrap; }
+        .subnote { opacity:.7; margin-top: -4px; }
 
-        .seg { display:flex; gap:8px; flex-wrap:wrap; }
-        .seg__btn {
-          padding:8px 12px; border-radius:12px; background:#121722; border:1px solid rgba(255,255,255,.08);
-          color:#fff;
-        }
-        .seg__btn.is-active { border-color: rgba(255,210,120,.7); box-shadow: inset 0 0 0 1px rgba(255,210,120,.35); }
-        .crypto-cta {
-          width: 100%; padding: 14px 16px; border-radius: 14px;
-          background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
-          border: 1px solid rgba(255,191,73,.55);
-          box-shadow: 0 12px 36px rgba(255,191,73,.28);
-          font-weight: 700;
-          color:#fff;
-        }
+        button:disabled { opacity:.6; }
       `}</style>
     </main>
   );
