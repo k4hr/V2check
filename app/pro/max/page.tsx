@@ -29,21 +29,17 @@ function Star({ size = 16 }: { size?: number }) {
   );
 }
 
-/* ---------- форматирование и скидки (только для оплаты картой) ---------- */
+/* ---- форматирование и скидки (для оплаты картой) ---- */
 function formatRUB(kopecks: number, locale: 'ru' | 'en'): string {
   const rub = Math.floor(kopecks / 100);
   const fmt = new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU');
   return fmt.format(rub) + ' ₽';
 }
-
-// скидки по планам (только карта)
 const CARD_DISCOUNT: Partial<Record<Plan, number>> = {
   MONTH: 0.30,
   HALF_YEAR: 0.50,
   YEAR: 0.70,
 };
-
-// округление ВНИЗ до ближайшего числа, заканчивающегося на 9
 function roundDownToNine(rub: number): number {
   if (rub <= 9) return 9;
   return Math.floor((rub - 9) / 10) * 10 + 9;
@@ -64,8 +60,8 @@ export default function ProMaxPage() {
   const [busy, setBusy] = useState<Plan | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [email, setEmail] = useState<string>(''); // email для чека
 
-  // цены
   const pricesStars = useMemo(() => getPrices(tier), []);
   const pricesRubK  = useMemo(() => getVkRubKopecks(tier), []);
   const pricesRubDiscounted = useMemo(() => ({
@@ -109,7 +105,11 @@ export default function ProMaxPage() {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
     try {
-      const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, { method: 'POST' });
+      const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }), // вариант A — передаём email
+      });
       const { ok, url, error, message } = await res.json();
       if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
       const tg: any = (window as any).Telegram?.WebApp;
@@ -131,6 +131,7 @@ export default function ProMaxPage() {
     cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
     cardNote: locale === 'en' ? 'Secure payment via YooKassa' : 'Безопасная оплата через ЮKassa',
     sale: (p: Plan) => ({ MONTH: '-30%', HALF_YEAR: '-50%', YEAR: '-70%', WEEK: '' }[p] || ''),
+    emailPh: locale === 'en' ? 'Email for the receipt' : 'Email для чека',
   };
 
   return (
@@ -148,19 +149,31 @@ export default function ProMaxPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Card / RUB — СВЕРХУ (отдельные блоки) */}
+        {/* Email для чека */}
+        <label className="email-line">
+          <input
+            type="email"
+            inputMode="email"
+            placeholder={T.emailPh}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </label>
+
+        {/* Card / RUB — СВЕРХУ */}
         <h3 className="section">{T.cardHeader}</h3>
         <div className="card-grid">
           {(Object.keys(pricesRubK) as Plan[]).map((p) => {
             const oldRub = Math.floor(pricesRubK[p] / 100);
             const newRub = pricesRubDiscounted[p];
             const hasSale = !!CARD_DISCOUNT[p];
+            const can = !busy || busy === p;
             return (
               <button
                 key={p}
                 type="button"
                 className="card-row"
-                disabled={!!busy && busy !== p}
+                disabled={!can}
                 onClick={() => buyCard(p)}
               >
                 <div className="card-left">
@@ -232,7 +245,13 @@ export default function ProMaxPage() {
           display:flex; align-items:center; gap:8px;
         }
 
-        /* Stars list (низ) */
+        .email-line input{
+          width:100%; padding:12px 14px; border-radius:12px;
+          background:#121722; border:1px solid rgba(255,255,255,.08);
+          color:#fff;
+        }
+
+        /* Stars list */
         .list { display: grid; gap: 12px; }
         .row {
           width: 100%; border: 1px solid #333; border-radius: 14px;
@@ -240,12 +259,11 @@ export default function ProMaxPage() {
           align-items: center; column-gap: 12px; background: #121621;
         }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
-        .dot { font-size: 18px; }
         .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
 
-        /* Card block (три области: лево — бейдж — цены) */
+        /* Card block */
         .card-grid { display: grid; gap: 10px; }
         .card-row {
           position: relative;
@@ -274,11 +292,9 @@ export default function ProMaxPage() {
         .price-wrap { grid-area:price; display:flex; flex-direction:column; align-items:flex-end; line-height:1.05; }
         .price-new { font-weight: 800; }
         .price-old { opacity:.55; text-decoration: line-through; font-size: 13px; }
-
         .subnote { opacity:.7; margin-top: -4px; }
         button:disabled { opacity:.6; }
 
-        /* Адаптив: если экран узкий, ставим бейдж под названием */
         @media (max-width: 380px) {
           .card-row {
             grid-template-columns: 1fr auto;
@@ -289,7 +305,6 @@ export default function ProMaxPage() {
             row-gap: 6px;
           }
           .price-wrap { align-items: flex-start; }
-          .price-old { align-self:flex-start; }
         }
       `}</style>
     </main>
