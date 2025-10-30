@@ -1,3 +1,4 @@
+/* path: app/home/news-section.tsx */
 'use client';
 
 import Link from 'next/link';
@@ -6,8 +7,8 @@ import type { Route } from 'next';
 import type { NewsItem } from './news';
 
 type Props = {
-  locale: 'ru' | 'en';     // для заголовков
-  items: NewsItem[];       // уже отфильтрованные новости
+  locale: 'ru' | 'en';
+  items: NewsItem[];
 };
 
 export default function NewsSection({ locale, items }: Props) {
@@ -24,19 +25,25 @@ export default function NewsSection({ locale, items }: Props) {
       </div>
 
       <div className="news__list" role="list">
-        {items.map(item => (
+        {items.map((item) => (
           <Link key={item.id} href={item.href as Route} className="news-card" role="listitem">
-            <div className="news-card__media">
-              <Image
-                src={item.image}
-                alt={item.title}
-                fill
-                sizes="(max-width: 640px) 75vw, 320px"
-                priority={false}
-                style={{ objectFit: 'cover' }}
-              />
-              {item.tag ? <span className="news-card__tag">{item.tag}</span> : null}
+            <div className="media-frame">
+              {/* Обложка 16:9 с рамкой и тенью */}
+              <div className="news-card__media">
+                <Image
+                  src={item.image}
+                  alt={item.title}
+                  fill
+                  sizes="(max-width: 640px) 85vw, (max-width: 980px) 33vw, 320px"
+                  priority={false}
+                  style={{ objectFit: 'cover' }}
+                />
+                {item.tag ? <span className="news-card__tag">{item.tag}</span> : null}
+                <span className="ring" aria-hidden />
+                <span className="shine" aria-hidden />
+              </div>
             </div>
+
             <div className="news-card__body">
               <div className="news-card__title">{item.title}</div>
             </div>
@@ -54,26 +61,65 @@ export default function NewsSection({ locale, items }: Props) {
         .news__list {
           display: grid;
           grid-auto-flow: column;
-          grid-auto-columns: 80%;
+          grid-auto-columns: 82%;
           gap: 12px;
           overflow-x: auto;
           scroll-snap-type: x mandatory;
-          padding-bottom: 2px;
+          padding: 2px 2px 4px;
         }
+
         .news-card {
           position: relative;
           display: grid;
-          grid-template-rows: 160px auto;
-          border-radius: 14px;
+          grid-template-rows: auto auto;
+          border-radius: 16px;
           overflow: hidden;
-          min-height: 220px;
-          background: #0f1320;
-          border: 1px solid rgba(255,255,255,.06);
           text-decoration: none;
           color: inherit;
+          background: #0f1320;
+          border: 1px solid rgba(255,255,255,.06);
+          box-shadow: 0 10px 26px rgba(0,0,0,.35);
           scroll-snap-align: start;
+          transition: transform .18s ease, box-shadow .18s ease;
         }
-        .news-card__media { position: relative; height: 160px; }
+        .news-card:active { transform: translateY(1px) scale(.995); }
+        .news-card:hover { box-shadow: 0 16px 36px rgba(0,0,0,.45); }
+
+        /* Рамка вокруг изображения + мягкая тень */
+        .media-frame {
+          padding: 8px;
+          border-radius: 16px 16px 12px 12px;
+          background:
+            radial-gradient(120% 140% at 8% 0%, rgba(76,130,255,.10), rgba(255,255,255,.03));
+          box-shadow:
+            inset 0 0 0 1px rgba(255,255,255,.04);
+        }
+
+        /* Само изображение: аспект 16:9 */
+        .news-card__media {
+          position: relative;
+          aspect-ratio: 16 / 9;
+          width: 100%;
+          overflow: hidden;
+          border-radius: 12px;
+          box-shadow: 0 8px 22px rgba(0,0,0,.35);
+          transform: translateZ(0);
+        }
+
+        /* Тонкая внутренняя «нить» вокруг картинки */
+        .ring {
+          position:absolute; inset:0;
+          border-radius:12px;
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+        }
+
+        /* Едва заметный блик сверху */
+        .shine {
+          position:absolute; left:0; right:0; top:0; height:40%;
+          background: linear-gradient(to bottom, rgba(255,255,255,.12), rgba(255,255,255,0));
+          pointer-events:none;
+        }
+
         .news-card__tag {
           position: absolute; left: 10px; top: 10px;
           padding: 4px 8px; border-radius: 10px;
@@ -82,9 +128,11 @@ export default function NewsSection({ locale, items }: Props) {
           font-size: 12px; white-space: nowrap;
           backdrop-filter: blur(2px);
         }
-        .news-card__body { padding: 10px 12px; display:flex; align-items:center; }
-        .news-card__title { font-weight: 700; line-height: 1.25; }
 
+        .news-card__body { padding: 10px 12px 12px; display:flex; align-items:center; }
+        .news-card__title { font-weight: 800; line-height: 1.25; letter-spacing: .1px; }
+
+        /* Широкие экраны — сетка 3–4 колонки */
         @media (min-width: 760px) {
           .news__list {
             grid-auto-flow: initial;
@@ -92,7 +140,6 @@ export default function NewsSection({ locale, items }: Props) {
             grid-template-columns: repeat(3, minmax(0,1fr));
             overflow: visible;
           }
-          .news-card { grid-template-rows: 180px auto; min-height: 230px; }
         }
         @media (min-width: 1000px) {
           .news__list { grid-template-columns: repeat(4, minmax(0,1fr)); }
