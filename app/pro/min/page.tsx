@@ -83,13 +83,11 @@ export default function ProMinPage() {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
     try {
-      // сервер должен вернуть ссылку ЮKassa/шлюза
       const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, url, error, message } = await res.json();
       if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
 
       const tg: any = (window as any).Telegram?.WebApp;
-      // Вебвью Телеграма умеет открывать внешние ссылки
       if (tg?.openLink) tg.openLink(url, { try_instant_view: false });
       else window.location.href = url;
     } catch (e: any) {
@@ -105,7 +103,7 @@ export default function ProMinPage() {
     back: S.back || 'Назад',
     title: locale === 'en' ? 'LiveManager Pro — payment' : 'LiveManager Pro — оплата',
     starsHeader: locale === 'en' ? 'Pay in Telegram Stars' : 'Оплата в Telegram Stars',
-    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
+    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (СБП)',
     cardNote: locale === 'en'
       ? 'Secure payment via YooKassa'
       : 'Безопасная оплата через ЮKassa',
@@ -126,7 +124,31 @@ export default function ProMinPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Stars */}
+        {/* Card / RUB — СВЕРХУ */}
+        <h3 className="section">{T.cardHeader}</h3>
+        <div className="card-grid">
+          {(Object.keys(pricesRub) as Plan[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              className="card-row"
+              disabled={!!busy && busy !== p}
+              onClick={() => buyCard(p)}
+            >
+              <div className="card-left">
+                <span className="bank">💳</span>
+                <b className="name">{TITLES[p]}</b>
+              </div>
+              <div className="card-right">
+                <span className="price">{formatRUB(pricesRub[p], locale)}</span>
+                <span className="chev">›</span>
+              </div>
+            </button>
+          ))}
+        </div>
+        <small className="subnote">{T.cardNote}</small>
+
+        {/* Stars — СНИЗУ */}
         <h3 className="section">{T.starsHeader}</h3>
         <div className="list">
           {entries.map(([key, cfg]) => {
@@ -152,30 +174,6 @@ export default function ProMinPage() {
             );
           })}
         </div>
-
-        {/* Card / RUB */}
-        <h3 className="section">{T.cardHeader}</h3>
-        <div className="card-grid">
-          {(Object.keys(pricesRub) as Plan[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="card-row"
-              disabled={!!busy && busy !== p}
-              onClick={() => buyCard(p)}
-            >
-              <div className="card-left">
-                <span className="bank">💳</span>
-                <b className="name">{TITLES[p]}</b>
-              </div>
-              <div className="card-right">
-                <span className="price">{formatRUB(pricesRub[p], locale)}</span>
-                <span className="chev">›</span>
-              </div>
-            </button>
-          ))}
-        </div>
-        <small className="subnote">{T.cardNote}</small>
       </div>
 
       <style jsx>{`
