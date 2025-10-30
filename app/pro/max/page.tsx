@@ -29,10 +29,32 @@ function Star({ size = 16 }: { size?: number }) {
   );
 }
 
+// ----- форматирование и скидки (только для оплаты картой) -----
 function formatRUB(kopecks: number, locale: 'ru' | 'en'): string {
   const rub = Math.floor(kopecks / 100);
   const fmt = new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU');
   return fmt.format(rub) + ' ₽';
+}
+
+// скидки по планам (только карта)
+const CARD_DISCOUNT: Partial<Record<Plan, number>> = {
+  MONTH: 0.30,
+  HALF_YEAR: 0.50,
+  YEAR: 0.70,
+};
+
+// округление вниз до ближайшего числа, заканчивающегося на 9
+function roundDownToNine(rub: number): number {
+  if (rub <= 9) return 9;
+  return Math.floor((rub - 9) / 10) * 10 + 9;
+}
+
+function discountRubForPlan(plan: Plan, kopecks: number): number {
+  const rub = Math.floor(kopecks / 100);
+  const d = CARD_DISCOUNT[plan] ?? 0;
+  if (!d) return rub;
+  const discounted = Math.max(1, Math.floor(rub * (1 - d)));
+  return roundDownToNine(discounted);
 }
 
 export default function ProMaxPage() {
@@ -46,7 +68,16 @@ export default function ProMaxPage() {
 
   // цены
   const pricesStars = useMemo(() => getPrices(tier), []);
-  const pricesRub   = useMemo(() => getVkRubKopecks(tier), []);
+  const pricesRubK = useMemo(() => getVkRubKopecks(tier), []);
+  const pricesRubDiscounted = useMemo(() => {
+    const out: Record<Plan, number> = {
+      WEEK: discountRubForPlan('WEEK', pricesRubK.WEEK),
+      MONTH: discountRubForPlan('MONTH', pricesRubK.MONTH),
+      HALF_YEAR: discountRubForPlan('HALF_YEAR', pricesRubK.HALF_YEAR),
+      YEAR: discountRubForPlan('YEAR', pricesRubK.YEAR),
+    };
+    return out;
+  }, [pricesRubK]);
 
   useEffect(() => {
     const tg: any = (window as any)?.Telegram?.WebApp;
@@ -103,10 +134,14 @@ export default function ProMaxPage() {
     back: S.back || 'Назад',
     title: locale === 'en' ? 'LiveManager Pro+ — payment' : 'LiveManager Pro+ — оплата',
     starsHeader: locale === 'en' ? 'Pay in Telegram Stars' : 'Оплата в Telegram Stars',
-    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (СБП)',
+    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
     cardNote: locale === 'en'
       ? 'Secure payment via YooKassa'
       : 'Безопасная оплата через ЮKassa',
+    sale: (p: Plan) => {
+      const map = { MONTH: '-30%', HALF_YEAR: '-50%', YEAR: '-70%', WEEK: '' } as Record<Plan, string>;
+      return map[p];
+    },
   };
 
   return (
@@ -124,27 +159,43 @@ export default function ProMaxPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Card / RUB — СВЕРХУ */}
+        {/* Card / RUB — СВЕРХУ со скидками */}
         <h3 className="section">{T.cardHeader}</h3>
         <div className="card-grid">
-          {(Object.keys(pricesRub) as Plan[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="card-row"
-              disabled={!!busy && busy !== p}
-              onClick={() => buyCard(p)}
-            >
-              <div className="card-left">
-                <span className="bank">💳</span>
-                <b className="name">{TITLES[p]}</b>
-              </div>
-              <div className="card-right">
-                <span className="price">{formatRUB(pricesRub[p], locale)}</span>
-                <span className="chev">›</span>
-              </div>
-            </button>
-          ))}
+          {(Object.keys(pricesRubK) as Plan[]).map((p) => {
+            const newRub = pricesRubDiscounted[p];
+            const oldRub = Math.floor(pricesRubK[p] / 100);
+            return (
+              <button
+                key={p}
+                type="button"
+                className="card-row"
+                disabled={!!busy && busy !== p}
+                onClick={() => buyCard(p)}
+              >
+                <div className="card-left">
+                  <span className="bank">💳</span>
+                  <b className="name">{TITLES[p]}</b>
+                  {CARD_DISCOUNT[p] ? <span className="sale">{T.sale(p)}</span> : null}
+                </div>
+                <div className="card-right">
+                  {CARD_DISCOUNT[p] ? (
+                    <>
+                      <span className="price price--new">
+                        {formatRUB(newRub * 100, locale)}
+                      </span>
+                      <del className="price price--old">
+                        {formatRUB(oldRub * 100, locale)}
+                      </del>
+                    </>
+                  ) : (
+                    <span className="price">{formatRUB(oldRub * 100, locale)}</span>
+                  )}
+                  <span className="chev">›</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
         <small className="subnote">{T.cardNote}</small>
 
@@ -216,8 +267,18 @@ export default function ProMaxPage() {
           width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
           background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
         }
-        .card-right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
+        .sale {
+          margin-left: 8px;
+          padding: 2px 6px;
+          border-radius: 8px;
+          font-size: 12px;
+          background: rgba(76,130,255,.18);
+          border: 1px solid rgba(120,170,255,.35);
+        }
+        .card-right { display:flex; justify-content:flex-end; align-items:center; gap:10px; font-variant-numeric: tabular-nums; }
         .price { white-space: nowrap; }
+        .price--old { opacity:.55; text-decoration: line-through; }
+        .price--new { font-weight: 800; }
         .subnote { opacity:.7; margin-top: -4px; }
 
         button:disabled { opacity:.6; }
