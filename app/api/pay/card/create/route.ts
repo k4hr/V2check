@@ -25,7 +25,7 @@ function applyDiscountKopecks(plan: Plan, baseKopecks: number): number {
 }
 
 function fmtRubValue(kopecks: number): string {
-  return (kopecks / 100).toFixed(2); // "1234.00"
+  return (kopecks / 100).toFixed(2);
 }
 
 function sha256(s: string) {
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok:false, error:'BAD_TIER_OR_PLAN' }, { status: 400 });
     }
 
-    // email из тела — если есть, пробросим в customer
+    // email из тела
     let email: string | undefined;
     try {
       const body = await req.json().catch(() => ({}));
@@ -50,32 +50,41 @@ export async function POST(req: Request) {
       if (/\S+@\S+\.\S+/.test(raw)) email = raw;
     } catch {}
 
-    // 1) базовая цена
     const baseK = getVkRubKopecks(tier)[plan];
-
-    // 2) скидка + округление
     const finalK = applyDiscountKopecks(plan, baseK);
 
-    // 3) конфиг ЮKassa
     const shopId = process.env.YK_SHOP_ID!;
     const secret = process.env.YK_SECRET_KEY!;
     const returnBase = process.env.YK_RETURN_URL_BASE || 'https://your-domain.tld';
-
     if (!shopId || !secret) {
       return NextResponse.json({ ok:false, error:'YKassa env not set' }, { status: 500 });
     }
 
-    // 4) idempotence: «минутные корзины»
-    // user-ish база: попробуем взять IP+UA (если нет своей авторизации/ID)
     const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0] || req.headers.get('x-real-ip') || '0.0.0.0';
     const ua = req.headers.get('user-agent') || 'ua';
-    const minuteBucket = Math.floor(Date.now() / 60000); // стабильный в течение 60 сек
+    const minuteBucket = Math.floor(Date.now() / 60000);
     const idemBase = `${ip}:${ua}:${tier}:${plan}:${minuteBucket}`;
-    const idempotenceKey = sha256(idemBase).slice(0, 48); // ЮKassa принимает до 128, нам хватит
+    const idempotenceKey = sha256(idemBase).slice(0, 48);
 
-    // 5) тело запроса
     const description = `LiveManager ${tier} — ${plan}`;
     const metadata: Record<string, any> = { tier, plan };
+
+    // чек с товарной позицией
+    const receipt = email
+      ? {
+          customer: { email },
+          items: [
+            {
+              description: description,
+              quantity: '1.00',
+              amount: { value: fmtRubValue(finalK), currency: 'RUB' },
+              vat_code: 1,
+              payment_mode: 'full_prepayment',
+              payment_subject: 'service',
+            },
+          ],
+        }
+      : undefined;
 
     const payload: any = {
       amount: { value: fmtRubValue(finalK), currency: 'RUB' },
@@ -86,13 +95,8 @@ export async function POST(req: Request) {
       },
       description,
       metadata,
-      receipt: {
-        customer: email ? { email } : undefined, // если нет — ЮKassa сама спросит на платёжной странице
-      },
+      ...(receipt ? { receipt } : {}),
     };
-
-    // Удалим пустой receipt.customer, чтобы не ругался валидатор
-    if (!email) delete payload.receipt;
 
     const auth = Buffer.from(`${shopId}:${secret}`).toString('base64');
 
@@ -109,11 +113,10 @@ export async function POST(req: Request) {
     const data = await resp.json();
 
     if (!resp.ok) {
-      // Если попали в «already used idempotence key», подскажем фронту, что можно повторить через минуту
       const text = (data?.description || '').toString();
       const alreadyUsed = /already used this idempotence key/i.test(text);
       return NextResponse.json(
-        { ok:false, error: text || 'YKassa error', alreadyUsed },
+        { ok:false, error: text || 'YKassa error', alreadyUsed, details:data },
         { status: 400 },
       );
     }
