@@ -28,7 +28,6 @@ export default function NewsSection({ locale, items }: Props) {
         {items.map((item) => (
           <Link key={item.id} href={item.href as Route} className="news-card" role="listitem">
             <div className="media-frame">
-              {/* Обложка 16:9 с рамкой и тенью */}
               <div className="news-card__media">
                 <Image
                   src={item.image}
@@ -45,7 +44,9 @@ export default function NewsSection({ locale, items }: Props) {
             </div>
 
             <div className="news-card__body">
-              <div className="news-card__title">{item.title}</div>
+              <div className="news-card__title" title={item.title}>
+                {item.title}
+              </div>
             </div>
           </Link>
         ))}
@@ -85,17 +86,14 @@ export default function NewsSection({ locale, items }: Props) {
         .news-card:active { transform: translateY(1px) scale(.995); }
         .news-card:hover { box-shadow: 0 16px 36px rgba(0,0,0,.45); }
 
-        /* Рамка вокруг изображения + мягкая тень */
         .media-frame {
           padding: 8px;
           border-radius: 16px 16px 12px 12px;
-          background:
-            radial-gradient(120% 140% at 8% 0%, rgba(76,130,255,.10), rgba(255,255,255,.03));
-          box-shadow:
-            inset 0 0 0 1px rgba(255,255,255,.04);
+          background: radial-gradient(120% 140% at 8% 0%, rgba(76,130,255,.10), rgba(255,255,255,.03));
+          box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
         }
 
-        /* Само изображение: аспект 16:9 */
+        /* 16:9 обложка */
         .news-card__media {
           position: relative;
           aspect-ratio: 16 / 9;
@@ -105,20 +103,8 @@ export default function NewsSection({ locale, items }: Props) {
           box-shadow: 0 8px 22px rgba(0,0,0,.35);
           transform: translateZ(0);
         }
-
-        /* Тонкая внутренняя «нить» вокруг картинки */
-        .ring {
-          position:absolute; inset:0;
-          border-radius:12px;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
-        }
-
-        /* Едва заметный блик сверху */
-        .shine {
-          position:absolute; left:0; right:0; top:0; height:40%;
-          background: linear-gradient(to bottom, rgba(255,255,255,.12), rgba(255,255,255,0));
-          pointer-events:none;
-        }
+        .ring { position:absolute; inset:0; border-radius:12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+        .shine { position:absolute; left:0; right:0; top:0; height:40%; background: linear-gradient(to bottom, rgba(255,255,255,.12), rgba(255,255,255,0)); pointer-events:none; }
 
         .news-card__tag {
           position: absolute; left: 10px; top: 10px;
@@ -129,10 +115,30 @@ export default function NewsSection({ locale, items }: Props) {
           backdrop-filter: blur(2px);
         }
 
-        .news-card__body { padding: 10px 12px 12px; display:flex; align-items:center; }
-        .news-card__title { font-weight: 800; line-height: 1.25; letter-spacing: .1px; }
+        /* Подпись: одна строка, рамка+тень */
+        .news-card__body {
+          padding: 10px 12px 12px;
+          display:flex; align-items:center;
+        }
+        .news-card__title {
+          display: inline-block;
+          max-width: 100%;
+          padding: 6px 10px;
+          border-radius: 10px;
+          background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+          border: 1px solid rgba(255,255,255,.10);
+          box-shadow:
+            0 4px 16px rgba(0,0,0,.30),
+            inset 0 0 0 1px rgba(255,255,255,.03);
+          font-weight: 700;
+          font-size: 14px;            /* меньше, чтобы помещалось */
+          line-height: 1;
+          white-space: nowrap;         /* одна строка */
+          overflow: hidden;
+          text-overflow: ellipsis;     /* эллипсис если совсем узко */
+          letter-spacing: .1px;
+        }
 
-        /* Широкие экраны — сетка 3–4 колонки */
         @media (min-width: 760px) {
           .news__list {
             grid-auto-flow: initial;
