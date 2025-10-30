@@ -29,10 +29,27 @@ function Star({ size = 16 }: { size?: number }) {
   );
 }
 
+/* скидки под карту те же */
 function formatRUB(kopecks: number, locale: 'ru' | 'en'): string {
   const rub = Math.floor(kopecks / 100);
   const fmt = new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU');
   return fmt.format(rub) + ' ₽';
+}
+const CARD_DISCOUNT: Partial<Record<Plan, number>> = {
+  MONTH: 0.30,
+  HALF_YEAR: 0.50,
+  YEAR: 0.70,
+};
+function roundDownToNine(rub: number): number {
+  if (rub <= 9) return 9;
+  return Math.floor((rub - 9) / 10) * 10 + 9;
+}
+function discountRubForPlan(plan: Plan, kopecks: number): number {
+  const rub = Math.floor(kopecks / 100);
+  const d = CARD_DISCOUNT[plan] ?? 0;
+  if (!d) return rub;
+  const discounted = Math.max(1, Math.floor(rub * (1 - d)));
+  return roundDownToNine(discounted);
 }
 
 export default function ProMinPage() {
@@ -44,9 +61,14 @@ export default function ProMinPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // цены
   const pricesStars = useMemo(() => getPrices(tier), []);
-  const pricesRub   = useMemo(() => getVkRubKopecks(tier), []);
+  const pricesRubK  = useMemo(() => getVkRubKopecks(tier), []);
+  const pricesRubDiscounted = useMemo(() => ({
+    WEEK:      discountRubForPlan('WEEK',      pricesRubK.WEEK),
+    MONTH:     discountRubForPlan('MONTH',     pricesRubK.MONTH),
+    HALF_YEAR: discountRubForPlan('HALF_YEAR', pricesRubK.HALF_YEAR),
+    YEAR:      discountRubForPlan('YEAR',      pricesRubK.YEAR),
+  }), [pricesRubK]);
 
   useEffect(() => {
     const tg: any = (window as any)?.Telegram?.WebApp;
@@ -67,7 +89,6 @@ export default function ProMinPage() {
       const res = await fetch(`/api/createInvoice?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, link, error } = await res.json();
       if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
-
       const tg: any = (window as any).Telegram?.WebApp;
       if (tg?.openInvoice) tg.openInvoice(link, () => {});
       else if (tg?.openTelegramLink) tg.openTelegramLink(link);
@@ -86,7 +107,6 @@ export default function ProMinPage() {
       const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, { method: 'POST' });
       const { ok, url, error, message } = await res.json();
       if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
-
       const tg: any = (window as any).Telegram?.WebApp;
       if (tg?.openLink) tg.openLink(url, { try_instant_view: false });
       else window.location.href = url;
@@ -103,10 +123,9 @@ export default function ProMinPage() {
     back: S.back || 'Назад',
     title: locale === 'en' ? 'LiveManager Pro — payment' : 'LiveManager Pro — оплата',
     starsHeader: locale === 'en' ? 'Pay in Telegram Stars' : 'Оплата в Telegram Stars',
-    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (СБП)',
-    cardNote: locale === 'en'
-      ? 'Secure payment via YooKassa'
-      : 'Безопасная оплата через ЮKassa',
+    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
+    cardNote: locale === 'en' ? 'Secure payment via YooKassa' : 'Безопасная оплата через ЮKassa',
+    sale: (p: Plan) => ({ MONTH: '-30%', HALF_YEAR: '-50%', YEAR: '-70%', WEEK: '' }[p] || ''),
   };
 
   return (
@@ -124,27 +143,47 @@ export default function ProMinPage() {
         {msg && <p className="err">{msg}</p>}
         {info && <p className="info">{info}</p>}
 
-        {/* Card / RUB — СВЕРХУ */}
+        {/* Card / RUB — СВЕРХУ (отдельные блоки) */}
         <h3 className="section">{T.cardHeader}</h3>
         <div className="card-grid">
-          {(Object.keys(pricesRub) as Plan[]).map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="card-row"
-              disabled={!!busy && busy !== p}
-              onClick={() => buyCard(p)}
-            >
-              <div className="card-left">
-                <span className="bank">💳</span>
-                <b className="name">{TITLES[p]}</b>
-              </div>
-              <div className="card-right">
-                <span className="price">{formatRUB(pricesRub[p], locale)}</span>
+          {(Object.keys(pricesRubK) as Plan[]).map((p) => {
+            const oldRub = Math.floor(pricesRubK[p] / 100);
+            const newRub = pricesRubDiscounted[p];
+            const hasSale = !!CARD_DISCOUNT[p];
+            return (
+              <button
+                key={p}
+                type="button"
+                className="card-row"
+                disabled={!!busy && busy !== p}
+                onClick={() => buyCard(p)}
+              >
+                <div className="card-left">
+                  <span className="bank">💳</span>
+                  <b className="name">{TITLES[p]}</b>
+                </div>
+
+                {hasSale ? (
+                  <span className="sale">{T.sale(p)}</span>
+                ) : (
+                  <span className="sale sale--empty" aria-hidden />
+                )}
+
+                <div className="price-wrap">
+                  {hasSale ? (
+                    <>
+                      <span className="price-new">{formatRUB(newRub * 100, locale)}</span>
+                      <del className="price-old">{formatRUB(oldRub * 100, locale)}</del>
+                    </>
+                  ) : (
+                    <span className="price-new">{formatRUB(oldRub * 100, locale)}</span>
+                  )}
+                </div>
+
                 <span className="chev">›</span>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
         <small className="subnote">{T.cardNote}</small>
 
@@ -188,7 +227,7 @@ export default function ProMinPage() {
           display:flex; align-items:center; gap:8px;
         }
 
-        /* Stars list */
+        /* Stars list (низ) */
         .list { display: grid; gap: 12px; }
         .row {
           width: 100%; border: 1px solid #333; border-radius: 14px;
@@ -196,8 +235,6 @@ export default function ProMinPage() {
           align-items: center; column-gap: 12px; background: #121621;
         }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
-        .dot { font-size: 18px; }
-        .name { white-space: nowrap; }
         .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
         .star :global(svg){ display:block; }
         .chev { opacity:.6; }
@@ -205,22 +242,47 @@ export default function ProMinPage() {
         /* Card block */
         .card-grid { display: grid; gap: 10px; }
         .card-row {
-          width: 100%; border: 1px solid rgba(120,170,255,.25); border-radius: 14px;
-          padding: 14px 16px; display: grid; grid-template-columns: 1fr auto;
-          align-items: center; column-gap: 12px;
+          position: relative;
+          width: 100%;
+          border: 1px solid rgba(120,170,255,.25);
+          border-radius: 14px;
+          padding: 14px 16px;
+          display: grid;
+          grid-template-columns: 1fr auto auto auto;
+          grid-template-areas: "left sale price chev";
+          align-items: center;
+          column-gap: 12px;
           background: radial-gradient(120% 140% at 10% 0%, rgba(76,130,255,.12), rgba(255,255,255,.03));
           box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
         }
-        .card-left { display:flex; align-items:center; gap:10px; min-width:0; }
+        .card-left { grid-area:left; display:flex; align-items:center; gap:10px; min-width:0; }
         .bank {
           width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
           background: rgba(120,170,255,.16); border: 1px solid rgba(120,170,255,.22);
         }
-        .card-right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
-        .price { white-space: nowrap; }
-        .subnote { opacity:.7; margin-top: -4px; }
 
+        .sale { grid-area:sale; padding: 4px 8px; border-radius: 10px; font-size: 12px;
+          background: rgba(76,130,255,.18); border: 1px solid rgba(120,170,255,.35); white-space: nowrap; }
+        .sale--empty { visibility: hidden; padding: 0; border: 0; }
+
+        .price-wrap { grid-area:price; display:flex; flex-direction:column; align-items:flex-end; line-height:1.05; }
+        .price-new { font-weight: 800; }
+        .price-old { opacity:.55; text-decoration: line-through; font-size: 13px; }
+
+        .subnote { opacity:.7; margin-top: -4px; }
         button:disabled { opacity:.6; }
+
+        @media (max-width: 380px) {
+          .card-row {
+            grid-template-columns: 1fr auto;
+            grid-template-areas:
+              "left chev"
+              "sale chev"
+              "price chev";
+            row-gap: 6px;
+          }
+          .price-wrap { align-items: flex-start; }
+        }
       `}</style>
     </main>
   );
