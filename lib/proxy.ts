@@ -4,14 +4,14 @@ import { ProxyAgent, type Dispatcher } from 'undici';
 
 let tinkoffDispatcher: Dispatcher | null = null;
 
-/** Создаёт и кеширует прокси-агент для Tinkoff */
+/** Создаёт и кеширует HTTP-proxy агент (CONNECT для https) */
 export function getTinkoffDispatcher(): Dispatcher | null {
   const proxy = process.env.TPAY_PROXY?.trim();
   if (!proxy) return null;
 
   if (!tinkoffDispatcher) {
     tinkoffDispatcher = new ProxyAgent(proxy, {
-      connect: { timeout: 10_000 }, // 10s на CONNECT
+      connect: { timeout: 10_000 },
     });
   }
   return tinkoffDispatcher;
