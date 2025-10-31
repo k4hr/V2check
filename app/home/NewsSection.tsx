@@ -12,15 +12,12 @@ type Props = {
 };
 
 export default function NewsSection({ locale, items }: Props) {
-  const t = {
-    title: locale === 'en' ? 'News & promos' : 'Новости и акции',
-  };
+  const t = { title: locale === 'en' ? 'News & promos' : 'Новости и акции' };
 
   return (
     <section className="news">
       <div className="news__head">
         <h2 className="news__title">{t.title}</h2>
-        {/* Убрали ссылку “Все новости” */}
       </div>
 
       <div className="news__list" role="list">
@@ -43,16 +40,16 @@ export default function NewsSection({ locale, items }: Props) {
             </div>
 
             <div className="news-card__body">
-              <div className="news-card__title" title={item.title}>
+              {/* подпись без подчёркивания */}
+              <span className="news-card__title" title={item.title}>
                 {item.title}
-              </div>
+              </span>
             </div>
           </Link>
         ))}
       </div>
 
       <style jsx>{`
-        /* ---------- Новости ---------- */
         .news { margin: 26px auto 10px; max-width: 980px; padding: 0 10px; }
         .news__head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 0 2px 10px; }
         .news__title { margin:0; font-size: 18px; opacity:.95; }
@@ -81,7 +78,13 @@ export default function NewsSection({ locale, items }: Props) {
           scroll-snap-align: start;
           transition: transform .18s ease, box-shadow .18s ease;
         }
-        .news-card * { text-decoration: none; }   /* убираем подчёркивание у внутренних узлов */
+        /* Жёстко снимаем подчёркивание в iOS/Safari */
+        .news-card, 
+        .news-card * {
+          text-decoration: none !important;
+          -webkit-text-decoration: none !important;
+          text-decoration-color: transparent !important;
+        }
         .news-card:active { transform: translateY(1px) scale(.995); }
         .news-card:hover { box-shadow: 0 16px 36px rgba(0,0,0,.45); }
 
@@ -92,7 +95,6 @@ export default function NewsSection({ locale, items }: Props) {
           box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
         }
 
-        /* 16:9 обложка */
         .news-card__media {
           position: relative;
           aspect-ratio: 16 / 9;
@@ -114,8 +116,8 @@ export default function NewsSection({ locale, items }: Props) {
           backdrop-filter: blur(2px);
         }
 
-        /* Подпись под картинкой: БЕЛЫЙ текст, без подчеркивания, 1 строка, рамка и тень */
         .news-card__body { padding: 10px 12px 12px; display:flex; align-items:center; }
+
         .news-card__title {
           display: inline-block;
           max-width: 100%;
@@ -127,8 +129,8 @@ export default function NewsSection({ locale, items }: Props) {
           font-weight: 800;
           font-size: 14px;
           line-height: 1;
-          color: #fff;                 /* белый шрифт */
-          white-space: nowrap;         /* одна строка */
+          color: #fff !important;       /* белый текст, без «синевы» ссылки */
+          white-space: nowrap;           /* одна строка */
           overflow: hidden;
           text-overflow: ellipsis;
           letter-spacing: .1px;
