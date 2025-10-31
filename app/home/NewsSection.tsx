@@ -14,14 +14,13 @@ type Props = {
 export default function NewsSection({ locale, items }: Props) {
   const t = {
     title: locale === 'en' ? 'News & promos' : 'Новости и акции',
-    more:  locale === 'en' ? 'All news' : 'Все новости',
   };
 
   return (
     <section className="news">
       <div className="news__head">
         <h2 className="news__title">{t.title}</h2>
-        <Link href="/news" className="news__more">{t.more} ›</Link>
+        {/* Убрали ссылку “Все новости” */}
       </div>
 
       <div className="news__list" role="list">
@@ -57,7 +56,6 @@ export default function NewsSection({ locale, items }: Props) {
         .news { margin: 26px auto 10px; max-width: 980px; padding: 0 10px; }
         .news__head { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin: 0 2px 10px; }
         .news__title { margin:0; font-size: 18px; opacity:.95; }
-        .news__more { font-size: 13px; opacity:.8; text-decoration:none; }
 
         .news__list {
           display: grid;
@@ -83,6 +81,7 @@ export default function NewsSection({ locale, items }: Props) {
           scroll-snap-align: start;
           transition: transform .18s ease, box-shadow .18s ease;
         }
+        .news-card * { text-decoration: none; }   /* убираем подчёркивание у внутренних узлов */
         .news-card:active { transform: translateY(1px) scale(.995); }
         .news-card:hover { box-shadow: 0 16px 36px rgba(0,0,0,.45); }
 
@@ -103,7 +102,7 @@ export default function NewsSection({ locale, items }: Props) {
           box-shadow: 0 8px 22px rgba(0,0,0,.35);
           transform: translateZ(0);
         }
-        .ring { position:absolute; inset:0; border-radius:12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+        .ring  { position:absolute; inset:0; border-radius:12px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
         .shine { position:absolute; left:0; right:0; top:0; height:40%; background: linear-gradient(to bottom, rgba(255,255,255,.12), rgba(255,255,255,0)); pointer-events:none; }
 
         .news-card__tag {
@@ -115,27 +114,23 @@ export default function NewsSection({ locale, items }: Props) {
           backdrop-filter: blur(2px);
         }
 
-        /* Подпись: одна строка, рамка+тень */
-        .news-card__body {
-          padding: 10px 12px 12px;
-          display:flex; align-items:center;
-        }
+        /* Подпись под картинкой: БЕЛЫЙ текст, без подчеркивания, 1 строка, рамка и тень */
+        .news-card__body { padding: 10px 12px 12px; display:flex; align-items:center; }
         .news-card__title {
           display: inline-block;
           max-width: 100%;
-          padding: 6px 10px;
-          border-radius: 10px;
+          padding: 7px 12px;
+          border-radius: 12px;
           background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
-          border: 1px solid rgba(255,255,255,.10);
-          box-shadow:
-            0 4px 16px rgba(0,0,0,.30),
-            inset 0 0 0 1px rgba(255,255,255,.03);
-          font-weight: 700;
-          font-size: 14px;            /* меньше, чтобы помещалось */
+          border: 1px solid rgba(255,255,255,.12);
+          box-shadow: 0 6px 18px rgba(0,0,0,.36), inset 0 0 0 1px rgba(255,255,255,.04);
+          font-weight: 800;
+          font-size: 14px;
           line-height: 1;
+          color: #fff;                 /* белый шрифт */
           white-space: nowrap;         /* одна строка */
           overflow: hidden;
-          text-overflow: ellipsis;     /* эллипсис если совсем узко */
+          text-overflow: ellipsis;
           letter-spacing: .1px;
         }
 
