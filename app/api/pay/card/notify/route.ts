@@ -1,97 +1,80 @@
-/* path: app/api/pay/card/notify/route.ts */
 import { NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { getVkRubKopecks, resolvePlan, resolveTier } from '@/lib/pricing';
+import { prisma } from '@/lib/prisma';
 
+// ЮKassa шлёт JSON с полями object{id, status, metadata, amount, ...}
 export const runtime = 'nodejs';
-const prisma = new PrismaClient();
 
-// сколько дней даёт план (совпадает с lib/pricing.ts)
-const PLAN_DAYS: Record<'WEEK'|'MONTH'|'HALF_YEAR'|'YEAR', number> = {
-  WEEK:7, MONTH:30, HALF_YEAR:180, YEAR:365
-};
+type Tier = 'PRO' | 'PROPLUS';
+type Plan = 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR';
+
+function addDays(date: Date, days: number) {
+  const d = new Date(date); d.setUTCDate(d.getUTCDate() + days); return d;
+}
+function daysFor(plan: Plan): number {
+  switch (plan) {
+    case 'WEEK': return 7;
+    case 'MONTH': return 30;
+    case 'HALF_YEAR': return 183; // полгода ≈ 6×30 + буфер
+    case 'YEAR': return 365;
+  }
+}
 
 export async function POST(req: Request) {
   try {
-    const payload = await req.json(); // формата event-notification
-    // НЕ доверяем на слово — вытянем платёж с сервера ЮKassa
-    const paymentId: string | undefined = payload?.object?.id || payload?.object?.payment_id || payload?.id;
-    const event = payload?.event;
-
-    if (!paymentId) return NextResponse.json({ ok:false, error:'NO_PAYMENT_ID' }, { status:400 });
-
-    // подтягиваем платёж
-    const shopId = process.env.YK_SHOP_ID!;
-    const secret = process.env.YK_SECRET_KEY!;
-    const auth = Buffer.from(`${shopId}:${secret}`).toString('base64');
-
-    const r = await fetch(`https://api.yookassa.ru/v3/payments/${paymentId}`, {
-      headers: { 'Authorization': `Basic ${auth}` }
-    });
-    const p = await r.json();
-    if (!r.ok) return NextResponse.json({ ok:false, error:'PAYMENT_FETCH_FAILED', details:p }, { status:400 });
-
-    if (p.status !== 'succeeded') {
-      return NextResponse.json({ ok:true, ignored:true, status:p.status }); // ждём succeeded
+    const body = await req.json();
+    // Минимальная валидация события
+    const type = body?.event || body?.type; // иногда приходит "payment.succeeded"
+    const object = body?.object;
+    if (!type || !object) {
+      return NextResponse.json({ ok:false, error:'BAD_WEBHOOK_BODY' }, { status:400 });
+    }
+    if (String(type) !== 'payment.succeeded' || String(object?.status) !== 'succeeded') {
+      // игнорим всё, что не успешная оплата
+      return NextResponse.json({ ok:true, skipped:true });
     }
 
-    // metadata, tier/plan и сумма
-    const tier = resolveTier(p.metadata?.tier);
-    const plan = resolvePlan(p.metadata?.plan);
-    const amountRub = Number(p.amount?.value || 0); // "123.45" → 123.45
-    const amountKop = Math.round(amountRub * 100);
+    const meta = object?.metadata || {};
+    const tier = String(meta.tier || '').toUpperCase() as Tier;
+    const plan = String(meta.plan || '').toUpperCase() as Plan;
 
-    // На всякий: базовая цена (с учётом наших скидок уже выставлена в create)
-    // Здесь можно повторно проверить, что сумма совпадает с ожидаемой.
-    // Если хотите — раскомментируйте и сравнивайте.
+    // Идентификатор пользователя, который мы прокидывали из клиента при создании платежа
+    // В твоей модели user.telegramId хранится как '123456' (tg) или 'vk:12345' (vk).
+    const key: string | undefined =
+      typeof meta.telegramId === 'string' ? meta.telegramId :
+      typeof meta.userId === 'string' ? meta.userId :
+      undefined;
 
-    // userId/telegramId (хотя бы один желательно класть в metadata в create)
-    const userId: string | undefined = p.metadata?.userId;
-    const telegramId: string | undefined = p.metadata?.telegramId;
-
-    if (!userId && !telegramId) {
-      // как минимум телеграм-id нужен, иначе не знаем кому начислять
-      return NextResponse.json({ ok:false, error:'NO_USER_REF' }, { status:400 });
+    if (!key || !['PRO','PROPLUS'].includes(tier) || !['WEEK','MONTH','HALF_YEAR','YEAR'].includes(plan)) {
+      return NextResponse.json({ ok:false, error:'META_MISSING_OR_BAD', meta }, { status:400 });
     }
 
-    // найдём пользователя
-    const user = await prisma.user.findFirst({
-      where: userId ? { id: userId } : { telegramId: String(telegramId || '') }
-    });
-    if (!user) return NextResponse.json({ ok:false, error:'USER_NOT_FOUND' }, { status:404 });
+    // Находим пользователя
+    const user = await prisma.user.findUnique({ where: { telegramId: key } });
+    if (!user) {
+      // На крайний случай — создадим, чтобы не потерять оплату
+      await prisma.user.create({ data: { telegramId: key } });
+    }
 
-    // идемпотентность на уровне нашей базы: не дублируем один и тот же paymentId
-    const already = await prisma.payment.findFirst({ where:{ providerPaymentChargeId: paymentId } });
-    if (already) return NextResponse.json({ ok:true, duplicate:true });
+    // Дни, которые нужно добавить
+    const add = daysFor(plan);
 
-    // Создаём запись Payment
-    await prisma.payment.create({
-      data: {
-        userId: user.id,
-        telegramId: user.telegramId,
-        tier, plan,
-        amount: amountKop,
-        currency: 'RUB',
-        days: PLAN_DAYS[plan],
-        platform: 'WEB',
-        provider: 'YKASSA',
-        providerPaymentChargeId: paymentId,
-        raw: p,
-      }
-    });
-
-    // Начисляем подписку: продлеваем от максимума(сейчас или текущая дата окончания)
+    // Текущее «до» (если уже есть активная подписка — продлеваем от этого момента)
     const now = new Date();
-    const from = user.subscriptionUntil && user.subscriptionUntil > now ? user.subscriptionUntil : now;
-    const daysToAdd = PLAN_DAYS[plan];
-    const newUntil = new Date(from.getTime() + daysToAdd*24*60*60*1000);
+    const from = (user?.subscriptionUntil && user.subscriptionUntil > now)
+      ? user.subscriptionUntil
+      : now;
+
+    const until = addDays(from, add);
 
     await prisma.user.update({
-      where: { id: user.id },
-      data: { plan: tier, subscriptionUntil: newUntil }
+      where: { telegramId: key },
+      data: {
+        subscriptionUntil: until,
+        plan: tier, // 'PRO' | 'PROPLUS'
+      },
     });
 
-    return NextResponse.json({ ok:true, applied:true });
+    return NextResponse.json({ ok:true, userId:key, tier, plan, until });
   } catch (e:any) {
     return NextResponse.json({ ok:false, error:String(e?.message||e) }, { status:500 });
   }
