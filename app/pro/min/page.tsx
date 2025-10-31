@@ -52,6 +52,50 @@ function discountRubForPlan(plan: Plan, kopecks: number): number {
   return roundDownToNine(discounted);
 }
 
+/* ---- auth key helpers ---- */
+function getCookie(name: string): string {
+  try {
+    const rows = document.cookie ? document.cookie.split('; ') : [];
+    for (const row of rows) {
+      const [k, ...rest] = row.split('=');
+      if (decodeURIComponent(k) === name) return decodeURIComponent(rest.join('='));
+    }
+  } catch {}
+  return '';
+}
+function getTgIdFromWebApp(): string {
+  try {
+    const tg: any = (window as any)?.Telegram?.WebApp;
+    const id = tg?.initDataUnsafe?.user?.id;
+    return id ? String(id) : '';
+  } catch { return ''; }
+}
+function getVkKeyFromCookie(): string {
+  try {
+    const raw = getCookie('vk_params');
+    if (!raw) return '';
+    const sp = new URLSearchParams(raw);
+    const uid = sp.get('vk_user_id');
+    return uid ? `vk:${uid}` : '';
+  } catch { return ''; }
+}
+async function fetchAuthKeyFromApi(): Promise<string> {
+  try {
+    const r = await fetch('/api/me', { method: 'POST', cache: 'no-store' });
+    const j = await r.json().catch(()=> ({}));
+    const key = j?.user?.telegramId;
+    return key ? String(key) : '';
+  } catch { return ''; }
+}
+async function getAuthKey(): Promise<string> {
+  const tgId = getTgIdFromWebApp();
+  if (tgId) return tgId;
+  const vkKey = getVkKeyFromCookie();
+  if (vkKey) return vkKey;
+  return await fetchAuthKeyFromApi();
+}
+/* -------------------------- */
+
 export default function ProMinPage() {
   const locale: Locale = readLocale();
   const S = STRINGS[locale];
@@ -111,13 +155,21 @@ export default function ProMinPage() {
         window.location.href = `/pay/email?return=${ret}`;
         return;
       }
+
+      const telegramId = await getAuthKey();
+      if (!telegramId) {
+        setMsg('Не удалось определить ваш ID. Откройте приложение из Telegram/VK и попробуйте снова.');
+        return;
+      }
+
       const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, telegramId }),   // ← ключевое изменение
       });
       const { ok, url, error, message } = await res.json();
       if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
+
       const tg: any = (window as any).Telegram?.WebApp;
       if (tg?.openLink) tg.openLink(url, { try_instant_view: false });
       else window.location.href = url;
