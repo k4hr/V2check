@@ -31,7 +31,7 @@ export default function GiveawayPage(){
         <span>←</span><b>Назад</b>
       </button>
 
-      <h1 className="title">Розыгрыш подписок CHATGPT 5</h1>
+      <h1 className="title">Розыгрыш подписок     CHATGPT 5</h1>
 
       <p className="lead">
         Разыгрываем <b>80 призов</b> среди пользователей приложения:
