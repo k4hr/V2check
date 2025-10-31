@@ -1,5 +1,3 @@
-// prisma/schema.prisma
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -18,13 +16,13 @@ model User {
   firstName         String?
   lastName          String?
 
-  // --- VK (добавлено для ВК; всё опционально) ---
-  vkUserId          String?    @unique   // numeric/str id пользователя ВК
-  vkScreenName      String?              // domain/shortname пользователя
-  vkPhoto           String?              // аватар, если пригодится
+  // --- VK (опционально) ---
+  vkUserId          String?    @unique
+  vkScreenName      String?
+  vkPhoto           String?
 
   // подписка / тариф
-  plan              String?    // 'PRO' | 'PROPLUS' (валидируем в коде)
+  plan              String?
   subscriptionUntil DateTime?
 
   // аудит
@@ -38,13 +36,14 @@ model User {
   usageDaily        UsageDaily[]
 
   chatThreads       ChatThread[]
+  cardPayments      CardPayment[]  // <—— добавили связь
 }
 
 // ============ Суточный учёт запросов ============
 model UsageDaily {
   id        String   @id @default(cuid())
   userId    String
-  date      String   // YYYY-MM-DD (UTC)
+  date      String
   used      Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -55,7 +54,7 @@ model UsageDaily {
   @@index([date])
 }
 
-// ============ Favorites (старые закладки, оставляем для совместимости) ============
+// ============ Favorites ============
 model Favorite {
   id        String   @id @default(cuid())
   userId    String
@@ -70,14 +69,14 @@ model Favorite {
   @@index([userId])
 }
 
-// ============ Chat Threads (избранные чаты Pro+) ============
+// ============ Chat Threads ============
 model ChatThread {
   id          String        @id @default(cuid())
   userId      String
-  toolSlug    String        // например: 'urchatgpt', 'marketing', 'free-chat' и т.п.
+  toolSlug    String
   title       String
   emoji       String?
-  starred     Boolean       @default(false) // можно держать false до нажатия на ★
+  starred     Boolean       @default(false)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
   lastUsedAt  DateTime      @default(now())
@@ -90,13 +89,12 @@ model ChatThread {
   @@index([updatedAt])
 }
 
-// Сообщение в треде
 model ChatMessage {
   id         String   @id @default(cuid())
   threadId   String
-  role       String   // 'system' | 'user' | 'assistant'
-  content    String   // текст
-  imagesJson String?  // JSON-массив ссылок (для Pro+ генераций)
+  role       String
+  content    String
+  imagesJson String?
   createdAt  DateTime @default(now())
 
   thread     ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
@@ -133,7 +131,7 @@ model Case {
   id        String    @id @default(cuid())
   userId    String
   title     String
-  status    String    @default("active") // active | closed | archived
+  status    String    @default("active")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   nextDueAt DateTime? @map("next_due_at")
@@ -148,11 +146,10 @@ model Case {
   @@map("cases")
 }
 
-// Элементы таймлайна дела
 model CaseItem {
   id        String   @id @default(cuid())
   caseId    String
-  kind      String   // note | step | deadline | doc
+  kind      String
   title     String
   body      String?
   dueAt     DateTime?
@@ -169,46 +166,58 @@ model CaseItem {
   @@map("case_items")
 }
 
-// ============ Payments (лог + идемпотентность) ============
+// ============ Payments (Stars/CRYPTO/VK/TG) ============
 model Payment {
   id                      String   @id @default(cuid())
   userId                  String
   telegramId              String
   payload                 String?
 
-  // Тариф/план
-  tier                    String?  // 'PRO' | 'PROPLUS'
-  plan                    String?  // 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR'
+  tier                    String?
+  plan                    String?
 
-  // Сумма в МИНОРНЫХ единицах (Stars, копейки и т.п.)
   amount                  Int?
-  currency                String?  // 'XTR' | 'RUB' | 'TON' и т.д.
+  currency                String?
   days                    Int?
 
-  // Провайдеры/платформы
-  platform                String?  // 'TG' | 'VK' | 'WEB' (добавлено для ВК)
-  provider                String?  // 'TG_STARS' | 'VK_PAY' | 'TON_DIRECT' ...
+  platform                String?
+  provider                String?
 
-  // Telegram
-  telegramChargeId        String?  // telegram_payment_charge_id
+  telegramChargeId        String?
+  vkOrderId               String?
+  vkAppId                 Int?
+  vkPayerId               String?
 
-  // VK (добавлено для ВК)
-  vkOrderId               String?  // идентификатор заказа ВК (для идемпотентности)
-  vkAppId                 Int?     // id приложения ВК, если нужно
-  vkPayerId               String?  // vk user id плательщика
-
-  // Прочее
-  providerPaymentChargeId String?  // provider_payment_charge_id
-  raw                     Json?    // сырой ответ провайдера/подпись и т.п. (для отладки)
+  providerPaymentChargeId String?
+  raw                     Json?
 
   createdAt               DateTime @default(now())
 
   user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([telegramId, telegramChargeId])
-  @@unique([vkOrderId])            // у VK много NULL допустимо, но один и тот же заказ не продублируем
+  @@unique([vkOrderId])
   @@index([userId])
   @@index([telegramId])
   @@index([platform])
   @@index([currency])
+}
+
+// ============ CardPayment (ЮKassa, RUB) ============
+model CardPayment {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  telegramId     String?
+  tier           String    // 'PRO' | 'PROPLUS'
+  plan           String    // 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR'
+  amountKopecks  Int
+  currency       String    @default("RUB")
+  paymentId      String    @unique   // YooKassa payment.id
+  meta           Json?
+
+  user           User?     @relation(fields: [telegramId], references: [telegramId])
+  @@index([telegramId])
+  @@index([tier])
+  @@index([plan])
+  @@index([createdAt])
 }
