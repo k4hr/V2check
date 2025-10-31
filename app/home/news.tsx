@@ -19,16 +19,9 @@ export const NEWS: NewsItem[] = [
   },
   {
     id: 'giveaway',
-    title: 'Розыгрыш трёх Pro+ на месяц',
+    title: 'Супер розыгрыш',
     tag: 'Розыгрыш',
     image: '/news/giveaway.jpg',
-    href: '/news/giveaway',
+    href: '/app/home/game',
   },
   {
-    id: 'update-yookassa',
-    title: 'Обновление: оплата картой (ЮKassa)',
-    tag: 'Апдейт',
-    image: '/news/yookassa.jpg',
-    href: '/changelog#payments',
-  },
-];
