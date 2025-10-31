@@ -54,6 +54,30 @@ function isProPlusActiveFromResp(data: any): boolean {
 
 type ThreadState = { id?: string; starred: boolean; busy: boolean };
 
+/* --- NEW: распознаём вопрос про «какая модель/версия» --- */
+function isModelVersionQuestion(raw: string, locale?: Locale): boolean {
+  const s = (raw || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s\-+]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Русские формулировки
+  const ru =
+    /(какая|какой|что за)\s+(ты\s+)?(модель|версия)/.test(s) ||
+    /(какая|какой)\s+ты\s+gpt/.test(s) ||
+    /(gpt|жпт|чат\s*gpt)\s*(какой|какая)?\s*(верс(ия|ии)|модель)/.test(s) ||
+    /(какая|какой)\s*(у тебя|твоя)?\s*(верс(ия|ии)|модель)\s*(gpt|жпт)?/.test(s);
+
+  // Английские формулировки
+  const en =
+    /(what|which)\s+(model|version)\s+are\s+you/.test(s) ||
+    /(which|what)\s+gpt\s+(are\s+you|version|model)/.test(s) ||
+    /gpt\s*(model|version)\?*$/.test(s);
+
+  return ru || en;
+}
+
 export default function ChatGPTPage() {
   const locale: Locale = readLocale();
   const C = getChatStrings(locale); // все строки для этой страницы
@@ -288,6 +312,19 @@ export default function ChatGPTPage() {
       { role: 'user', content: (tText || TT.noText) + (attach.length ? TT.attachNote(attach.length) : '') },
     ]);
 
+    // --- NEW: мгновенный ответ про версию модели ---
+    const promptText = tText || '';
+    if (isModelVersionQuestion(promptText, locale)) {
+      const reply = locale === 'en' ? "I’m ChatGPT 5." : "Я — ChatGPT 5.";
+      setMessages(m => [...m, { role: 'assistant', content: reply }]);
+      setLoading(false);
+      setUploading(false);
+      setText('');
+      setAttach(prev => { prev.forEach(a => URL.revokeObjectURL(a.previewUrl)); return []; });
+      return;
+    }
+    // --- /NEW ---
+
     const uploadedUrls: string[] = [];
     try {
       for (let i = 0; i < attach.length; i++) {
@@ -327,8 +364,6 @@ export default function ChatGPTPage() {
       setLoading(false);
       return;
     }
-
-    const promptText = tText || '';
 
     try {
       const history = [
@@ -374,7 +409,7 @@ export default function ChatGPTPage() {
       setText('');
       setAttach(prev => { prev.forEach(a => URL.revokeObjectURL(a.previewUrl)); return []; });
     }
-  }, [attach, idSuffix, loading, mode, systemPrompt, text, uploading, messages, TT]);
+  }, [attach, idSuffix, loading, mode, systemPrompt, text, uploading, messages, TT, locale]);
 
   const pickDisabled = attach.length >= maxAttach || uploading || loading;
 
