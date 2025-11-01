@@ -28,6 +28,12 @@ export default function AdminHome() {
   const [grantBusy, setGrantBusy] = useState(false);
   const [grantMsg, setGrantMsg] = useState<string | null>(null);
 
+  // === Новые стейты для блока «Автоплатёж — отмена» ===
+  const [cancelKey, setCancelKey] = useState('');            // tg id или vk:12345
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
+  const [cancelErr, setCancelErr] = useState<string | null>(null);
+
   // для браузерного режима
   const debugId = useMemo(() => {
     try {
@@ -96,6 +102,31 @@ export default function AdminHome() {
       setGrantMsg(`Ошибка: ${String(e?.message || e)}`);
     } finally {
       setGrantBusy(false);
+    }
+  }
+
+  // === Функция из твоего блока для отмены автоплатежа ===
+  async function cancelAutopay() {
+    if (!cancelKey.trim() || cancelBusy) return;
+    setCancelBusy(true); setCancelMsg(null); setCancelErr(null);
+    try {
+      const initData = (window as any)?.Telegram?.WebApp?.initData || '';
+      const r = await fetch('/api/admin/autopay/cancel', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(initData ? { 'x-init-data': initData } : {}),
+        },
+        body: JSON.stringify({ key: cancelKey.trim() }),
+      });
+      const data = await r.json();
+      if (!r.ok || !data?.ok) throw new Error(data?.error || 'CANCEL_FAILED');
+      haptic('light');
+      setCancelMsg(`Ок: автоплатёж выключен. NextAt=${data?.user?.autopayNextAt ?? '—'}`);
+    } catch (e: any) {
+      setCancelErr(e?.message || 'Ошибка отмены');
+    } finally {
+      setCancelBusy(false);
     }
   }
 
@@ -234,6 +265,51 @@ export default function AdminHome() {
           {!!grantMsg && <div style={{ marginTop: 4, fontSize: 14 }}>{grantMsg}</div>}
         </div>
       </section>
+
+      {/* === НОВАЯ СЕКЦИЯ: Автоплатёж — отмена === */}
+      <section
+        style={{
+          display: 'grid', gap: 10, padding: 14, borderRadius: 16,
+          border: '1px solid rgba(120,170,255,.25)',
+          background: 'radial-gradient(140% 140% at 10% 0%, rgba(120,170,255,.14), rgba(255,255,255,.03))',
+          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.04)'
+        }}
+      >
+        <h3 style={{ marginTop: 0 }}>Автоплатёж — отмена</h3>
+        <p style={{ marginTop: -6, opacity: .85 }}>
+          Введите <b>Telegram ID</b> пользователя (или ключ вида <code>vk:12345</code>) и отключите автопродление.
+        </p>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            placeholder="например: 123456789 или vk:12345"
+            value={cancelKey}
+            onChange={e => setCancelKey(e.target.value)}
+            style={{ flex: '1 1 280px', height: 38, borderRadius: 10, border: '1px solid #2b3552', background: '#121722', padding: '0 10px' }}
+          />
+          <button
+            type="button"
+            className="list-btn"
+            disabled={!cancelKey.trim() || cancelBusy}
+            onClick={() => { haptic('light'); cancelAutopay(); }}
+            style={{ padding: '10px 14px', borderRadius: 12 }}
+          >
+            Отключить автоплатёж
+          </button>
+        </div>
+
+        {cancelMsg && <div style={{ color: '#7dff9b' }}>{cancelMsg}</div>}
+        {cancelErr && <div style={{ color: '#ff5c7a' }}>Ошибка: {cancelErr}</div>}
+        <small style={{ opacity: .8 }}>
+          Требуется админ-доступ (валидный Telegram WebApp initData).
+        </small>
+      </section>
+
+      {/* Подсказка про крон */}
+      <div style={{ padding: 12, border: '1px dashed #333', borderRadius: 12, opacity: .85 }}>
+        Для автосписания раз в сутки вызови <code>/api/cron/autopay</code> из внешнего планировщика
+        (headers: <code>x-cron-secret: {'<CRON_SECRET>'}</code>).
+      </div>
     </main>
   );
 }
