@@ -1,3 +1,4 @@
+// app/pro/min/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -181,7 +182,6 @@ export default function ProMinPage() {
 
   // Спец-кнопка «Пробный день» (1 ₽ → потом месяц)
   async function buyTrial() {
-    // используем тот же busy, что и у MONTH, чтобы не было двойных кликов
     await buyCard('MONTH', { trial: true });
   }
 
@@ -222,7 +222,8 @@ export default function ProMinPage() {
               <span className="bank">💳</span>
               <b className="name">{T.trialName}</b>
             </div>
-            <span className="sale">1&nbsp;₽</span>
+            {/* бейджик убран, оставляем пустую плашку для выравнивания */}
+            <span className="sale sale--empty" aria-hidden />
             <div className="price-wrap">
               <span className="price-new">{formatRUB(100, locale)}</span>
               <del className="price-old">{formatRUB(1000, locale)}</del>
