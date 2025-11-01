@@ -25,6 +25,16 @@ model User {
   plan              String?
   subscriptionUntil DateTime?
 
+  // автоплатёж (ЮKassa)
+  ykCustomerId       String?   // при желании — ID Customer из YooKassa
+  ykPaymentMethodId  String?   // сохранённый payment_method.id для рекуррентных списаний
+  autopayActive      Boolean   @default(false)
+  autopayTier        String?
+  autopayPlan        String?
+  autopayNextAt      DateTime? // когда списывать в следующий раз
+  trialActive        Boolean   @default(false)
+  trialStartedAt     DateTime?
+
   // аудит
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
@@ -36,7 +46,10 @@ model User {
   usageDaily        UsageDaily[]
 
   chatThreads       ChatThread[]
-  cardPayments      CardPayment[]  // <—— добавили связь
+  cardPayments      CardPayment[]
+
+  @@index([ykPaymentMethodId])
+  @@index([autopayActive, autopayNextAt])
 }
 
 // ============ Суточный учёт запросов ============
@@ -208,16 +221,21 @@ model CardPayment {
   id             String   @id @default(cuid())
   createdAt      DateTime @default(now())
   telegramId     String?
-  tier           String    // 'PRO' | 'PROPLUS'
-  plan           String    // 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR'
+  tier           String
+  plan           String
   amountKopecks  Int
   currency       String    @default("RUB")
-  paymentId      String    @unique   // YooKassa payment.id
+  paymentId      String    @unique
+  paymentMethodId String?
+  customerId     String?
+  isTrial        Boolean   @default(false)
   meta           Json?
 
   user           User?     @relation(fields: [telegramId], references: [telegramId])
+
   @@index([telegramId])
   @@index([tier])
   @@index([plan])
   @@index([createdAt])
+  @@index([paymentMethodId])
 }
