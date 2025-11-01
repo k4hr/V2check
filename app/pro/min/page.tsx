@@ -1,4 +1,3 @@
-/* path: app/pro/min/page.tsx */
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -144,7 +143,7 @@ export default function ProMinPage() {
     }
   }
 
-  async function buyCard(plan: Plan) {
+  async function buyCard(plan: Plan, extraBody: Record<string, any> = {}) {
     if (busy) return;
     setBusy(plan); setMsg(null); setInfo(null);
     try {
@@ -165,7 +164,7 @@ export default function ProMinPage() {
       const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, telegramId }),   // ← ключевое изменение
+        body: JSON.stringify({ email, telegramId, ...extraBody }),
       });
       const { ok, url, error, message } = await res.json();
       if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
@@ -180,6 +179,12 @@ export default function ProMinPage() {
     }
   }
 
+  // Спец-кнопка «Пробный день» (1 ₽ → потом месяц)
+  async function buyTrial() {
+    // используем тот же busy, что и у MONTH, чтобы не было двойных кликов
+    await buyCard('MONTH', { trial: true });
+  }
+
   const entries = Object.entries(pricesStars) as [Plan, typeof pricesStars[Plan]][];
 
   const T = {
@@ -189,6 +194,7 @@ export default function ProMinPage() {
     cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
     cardNote: locale === 'en' ? 'Secure payment via YooKassa' : 'Безопасная оплата через ЮKassa',
     sale: (p: Plan) => ({ MONTH: '-30%', HALF_YEAR: '-50%', YEAR: '-70%', WEEK: '' }[p] || ''),
+    trialName: locale === 'en' ? 'Pro — Trial day' : 'Pro — Пробный день',
   };
 
   return (
@@ -205,6 +211,25 @@ export default function ProMinPage() {
         {/* Card / RUB — СВЕРХУ */}
         <h3 className="section">{T.cardHeader}</h3>
         <div className="card-grid">
+          {/* ПРОБНЫЙ ДЕНЬ — перед месячным тарифом */}
+          <button
+            type="button"
+            className="card-row"
+            disabled={!!busy && busy !== 'MONTH'}
+            onClick={buyTrial}
+          >
+            <div className="card-left">
+              <span className="bank">💳</span>
+              <b className="name">{T.trialName}</b>
+            </div>
+            <span className="sale">1&nbsp;₽</span>
+            <div className="price-wrap">
+              <span className="price-new">{formatRUB(100, locale)}</span>
+              <del className="price-old">{formatRUB(1000, locale)}</del>
+            </div>
+            <span className="chev">›</span>
+          </button>
+
           {(Object.keys(pricesRubK) as Plan[]).map((p) => {
             const oldRub = Math.floor(pricesRubK[p] / 100);
             const newRub = pricesRubDiscounted[p];
