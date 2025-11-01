@@ -1,4 +1,3 @@
-/* path: app/api/pay/card/webhook/route.ts */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -37,14 +36,14 @@ async function tg(method: string, payload: any) {
 
 export async function POST(req: Request) {
   try {
-    // Тело вебхука (легко подделать) — используем только id из него
+    // В теле вебхука берём только object.id
     const event = await req.json().catch(()=> ({}));
     const paymentId = event?.object?.id as string | undefined;
     if (!paymentId) return NextResponse.json({ ok: true, skipped: 'no_id' });
 
     if (!SHOP_ID || !SECRET_KEY) return NextResponse.json({ ok:false, error:'YKassa env not set' }, { status:500 });
 
-    // Проверяем у ЮKassa по API, что платёж действительно успешен
+    // Подтверждаем у ЮKassa
     const auth = Buffer.from(`${SHOP_ID}:${SECRET_KEY}`).toString('base64');
     const r = await fetch(`https://api.yookassa.ru/v3/payments/${paymentId}`, {
       headers: { 'Authorization': `Basic ${auth}` }, cache: 'no-store',
@@ -61,68 +60,108 @@ export async function POST(req: Request) {
     const key: string | undefined =
       typeof meta.telegramId === 'string' ? meta.telegramId :
       typeof meta.userId === 'string'      ? meta.userId      : undefined;
+    const isTrial = meta?.trial === '1' || meta?.trial === 1 || meta?.trial === true;
 
     if (!key || !['PRO','PROPLUS'].includes(tier) || !['WEEK','MONTH','HALF_YEAR','YEAR'].includes(plan)) {
       return NextResponse.json({ ok:false, error:'META_MISSING_OR_BAD', meta }, { status:400 });
     }
 
-    // Идемпотентность по paymentId: если уже есть запись — выходим
+    // Идемпотентность по paymentId
     const dup = await prisma.payment.findFirst({
       where: { providerPaymentChargeId: paymentId },
       select: { id: true },
     });
     if (dup) return NextResponse.json({ ok:true, stage:'already_processed' });
 
-    // Гарантируем пользователя
+    // Пользователь
     let user = await prisma.user.findUnique({ where: { telegramId: key } });
     if (!user) user = await prisma.user.create({ data: { telegramId: key } });
 
-    // Продлеваем подписку
-    const add = daysFor(plan);
+    // Продление: 1 день для триала, иначе полноценный план
+    const add = isTrial ? 1 : daysFor(plan);
     const now = new Date();
     const from = (user.subscriptionUntil && user.subscriptionUntil > now) ? user.subscriptionUntil : now;
     const until = addDays(from, add);
 
+    // Сохранённый платёжный метод (если запрошен в триале)
+    const paymentMethodId: string | undefined = data?.payment_method?.id || undefined;
+    const customerId: string | undefined = data?.customer?.id || undefined;
+
+    // Обновляем юзера
     await prisma.user.update({
       where: { id: user.id },
-      data: { subscriptionUntil: until, plan: tier },
+      data: {
+        subscriptionUntil: until,
+        plan: tier,
+        // флаги автоплатежа/триала
+        ...(isTrial ? {
+          trialActive: true,
+          trialStartedAt: now,
+          autopayActive: true,
+          autopayTier: tier,
+          autopayPlan: 'MONTH',         // после триала — месячный план
+          autopayNextAt: addDays(now, 1),
+        } : {}),
+        // сохраняем метод оплаты
+        ...(paymentMethodId ? { ykPaymentMethodId: paymentMethodId } : {}),
+        ...(customerId ? { ykCustomerId: customerId } : {}),
+      },
     });
 
-    // Лог платежа в общую таблицу Payment
+    // Сумма
     const amountStr = String(data?.amount?.value || '0'); // "123.45"
     const kopecks = Math.round(Number(amountStr) * 100);
     const currency = String(data?.amount?.currency || 'RUB');
 
+    // Лог в CardPayment (удобнее анализировать ЮKassa)
+    await prisma.cardPayment.create({
+      data: {
+        paymentId,
+        telegramId: key,
+        tier,
+        plan,
+        amountKopecks: kopecks,
+        currency,
+        paymentMethodId: paymentMethodId,
+        customerId: customerId,
+        isTrial,
+        meta: data,
+      },
+    });
+
+    // Лог в общую таблицу Payment (для суммарной аналитики)
     await prisma.payment.create({
       data: {
         userId: user.id,
         telegramId: key,
-        payload: `yk:${tier}:${plan}`,
+        payload: `yk:${tier}:${plan}${isTrial?':trial':''}`,
         tier,
         plan,
-        amount: kopecks,                // минорные единицы
-        currency,                       // 'RUB'
+        amount: kopecks,
+        currency,
         days: add,
         platform: 'WEB',
         provider: 'YKASSA',
         providerPaymentChargeId: paymentId,
-        raw: { id: data?.id, status: data?.status, metadata: data?.metadata }, // компактный аудит
+        raw: { id: data?.id, status: data?.status, metadata: data?.metadata },
       },
     });
 
-    // Сообщение в Telegram (только если это tg-id, а не 'vk:...')
+    // Сообщение в Telegram (если это tg-id)
     if (/^\d+$/.test(key) && BOT_TOKEN) {
       const prettyTier = tier === 'PROPLUS' ? 'Pro+' : 'Pro';
       await tg('sendMessage', {
         chat_id: Number(key),
-        text: `✅ Оплата картой прошла успешно.\nПодписка *${prettyTier}* активна до *${fmtDate(until)}*.`,
+        text: isTrial
+          ? `✅ Оплата прошла. Активирован *пробный доступ* (${prettyTier}) до *${fmtDate(until)}*. Автопродление: завтра списание за месяц.`
+          : `✅ Оплата картой прошла успешно.\nПодписка *${prettyTier}* активна до *${fmtDate(until)}*.`,
         parse_mode: 'Markdown',
       });
     }
 
-    return NextResponse.json({ ok:true, userId:key, tier, plan, until, providerPaymentChargeId: paymentId });
+    return NextResponse.json({ ok:true, userId:key, tier, plan, until, isTrial, providerPaymentChargeId: paymentId });
   } catch (e:any) {
-    // Всегда 200, иначе ЮKassa будет ретраить без конца. Ошибку вернём в теле для логов.
+    // Возвращаем 200, чтобы ЮKassa не ретраила бесконечно
     return NextResponse.json({ ok:true, error:String(e?.message||e) });
   }
 }
