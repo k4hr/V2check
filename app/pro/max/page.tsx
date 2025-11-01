@@ -1,3 +1,4 @@
+// app/pro/max/page.tsx
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -220,7 +221,8 @@ export default function ProMaxPage() {
               <span className="bank">💳</span>
               <b className="name">{T.trialName}</b>
             </div>
-            <span className="sale">1&nbsp;₽</span>
+            {/* бейджик удалён */}
+            <span className="sale sale--empty" aria-hidden />
             <div className="price-wrap">
               <span className="price-new">{formatRUB(100, locale)}</span>
               <del className="price-old">{formatRUB(1000, locale)}</del>
@@ -285,7 +287,7 @@ export default function ProMaxPage() {
         .section { margin:6px 2px 2px; opacity:.9; }
         .err { color:#ff4d6d; text-align:center; }
         .info { opacity:.7; text-align:center; }
-        .back { width:120px; padding:10px 14px; border-radius:12px; background:#171a21; border:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+        .back { width:120px; padding:10px 14px; border-radius:12px; background:#171a21; border:1px solid {var(--border)}; display:flex; align-items:center; gap:8px; }
 
         /* Stars */
         .list { display:grid; gap:12px; }
