@@ -125,6 +125,11 @@ export default function CabinetPage() {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [adminInfo, setAdminInfo] = useState<string>('');
 
+  // === cancel autopay (user self-service) ===
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelMsg, setCancelMsg] = useState<string | null>(null);
+  const [cancelErr, setCancelErr] = useState<string | null>(null);
+
   // debug id
   const debugId = useMemo(() => {
     try {
@@ -234,6 +239,35 @@ export default function CabinetPage() {
     } catch {
       setIsAdmin(false);
       if (DEBUG) setAdminInfo('check error');
+    }
+  }
+
+  // === cancel autopay function ===
+  async function cancelAutopay() {
+    if (cancelBusy) return;
+    setCancelBusy(true);
+    setCancelMsg(null);
+    setCancelErr(null);
+    try {
+      const WebApp: any = (window as any)?.Telegram?.WebApp;
+      const initData = WebApp?.initData || getInitDataFromCookie();
+      const headers = authHeaders({
+        'Content-Type': 'application/json',
+        ...(initData ? { 'X-Telegram-Init-Data': initData, 'X-Init-Data': initData } : {})
+      });
+      const r = await fetch('/api/autopay/cancel', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({})
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j?.ok) throw new Error(j?.error || 'CANCEL_FAILED');
+      setCancelMsg('Автоплатёж отключён');
+      haptic('light');
+    } catch (e: any) {
+      setCancelErr(String(e?.message || e || 'Ошибка'));
+    } finally {
+      setCancelBusy(false);
     }
   }
 
@@ -354,6 +388,34 @@ export default function CabinetPage() {
                 </span>
                 <span className="list-btn__right"><span className="list-btn__chev">›</span></span>
               </Link>
+
+              {/* Узкая кнопка: Отключить автоплатёж */}
+              <div style={{ display:'flex', justifyContent:'center' }}>
+                <button
+                  type="button"
+                  onClick={() => { haptic('light'); cancelAutopay(); }}
+                  disabled={cancelBusy}
+                  style={{
+                    height: 34,
+                    padding: '6px 12px',
+                    borderRadius: 10,
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    fontWeight: 600,
+                    opacity: cancelBusy ? .7 : 1
+                  }}
+                  aria-label="Отключить автоплатёж"
+                >
+                  {cancelBusy ? 'Отключаем…' : 'Отключить автоплатёж'}
+                </button>
+              </div>
+
+              {(cancelMsg || cancelErr) && (
+                <div style={{ textAlign:'center', fontSize:13, marginTop: -4 }}>
+                  {cancelMsg && <span style={{ color:'#78ff98' }}>{cancelMsg}</span>}
+                  {cancelErr && <span style={{ color:'#ff5c7a' }}>Ошибка: {cancelErr}</span>}
+                </div>
+              )}
             </div>
           </div>
         </div>
