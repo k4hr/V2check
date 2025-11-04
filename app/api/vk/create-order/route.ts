@@ -44,8 +44,8 @@ function asciiDescription(label: string): string {
 }
 
 /** Строгий order_id: [A-Za-z0-9_-], длина ≤ 64 */
-function makeOrderId(vkUserId: string, tier: Tier, plan: Plan) {
-  const raw = `lm_${tier.toLowerCase()}_${plan.toLowerCase()}_${vkUserId}_${Date.now()}`;
+function makeOrderId(vkUserId: string, tier: Tier, plan: Plan, suffix = '') {
+  const raw = `lm_${tier.toLowerCase()}_${plan.toLowerCase()}${suffix}_${vkUserId}_${Date.now()}`;
   return raw.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 64);
 }
 
@@ -63,46 +63,50 @@ export async function POST(req: NextRequest) {
 
     const url = new URL(req.url);
 
-    // читаем tier/plan из query с нормализацией под твои типы
-    const tier = resolveTier(url.searchParams.get('tier'));                  // 'PRO' | 'PROPLUS'
-    const plan = resolvePlan(url.searchParams.get('plan'));                  // 'WEEK' | 'MONTH' | 'HALF_YEAR' | 'YEAR'
+    // tier/plan из query + строгая нормализация
+    const tier = resolveTier(url.searchParams.get('tier'));
+    const plan = resolvePlan(url.searchParams.get('plan'));
+    if (!tier || !plan) {
+      return NextResponse.json({ ok: false, error: 'BAD_TIER_OR_PLAN' }, { status: 400 });
+    }
 
-    // валидируем VK launch-параметры (из заголовка/куки: middleware их уже кладёт)
+    // Валидируем VK launch-параметры (из заголовка или cookie)
     const rawVk = req.headers.get('x-vk-params') || req.cookies.get('vk_params')?.value || '';
     const { ok, vkUserId } = verifyVkParams(rawVk, VK_SECURE_KEY);
     if (!ok || !vkUserId) {
       return NextResponse.json({ ok: false, error: 'BAD_VK_PARAMS' }, { status: 401 });
     }
 
-    // Цена в копейках + текстовые поля из pricing
+    // Читаем тело (email/telegramId нам не нужны для VKPay, но trial важен)
+    const body = await req.json().catch(() => ({} as any));
+    const trial = Boolean(body?.trial) || url.searchParams.get('trial') === '1';
+
+    // Цена и текстовые поля из pricing
     const priced = getPriceFor(tier, plan, 'VK'); // { amount(kopecks), currency:'RUB', days, label, title, description }
     if (priced.currency !== 'RUB') {
       return NextResponse.json({ ok: false, error: 'PRICING_CONFIG_ERROR' }, { status: 500 });
     }
 
-    // Собираем безопасные поля
-    const amountStr = toAmountStringFromKopecks(priced.amount); // "399.00"
-    const order_id  = makeOrderId(vkUserId, tier, plan);
-    const description = asciiDescription(priced.title || priced.label || 'LiveManager');
+    // Готовим сумму и описание: для trial берём 1 ₽ и помечаем описание/ID
+    const amountKopecks = trial ? 100 : priced.amount;
+    const amountStr = toAmountStringFromKopecks(amountKopecks);
+    const order_id  = makeOrderId(vkUserId, tier, plan, trial ? '_trial' : '');
+    const baseDesc  = asciiDescription(priced.title || priced.label || 'LiveManager');
+    const description = trial ? `${baseDesc} trial 1 day` : baseDesc;
 
-    // Возвращаем payload для VKWebAppOpenPayForm
+    // Payload для VKWebAppOpenPayForm
     const openPayForm = {
       app_id: VK_APP_ID,
       action: 'pay-to-service',
       params: {
         merchant_id: VK_MERCHANT_ID,  // строка
-        amount: amountStr,            // строка "XXXX.XX"
-        order_id,                     // ASCII id
-        description,                  // ASCII описание
+        amount: amountStr,            // "XXXX.XX"
+        order_id,                     // ASCII
+        description,                  // ASCII
       },
     };
 
-    return NextResponse.json({
-      ok: true,
-      openPayForm,
-      // debug полезно оставить на время интеграции:
-      // debug: { tier, plan, vkUserId, amountKopecks: priced.amount, amountStr, order_id, description }
-    });
+    return NextResponse.json({ ok: true, openPayForm });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
   }
