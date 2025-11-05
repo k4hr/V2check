@@ -153,7 +153,7 @@ export async function POST(req: Request) {
       await tg('sendMessage', {
         chat_id: Number(key),
         text: isTrial
-          ? `✅ Оплата прошла. Активирован *пробный доступ* (${prettyTier}) до *${fmtDate(until)}*. Автопродление: завтра списание за месяц.`
+          ? `✅ Оплата прошла. Активирован *пробный доступ* (${prettyTier}) до *${fmtDate(until)}*`
           : `✅ Оплата картой прошла успешно.\nПодписка *${prettyTier}* активна до *${fmtDate(until)}*.`,
         parse_mode: 'Markdown',
       });
