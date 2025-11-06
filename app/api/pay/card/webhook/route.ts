@@ -1,3 +1,4 @@
+/* path: app/api/pay/card/webhook/route.ts */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
@@ -36,7 +37,6 @@ async function tg(method: string, payload: any) {
 
 export async function POST(req: Request) {
   try {
-    // В теле вебхука берём только object.id
     const event = await req.json().catch(()=> ({}));
     const paymentId = event?.object?.id as string | undefined;
     if (!paymentId) return NextResponse.json({ ok: true, skipped: 'no_id' });
@@ -87,39 +87,35 @@ export async function POST(req: Request) {
     const paymentMethodId: string | undefined = data?.payment_method?.id || undefined;
     const customerId: string | undefined = data?.customer?.id || undefined;
 
-    // Обновляем юзера
     await prisma.user.update({
       where: { id: user.id },
       data: {
         subscriptionUntil: until,
         plan: tier,
-        // флаги автоплатежа/триала
         ...(isTrial ? {
           trialActive: true,
           trialStartedAt: now,
           autopayActive: true,
           autopayTier: tier,
-          autopayPlan: 'MONTH',         // после триала — месячный план
+          autopayPlan: 'MONTH',
           autopayNextAt: addDays(now, 1),
         } : {}),
-        // сохраняем метод оплаты
         ...(paymentMethodId ? { ykPaymentMethodId: paymentMethodId } : {}),
         ...(customerId ? { ykCustomerId: customerId } : {}),
       },
     });
 
     // Сумма
-    const amountStr = String(data?.amount?.value || '0'); // "123.45"
+    const amountStr = String(data?.amount?.value || '0');
     const kopecks = Math.round(Number(amountStr) * 100);
     const currency = String(data?.amount?.currency || 'RUB');
 
-    // Лог в CardPayment (удобнее анализировать ЮKassa)
+    // Логи
     await prisma.cardPayment.create({
       data: {
         paymentId,
         telegramId: key,
-        tier,
-        plan,
+        tier, plan,
         amountKopecks: kopecks,
         currency,
         paymentMethodId: paymentMethodId,
@@ -129,14 +125,12 @@ export async function POST(req: Request) {
       },
     });
 
-    // Лог в общую таблицу Payment (для суммарной аналитики)
     await prisma.payment.create({
       data: {
         userId: user.id,
         telegramId: key,
         payload: `yk:${tier}:${plan}${isTrial?':trial':''}`,
-        tier,
-        plan,
+        tier, plan,
         amount: kopecks,
         currency,
         days: add,
@@ -147,7 +141,6 @@ export async function POST(req: Request) {
       },
     });
 
-    // Сообщение в Telegram (если это tg-id)
     if (/^\d+$/.test(key) && BOT_TOKEN) {
       const prettyTier = tier === 'PROPLUS' ? 'Pro+' : 'Pro';
       await tg('sendMessage', {
@@ -161,7 +154,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok:true, userId:key, tier, plan, until, isTrial, providerPaymentChargeId: paymentId });
   } catch (e:any) {
-    // Возвращаем 200, чтобы ЮKassa не ретраила бесконечно
     return NextResponse.json({ ok:true, error:String(e?.message||e) });
   }
 }
