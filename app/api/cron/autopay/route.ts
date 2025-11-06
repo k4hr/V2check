@@ -1,3 +1,4 @@
+/* path: app/api/cron/autopay/route.ts */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getVkRubKopecksOne, resolveTier, resolvePlan, type Tier, type Plan } from '@/lib/pricing';
@@ -8,6 +9,7 @@ export const runtime = 'nodejs';
 const SHOP_ID     = process.env.YK_SHOP_ID || '';
 const SECRET_KEY  = process.env.YK_SECRET_KEY || '';
 const CRON_SECRET = (process.env.CRON_SECRET || '').trim();
+const RECEIPT_FALLBACK_EMAIL = (process.env.RECEIPT_FALLBACK_EMAIL || 'no-reply@livemanager.app').trim();
 
 const fmt = (k:number)=> (k/100).toFixed(2);
 const sha256 = (s:string)=> crypto.createHash('sha256').update(s).digest('hex');
@@ -53,12 +55,39 @@ export async function POST(req: Request) {
     for (const u of due) {
       try {
         const tier: Tier = resolveTier(u.autopayTier || u.plan || 'PRO');
-        const plan: Plan = resolvePlan(u.autopayPlan || 'MONTH'); // автосписание — месяц по умолчанию
+        const plan: Plan = resolvePlan(u.autopayPlan || 'MONTH');
 
-        const amountK = getVkRubKopecksOne(tier, plan); // без дополнительных скидок
+        const amountK = getVkRubKopecksOne(tier, plan);
         const description = `LiveManager ${tier} — автопродление ${plan}`;
-        const metadata: Record<string, any> = {
-          tier, plan, telegramId: u.telegramId, recur: '1',
+        const metadata: Record<string, any> = { tier, plan, telegramId: u.telegramId, recur: '1' };
+
+        // Достаём email для чека из последнего успешного платежа
+        let email: string | undefined;
+        try {
+          const cp = await prisma.cardPayment.findFirst({
+            where: { telegramId: u.telegramId || undefined },
+            orderBy: { createdAt: 'desc' },
+            select: { meta: true },
+          });
+          const meta: any = cp?.meta || {};
+          email =
+            meta?.receipt?.customer?.email ||
+            meta?.metadata?.email ||
+            undefined;
+        } catch {}
+
+        if (!email) email = RECEIPT_FALLBACK_EMAIL;
+
+        const receipt = {
+          customer: { email },
+          items: [{
+            description,
+            quantity: '1.00',
+            amount: { value: fmt(amountK), currency: 'RUB' },
+            vat_code: 1,
+            payment_mode: 'full_prepayment',
+            payment_subject: 'service',
+          }],
         };
 
         const idempotenceKey = sha256(`${u.id}:${plan}:${Math.floor(Date.now()/3600000)}`).slice(0,48);
@@ -69,6 +98,7 @@ export async function POST(req: Request) {
           payment_method_id: u.ykPaymentMethodId!,
           description,
           metadata,
+          receipt, // <— ОБЯЗАТЕЛЬНО для 54-ФЗ
           ...(u.ykCustomerId ? { customer: { id: u.ykCustomerId } } : {}),
         };
 
@@ -86,12 +116,10 @@ export async function POST(req: Request) {
         if (!resp.ok || data?.status !== 'succeeded') {
           fail++;
           results.push({ user: u.telegramId, error: data?.description || 'create_failed', status: data?.status });
-          // перенесём следующую попытку на сутки вперёд
           await prisma.user.update({ where: { id: u.id }, data: { autopayNextAt: addDays(now, 1) } });
           continue;
         }
 
-        // успех: продлеваем подписку и планируем следующую дату
         const add = daysFor(plan);
         const from = (u.subscriptionUntil && u.subscriptionUntil > now) ? u.subscriptionUntil : now;
         const until = addDays(from, add);
@@ -101,9 +129,9 @@ export async function POST(req: Request) {
           data: { subscriptionUntil: until, plan: tier, autopayNextAt: addDays(now, add) },
         });
 
-        // лог
         const amountStr = String(data?.amount?.value || '0');
         const kopecks = Math.round(Number(amountStr) * 100);
+
         await prisma.cardPayment.create({
           data: {
             paymentId: data.id,
@@ -147,5 +175,4 @@ export async function POST(req: Request) {
   }
 }
 
-// Можно и GET для удобства тестов
 export const GET = POST;
