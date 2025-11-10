@@ -24,6 +24,7 @@ function norm(s: string) {
 
 export default function Page(): ReactElement {
   const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(false);
 
   // текущая локаль и словарь раздела
   const locale = readLocale();
@@ -143,6 +144,24 @@ export default function Page(): ReactElement {
   );
   const clear = useCallback(() => setQuery(''), []);
 
+  // стиль «как в Pro+»
+  const searchStyle: React.CSSProperties = {
+    width: '100%',
+    height: 48,
+    padding: '12px 16px',
+    borderRadius: 14,
+    background: '#ffffff',
+    border: focused ? '1px solid rgba(255,210,120,.55)' : '1px solid rgba(10,12,20,.10)',
+    color: '#0B0C10',
+    outline: 'none',
+    fontSize: 16,
+    boxShadow: focused
+      ? '0 0 0 3px rgba(255,210,120,.22), inset 0 1px 0 rgba(255,255,255,.75), 0 8px 18px rgba(18,28,45,.06)'
+      : 'inset 0 1px 0 rgba(255,255,255,.65), 0 8px 18px rgba(18,28,45,.06)',
+    WebkitAppearance: 'none' as any,
+    appearance: 'none' as any,
+  };
+
   return (
     <main className="lm-wrap">
       <BackBtn fallback={`/home${linkSuffix}` as Route} />
@@ -165,23 +184,19 @@ export default function Page(): ReactElement {
         {dict.chooseTool}
       </p>
 
+      {/* -------- ТА САМАЯ строка поиска -------- */}
       <div style={{ marginTop: 12, position: 'relative' }}>
         <input
+          className="pro-search"
           type="search"
           inputMode="search"
           placeholder={dict.searchPlaceholder}
           aria-label={dict.searchAria}
           value={query}
           onChange={onInput}
-          style={{
-            width: '100%',
-            padding: '12px 14px',
-            borderRadius: 12,
-            background: '#141823',
-            border: '1px solid var(--border)',
-            color: 'var(--fg, #fff)',
-            outline: 'none'
-          }}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={searchStyle}
         />
         {query ? (
           <button
@@ -189,10 +204,18 @@ export default function Page(): ReactElement {
             aria-label="Clear"
             style={{
               position: 'absolute',
-              right: 8, top: '50%', transform: 'translateY(-50%)',
-              width: 28, height: 28, borderRadius: 999,
-              border: 0, background: 'rgba(255,255,255,.12)',
-              color: 'inherit', fontSize: 18, lineHeight: '28px'
+              right: 8,
+              top: '50%',
+              transform: 'translateY(-50%)',
+              width: 28,
+              height: 28,
+              borderRadius: 999,
+              border: '1px solid rgba(10,12,20,.10)',
+              background: 'rgba(255,255,255,.95)',
+              color: '#0B0C10',
+              fontSize: 18,
+              lineHeight: '28px',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,.6)',
             }}
           >
             ×
@@ -222,6 +245,10 @@ export default function Page(): ReactElement {
         .lm-subtitle { opacity: .7; margin-top: 6px; }
         .lm-grid { display: grid; gap: 12px; }
         .empty { opacity: .7; padding: 12px 8px; text-align: center; }
+
+        /* плейсхолдер под светлый инпут; убираем системный крестик */
+        .pro-search::placeholder { color: rgba(11,12,16,.45); }
+        .pro-search::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
       `}</style>
     </main>
   );
