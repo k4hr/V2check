@@ -386,7 +386,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
     >
       <div style={{ position: 'relative' }}>
         <BackBtn fallback={backHref} />
-        {/* ★ в правом верхнем углу */}
+        {/* ★ в правом верхнем углу — стеклянная */}
         <button
           type="button"
           onClick={toggleStar}
@@ -395,12 +395,13 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           style={{
             position: 'absolute', top: 0, right: 0,
             width: 36, height: 36, borderRadius: 10,
-            border: thread.starred ? '1px solid rgba(255,210,120,.75)' : '1px solid rgba(255,255,255,.18)',
-            background: thread.starred ? 'rgba(255,210,120,.14)' : 'rgba(255,255,255,.06)',
-            color: '#ffd678',
+            border: thread.starred ? '1px solid rgba(255,210,120,.75)' : '1px solid rgba(10,12,20,.10)',
+            background: thread.starred ? 'rgba(255,210,120,.14)' : 'rgba(255,255,255,.78)',
+            color: '#A8791A',
             display: 'grid', placeItems: 'center',
-            boxShadow: thread.starred ? '0 6px 18px rgba(255,191,73,.25)' : 'none',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.6), 0 10px 24px rgba(18,28,45,.10)',
             opacity: thread.busy ? .6 : 1,
+            backdropFilter: 'blur(8px)',
           }}
         >
           {thread.starred ? '★' : '☆'}
@@ -423,21 +424,21 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
         )}
 
-        {/* MINI BADGE — показываем только при активном Pro+ */}
+        {/* MINI BADGE — показываем только при активном Pro+ (чёрный текст, стекло) */}
         {proPlusActive && (
           <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
             <span
               style={{
                 display:'inline-flex', alignItems:'center', gap:8,
-                padding:'6px 10px', borderRadius: 999,
-                background:'rgba(255,210,120,.16)',
-                border:'1px solid rgba(255,210,120,.35)',
-                boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
-                color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
+                padding:'6px 12px', borderRadius: 999,
+                background: 'linear-gradient(135deg, rgba(255,210,120,.20), rgba(255,210,120,.10)), rgba(255,255,255,.72)',
+                border:'1px solid rgba(255,210,120,.45)',
+                boxShadow:'inset 0 1px 0 rgba(255,255,255,.55), 0 10px 26px rgba(255,191,73,.18)',
+                backdropFilter:'blur(10px) saturate(140%)',
+                color:'#0B0C10', fontWeight:700, fontSize:12, letterSpacing:.2
               }}
             >
-              <span aria-hidden>✨</span>
-              Pro+ активен
+              ✨ Pro+ активен
             </span>
           </div>
         )}
@@ -447,7 +448,33 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
       <div ref={listRef} style={{ minHeight: 0, overflow: 'auto', padding: '4px 2px' }}>
         {messages.filter(m => m.role !== 'system').map((m, i) => {
           const isUser = m.role === 'user';
+          const isAssistant = m.role === 'assistant';
           const hasImages = Array.isArray(m.images) && m.images.length > 0;
+
+          // Единый стиль стеклянных пузырей (как на странице ChatGPT)
+          const bubbleBase: React.CSSProperties = {
+            padding: '10px 12px',
+            borderRadius: 14,
+            lineHeight: 1.5,
+            whiteSpace: 'pre-wrap',
+            fontSize: 16,
+            wordBreak: 'break-word',
+            color: 'var(--text)',
+            backdropFilter: 'saturate(140%) blur(10px)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.55), 0 8px 24px rgba(18,28,45,.08)',
+          };
+
+          const bubbleStyle: React.CSSProperties = isAssistant
+            ? {
+                ...bubbleBase,
+                background: 'rgba(255,255,255,.80)',
+                border: '1px solid rgba(10,12,20,.10)',
+              }
+            : {
+                ...bubbleBase,
+                background: 'rgba(45,126,247,.10)',
+                border: '1px solid rgba(45,126,247,.22)',
+              };
 
           return (
             <div key={i} style={{
@@ -458,32 +485,22 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
               <div style={{ maxWidth: '86%' }}>
                 {/* текстовый пузырь */}
                 {m.content && m.content !== '(изображения)' && (
-                  <div
-                    style={{
-                      padding: '10px 12px',
-                      borderRadius: 14,
-                      lineHeight: 1.5,
-                      background: isUser ? '#24304a' : '#1a2132',
-                      border: isUser ? '1px solid #2b3552' : '1px solid rgba(255,210,120,.30)',
-                      boxShadow: isUser ? undefined : '0 6px 22px rgba(255,191,73,.14) inset',
-                      whiteSpace: 'pre-wrap',
-                      fontSize: 16,
-                      wordBreak: 'break-word',
-                    }}
-                  >
+                  <div style={bubbleStyle}>
                     {m.content}
                   </div>
                 )}
 
-                {/* «галерея» изображений ассистента */}
+                {/* «галерея» изображений ассистента — светлое стекло */}
                 {hasImages && (
                   <div
                     style={{
                       marginTop: m.content && m.content !== '(изображения)' ? 8 : 0,
                       padding: 8,
                       borderRadius: 14,
-                      background: '#101622',
-                      border: '1px solid #2b3552',
+                      background: 'rgba(255,255,255,.78)',
+                      border: '1px solid rgba(10,12,20,.10)',
+                      backdropFilter: 'saturate(140%) blur(10px)',
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,.55), 0 8px 24px rgba(18,28,45,.08)',
                     }}
                   >
                     <div
@@ -501,8 +518,8 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
                             position: 'relative',
                             borderRadius: 12,
                             overflow: 'hidden',
-                            border: '1px solid #2b3552',
-                            background: '#0f1422',
+                            border: '1px solid rgba(10,12,20,.10)',
+                            background: 'rgba(255,255,255,.75)',
                             aspectRatio: '1 / 1',
                           }}
                         >
@@ -520,7 +537,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
                             }}
                           />
 
-                          {/* overlay с кнопками */}
+                          {/* overlay с кнопками (светлое стекло) */}
                           <div
                             style={{
                               position: 'absolute',
@@ -537,9 +554,9 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
                               style={{
                                 padding: '6px 8px',
                                 borderRadius: 10,
-                                background: 'rgba(0,0,0,.45)',
-                                border: '1px solid rgba(255,255,255,.25)',
-                                color: '#fff',
+                                background: 'rgba(255,255,255,.85)',
+                                border: '1px solid rgba(10,12,20,.10)',
+                                color: 'var(--text)',
                                 fontSize: 12,
                                 textDecoration: 'none',
                                 backdropFilter: 'blur(6px)',
@@ -554,9 +571,9 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
                               style={{
                                 padding: '6px 8px',
                                 borderRadius: 10,
-                                background: 'rgba(0,0,0,.45)',
-                                border: '1px solid rgba(255,255,255,.25)',
-                                color: '#fff',
+                                background: 'rgba(255,255,255,.85)',
+                                border: '1px solid rgba(10,12,20,.10)',
+                                color: 'var(--text)',
                                 fontSize: 12,
                               }}
                             >
@@ -577,7 +594,7 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
         )}
       </div>
 
-      {/* трей вложений (прикреплённые пользователем) */}
+      {/* трей вложений (прикреплённые пользователем) — светлое стекло */}
       {!!attach.length && (
         <div
           ref={trayRef}
@@ -587,10 +604,10 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
             gap: 10,
             padding: '8px 4px',
             borderRadius: 14,
-            background: 'rgba(9, 13, 22, 0.6)',
-            border: '1px solid rgba(255,210,120,.28)',
-            boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.04)',
-            backdropFilter: 'saturate(160%) blur(8px)',
+            background: 'rgba(255,255,255,.78)',
+            border: '1px solid rgba(10,12,20,.10)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.55)',
+            backdropFilter: 'saturate(140%) blur(8px)',
           }}
         >
           {attach.map(a => (
@@ -598,9 +615,10 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
               position: 'relative',
               width: 64, height: 64,
               borderRadius: 12,
-              border: '1px solid rgba(255,210,120,.28)',
+              border: '1px solid rgba(10,12,20,.10)',
               overflow: 'hidden',
               flex: '0 0 auto',
+              background: 'rgba(255,255,255,.75)',
             }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={a.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -611,14 +629,14 @@ export default function AIChatClientPro(props: AIChatClientProProps) {
                 style={{
                   position: 'absolute', top: -6, right: -6,
                   width: 26, height: 26, borderRadius: 999,
-                  border: '1px solid rgba(255,210,120,.35)', background: '#0e1422',
-                  color: '#fff', fontSize: 16, lineHeight: '22px'
+                  border: '1px solid rgba(10,12,20,.10)', background: 'rgba(255,255,255,.9)',
+                  color: '#0B0C10', fontSize: 16, lineHeight: '22px'
                 }}
               >×</button>
               {a.status === 'uploading' && (
                 <div style={{
                   position: 'absolute', left: 0, right: 0, bottom: 0,
-                  height: 5, background: 'rgba(255,210,120,.35)'
+                  height: 5, background: 'rgba(45,126,247,.25)'
                 }} />
               )}
             </div>
