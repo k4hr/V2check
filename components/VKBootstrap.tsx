@@ -1,8 +1,8 @@
-/* path: components/VKBootstrap.tsx */
 'use client';
 
 import { useEffect } from 'react';
 import bridge from '@vkontakte/vk-bridge';
+import type { ReactNode } from 'react';
 
 declare global {
   interface Window {
@@ -11,7 +11,7 @@ declare global {
   }
 }
 
-type Props = { children?: React.ReactNode };
+type Props = { children?: ReactNode };
 
 export default function VKBootstrap({ children }: Props) {
   useEffect(() => {
@@ -48,7 +48,7 @@ export default function VKBootstrap({ children }: Props) {
         const lp: any = await bridge.send('VKWebAppGetLaunchParams').catch(() => ({}));
         let raw = buildVkParamsString(lp || {});
         if (!raw) {
-          // fallback: пробуем собрать из search+hash
+          // fallback: search + hash
           const all = new URLSearchParams(location.search + location.hash.replace(/^#/, location.search ? '&' : '?'));
           const tmp: Record<string, string> = {};
           all.forEach((v, k) => {
@@ -56,27 +56,24 @@ export default function VKBootstrap({ children }: Props) {
           });
           raw = buildVkParamsString(tmp);
         }
-
         if (raw) {
           window.__VK_PARAMS__ = raw;
           setCookie('vk_params', raw, 86400);
-
-          // ⚡ ВАЖНО: ставим welcomed=1, чтобы middleware не редиректил
           setCookie('welcomed', '1', 60 * 60 * 24 * 365);
         }
       } catch {}
     };
 
-    const forceDark = () => {
+    const forceLight = () => {
       try {
-        document.documentElement.style.colorScheme = 'dark';
-        document.documentElement.setAttribute('data-force-dark', '1');
+        document.documentElement.style.colorScheme = 'light';
+        document.documentElement.setAttribute('data-force-light', '1');
       } catch {}
       bridge
         .send('VKWebAppSetViewSettings', {
-          status_bar_style: 'dark',
-          action_bar_color: '#0b1220',
-          navigation_bar_color: '#0b1220',
+          status_bar_style: 'light',          // было 'dark'
+          action_bar_color: '#F5F7FA',
+          navigation_bar_color: '#F5F7FA',
         })
         .catch(() => {});
     };
@@ -87,18 +84,17 @@ export default function VKBootstrap({ children }: Props) {
         bridge.send('VKWebAppExpand').catch(() => {});
         const cfg: any = await bridge.send('VKWebAppGetConfig').catch(() => ({}));
         setHost(cfg?.api_host || 'api.vk.ru');
-        forceDark();
+        forceLight();               // ФИКС: только светлая тема
         await persistLaunchParams();
       } catch (e) {
         console.warn('VKBootstrap init failed', e);
       }
 
-      // следим за изменением конфигурации VK Mini App
       const handler = (e: any) => {
         if (e?.detail?.type === 'VKWebAppUpdateConfig') {
           const data = e.detail.data || {};
           if (data.api_host) setHost(data.api_host);
-          forceDark();
+          forceLight();
         }
       };
       bridge.subscribe(handler);
