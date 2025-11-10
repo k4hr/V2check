@@ -6,6 +6,7 @@ import type { Route } from 'next';
 import { useEffect, useMemo } from 'react';
 import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
+import BackBtn from '@/app/components/BackBtn';
 
 function setWelcomedCookie() {
   try {
@@ -81,7 +82,7 @@ export default function ProSelectPage() {
     },
   };
 
-  // Кука welcomed сразу, чтобы middleware не редиректил назад
+  // Кука welcomed сразу
   useEffect(setWelcomedCookie, []);
 
   // Определяем платформу один раз на клиенте
@@ -91,7 +92,6 @@ export default function ProSelectPage() {
     const w: any = window;
     try { document.documentElement.lang = locale; } catch {}
 
-    // Инициализация контейнера в зависимости от платформы
     try {
       if (platform === 'telegram') {
         w?.Telegram?.WebApp?.ready?.();
@@ -109,7 +109,7 @@ export default function ProSelectPage() {
     } catch {}
   }, [locale, platform]);
 
-  // Хвост для ссылок: протаскиваем welcomed=1 и id (если был)
+  // Хвост ссылок: welcomed=1 и id (если был)
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
@@ -129,14 +129,10 @@ export default function ProSelectPage() {
 
   return (
     <main className="lm-wrap">
-      {/* Назад всегда на /home с сохранением хвоста */}
-      <Link
-        href={`/home${linkSuffix}` as Route}
-        className="card"
-        style={{ maxWidth: 140, padding: '10px 12px', marginBottom: 12, textDecoration: 'none' }}
-      >
-        ← {S.back}
-      </Link>
+      {/* Назад — стандартный BackBtn, без дополнительной «кнопки-назад» */}
+      <div style={{ marginBottom: 8 }}>
+        <BackBtn fallback={`/home${linkSuffix}` as Route} />
+      </div>
 
       <h1 style={{ textAlign:'center' }}>{L[locale].choosePlan}</h1>
       <p className="lm-subtitle" style={{ textAlign:'center' }}>
@@ -144,7 +140,7 @@ export default function ProSelectPage() {
       </p>
 
       <div className="lm-grid" style={{ marginTop:16 }}>
-        {/* Pro */}
+        {/* Pro — светлое стекло */}
         <Link
           href={`${base}/min${linkSuffix}` as Route}
           className="card card--pro"
@@ -160,7 +156,7 @@ export default function ProSelectPage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Pro+ */}
+        {/* Pro+ — золотое стекло */}
         <Link
           href={`${base}/max${linkSuffix}` as Route}
           className="card card--proplus"
@@ -224,82 +220,103 @@ export default function ProSelectPage() {
         .lm-subtitle { opacity: .7; margin-top: 6px; }
         .lm-grid { display: grid; gap: 12px; }
 
+        /* ===== Карточки: светлое стекло ===== */
         .card {
           display: flex; align-items: center; justify-content: space-between;
-          padding: 16px; border-radius: 14px;
-          background: #161b25; border: 1px solid rgba(255,255,255,.08);
-          color: inherit; box-shadow: 0 6px 24px rgba(0,0,0,.25);
-          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+          padding: 16px; border-radius: 16px;
+          color: #0B0C10; text-decoration: none;
+          background: rgba(255,255,255,.78);
+          border: 1px solid rgba(10,12,20,.10);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 10px 26px rgba(18,28,45,.10);
+          backdrop-filter: blur(10px) saturate(140%);
+          transition: transform .12s ease, border-color .12s ease, background .12s ease, box-shadow .12s ease;
           -webkit-tap-highlight-color: transparent;
         }
         .card:hover { transform: translateY(-1px); }
         .card__left { display: flex; gap: 12px; align-items: center; }
         .card__icon {
-          width: 36px; height: 36px; display: grid; place-items: center; font-size: 20px;
-          background: rgba(255,255,255,.06); border-radius: 10px;
+          width: 40px; height: 40px; display: grid; place-items: center; font-size: 20px;
+          border-radius: 12px; border: 1px solid rgba(10,12,20,.10);
+          background: rgba(255,255,255,.85);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
         }
         .card__title { font-weight: 800; font-size: 16px; line-height: 1.1; }
-        .card__subtitle { opacity: .78; font-size: 13px; margin-top: 2px; }
-        .card__chev { opacity: .6; font-size: 22px; }
+        .card__subtitle { opacity: .75; font-size: 13px; margin-top: 2px; }
+        .card__chev { opacity: .55; font-size: 22px; }
 
-        /* Pro */
-        .card--pro {
-          border-color: rgba(91, 140, 255, .45);
-          box-shadow: 0 10px 30px rgba(91, 140, 255, .16), inset 0 0 0 1px rgba(91, 140, 255, .10);
-        }
-        .card__icon--pro {
-          background: radial-gradient(120% 120% at 20% 20%, rgba(120,150,255,.45), rgba(120,150,255,.08) 60%, rgba(255,255,255,.05));
-        }
+        /* Pro — лёгкий синий акцент при hover */
+        .card--pro:hover { border-color: rgba(45,126,247,.45); background: rgba(255,255,255,.82); }
 
-        /* Pro+ карточка (золото) */
+        /* Pro+ — золотое стекло по умолчанию */
         .card--proplus {
-          border-color: rgba(255, 191, 73, .45);
-          box-shadow: 0 10px 30px rgba(255,191,73,.18), inset 0 0 0 1px rgba(255,191,73,.10);
+          background:
+            linear-gradient(135deg, rgba(255,210,120,.22), rgba(255,191,73,.18)),
+            rgba(255,255,255,.78);
+          border: 1px solid rgba(255,191,73,.55);
+          box-shadow: 0 12px 36px rgba(255,191,73,.20), inset 0 1px 0 rgba(255,255,255,.6);
+        }
+        .card--proplus:hover {
+          background:
+            linear-gradient(135deg, rgba(255,210,120,.28), rgba(255,191,73,.22)),
+            rgba(255,255,255,.82);
+          border-color: rgba(255,191,73,.70);
         }
         .card__icon--proplus {
-          background: radial-gradient(120% 120% at 20% 20%, rgba(255,210,120,.55), rgba(255,210,120,.10) 60%, rgba(255,255,255,.05));
+          background:
+            linear-gradient(135deg, rgba(255,210,120,.28), rgba(255,191,73,.18)),
+            rgba(255,255,255,.85);
+          border-color: rgba(255,191,73,.55);
+        }
+        .card__icon--pro {
+          background:
+            linear-gradient(135deg, rgba(45,126,247,.16), rgba(59,130,246,.10)),
+            rgba(255,255,255,.85);
+          border-color: rgba(10,12,20,.10);
         }
 
-        /* ===== Таблица ===== */
+        /* ===== Таблица сравнения — белое стекло ===== */
         .cmp { margin-top: 18px; }
-        .cmp__title { margin: 10px 0 10px; text-align: center; font-size: 18px; opacity: .95; }
+        .cmp__title { margin: 12px 0 12px; text-align: center; font-size: 18px; opacity: .95; color:#0B0C10; }
 
         .cmp-grid {
-          border: 1px solid rgba(255,255,255,.08);
-          border-radius: 14px;
+          background: rgba(255,255,255,.88);
+          border: 1px solid rgba(10,12,20,.10);
+          border-radius: 18px;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 12px 28px rgba(18,28,45,.08);
+          backdrop-filter: blur(8px) saturate(140%);
           overflow: hidden;
-          background: #111624;
           display: grid;
           grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
+          color: #0B0C10;
         }
 
-        /* Центровка содержимого */
         .cell {
           padding: 12px;
           font-size: 14px;
-          border-bottom: 1px solid rgba(255,255,255,.06);
+          border-bottom: 1px solid rgba(10,12,20,.06);
           display: flex;
           align-items: center;
           justify-content: center;
           text-align: center;
           min-height: 54px;
-          position: relative;
         }
-        .cell--label { background: rgba(255,255,255,.02); font-weight: 600; }
-        .cell--head  { font-weight: 800; background: rgba(255,255,255,.04); }
+        .cell--label { background: rgba(10,12,20,.03); font-weight: 600; }
+        .cell--head  { font-weight: 800; background: rgba(10,12,20,.04); }
 
         /* Вертикальные разделители */
         .cmp-grid .cell:nth-child(3n+1),
-        .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(255,255,255,.06); }
+        .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(10,12,20,.06); }
         .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
 
-        /* Колонка Pro+ — фон как у «золотой» кнопки */
+        /* Колонка Pro+ — золотой подсвет */
         .cell--proplus,
         .cell--proplus-head {
-          background: linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%);
-          color: #fff;
+          background:
+            linear-gradient(135deg, rgba(255,210,120,.16), rgba(255,191,73,.12)),
+            rgba(255,255,255,.80);
+          font-weight: 700;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
         }
-        .cell--proplus-head { font-weight: 800; }
 
         /* Чипы */
         .chip {
@@ -307,17 +324,16 @@ export default function ProSelectPage() {
           min-width: 24px; height: 24px; padding: 0 8px;
           border-radius: 999px; font-size: 13px; line-height: 24px;
           border: 1px solid transparent;
-          position: relative; z-index: 1;
         }
         .chip--ok {
-          background: rgba(80,200,120,.30);
-          border-color: rgba(80,200,120,.55);
-          color: #dfffe6;
+          background: rgba(36,199,104,.22);
+          border-color: rgba(36,199,104,.45);
+          color: #0B0C10;
         }
         .chip--no {
-          background: rgba(255,90,90,.22);
-          border-color: rgba(255,90,90,.45);
-          color: #ffd6d6;
+          background: rgba(255,90,90,.18);
+          border-color: rgba(255,90,90,.40);
+          color: #0B0C10;
         }
 
         @media (max-width: 420px) {
