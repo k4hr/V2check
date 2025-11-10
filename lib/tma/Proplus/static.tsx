@@ -82,34 +82,65 @@ export default function ProPlusHub() {
         .title { text-align: center; margin: 0; }
         .subtitle { text-align: center; opacity: .7; margin-top: 6px; }
 
+        /* -------- Белая аккуратная строка поиска -------- */
         .searchBox { margin-top: 14px; }
         .search {
-          width: 100%; padding: 14px 16px; border-radius: 14px;
-          background: #141823; border: 1px solid var(--border);
-          color: var(--fg, #fff); outline: none; font-size: 16px;
+          width: 100%;
+          height: 48px;
+          padding: 12px 16px;
+          border-radius: 14px;
+          background: #ffffff;
+          border: 1px solid rgba(10,12,20,.10); /* чёткая, тонкая */
+          color: #0B0C10;
+          outline: none;
+          font-size: 16px;
+          -webkit-appearance: none;
+          appearance: none;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 8px 18px rgba(18,28,45,.06);
+        }
+        .search::placeholder { color: rgba(11,12,16,.45); }
+        .search:focus {
+          border-color: rgba(255,210,120,.55);
+          box-shadow:
+            0 0 0 3px rgba(255,210,120,.22),
+            inset 0 1px 0 rgba(255,255,255,.75);
         }
 
-        /* Вариант B: родительская сетка задаёт единую высоту строк */
+        /* -------- Сетка карточек -------- */
         .grid {
           display: grid;
           gap: 16px;
           margin-top: 16px;
-          grid-auto-rows: 192px; /* единая высота всех карточек */
+          grid-auto-rows: 192px; /* единая высота */
         }
 
-        /* Карточка занимает всю отведённую строку и сама — трёхрядная сетка */
+        /* -------- Золотые карточки: светлое стекло + чёрный текст -------- */
         .pro-card {
           height: 100%;
           display: grid;
-          grid-template-rows: minmax(0,auto) 1fr auto; /* контент сверху не распирает */
-          padding: 20px; border-radius: 18px; color: #fff;
+          grid-template-rows: minmax(0,auto) 1fr auto;
+          padding: 20px;
+          border-radius: 18px;
+          color: #0B0C10; /* ЧЁРНЫЙ ТЕКСТ */
           background:
-            radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.18), rgba(255,255,255,.03)),
-            linear-gradient(135deg, rgba(255,210,120,.10), rgba(255,191,73,.06));
-          border: 1px solid rgba(255,210,120,.32);
-          box-shadow: 0 12px 36px rgba(255,191,73,.25), inset 0 0 0 1px rgba(255,255,255,.045);
+            radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.16), rgba(255,210,120,.06) 70%),
+            linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.86));
+          border: 1px solid rgba(218,165,32,.38); /* аккуратная золотая рамка */
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.70),
+            0 10px 26px rgba(215,170,60,.10);
         }
-        .pro-card.empty { display:flex; justify-content:center; align-items:center; min-height:96px; opacity:.7; }
+        .pro-card:hover {
+          border-color: rgba(218,165,32,.55);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.75),
+            0 12px 30px rgba(215,170,60,.14);
+          transform: translateY(-1px);
+          transition: all .12s ease;
+        }
+        .pro-card.empty {
+          display:flex; justify-content:center; align-items:center; min-height:96px; opacity:.7;
+        }
 
         .pro-head { display:flex; gap:14px; align-items:center; }
         .pro-ico {
@@ -117,8 +148,9 @@ export default function ProPlusHub() {
           display: grid; place-items: center;
           font-size: 30px; line-height: 1;
           background: rgba(255,210,120,.22);
-          border: 1px solid rgba(255,210,120,.34);
+          border: 1px solid rgba(218,165,32,.42);
           border-radius: 14px;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
         }
         .pro-text { line-height: 1.15; min-width: 0; }
 
@@ -134,19 +166,21 @@ export default function ProPlusHub() {
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
         }
-        @media (max-width: 360px) {
-          .pro-title { font-size: 15px; }
-        }
+        @media (max-width: 360px) { .pro-title { font-size: 15px; } }
 
         /* Описание — до 3 строк */
         .pro-sub {
-          display:block; opacity: .9; margin-top: 6px; font-size: 13px; line-height: 1.25;
+          display:block;
+          color: rgba(11,12,16,.70);
+          margin-top: 6px;
+          font-size: 13px; line-height: 1.25;
           overflow: hidden; text-overflow: ellipsis;
           display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
         }
 
         .ctaWrap { display:flex; justify-content:center; align-items:flex-end; }
 
+        /* Золотая CTA — чёткая, без «мыла» */
         .cta,
         :global(a.cta) {
           display:flex; align-items:center; justify-content:center;
@@ -154,16 +188,30 @@ export default function ProPlusHub() {
           height: 48px;
           border-radius: 14px;
           font-weight: 700; font-size: 16px;
-          color: #fff !important;
+          color: #ffffff !important;
           text-decoration: none !important;
-          background: linear-gradient(135deg, rgba(255,210,120,.45), rgba(255,191,73,.25));
-          border: 1px solid rgba(255,191,73,.55);
-          box-shadow: 0 12px 36px rgba(255,191,73,.28);
+          background: linear-gradient(135deg, rgba(255,210,120,.85), rgba(255,191,73,.65));
+          border: 1px solid rgba(218,165,32,.68);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.55),
+            0 12px 28px rgba(215,170,60,.22);
           transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
           cursor: pointer;
         }
+        .cta:hover,
+        :global(a.cta:hover) {
+          border-color: rgba(218,165,32,.85);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.65),
+            0 14px 34px rgba(215,170,60,.26);
+        }
         .cta:active,
-        :global(a.cta:active) { transform: translateY(1px); box-shadow: 0 8px 24px rgba(255,191,73,.24); }
+        :global(a.cta:active) {
+          transform: translateY(1px);
+          box-shadow:
+            inset 0 1px 0 rgba(255,255,255,.55),
+            0 10px 24px rgba(215,170,60,.20);
+        }
       `}</style>
     </main>
   );
