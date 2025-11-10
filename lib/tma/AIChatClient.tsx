@@ -266,7 +266,7 @@ export default function AIChatClient(props: AIChatClientProps) {
     >
       <div style={{ position: 'relative' }}>
         <BackBtn fallback={backHref} />
-        {/* ★ */}
+        {/* ★ — стеклянная, светлая */}
         <button
           type="button"
           onClick={toggleStar}
@@ -275,12 +275,13 @@ export default function AIChatClient(props: AIChatClientProps) {
           style={{
             position: 'absolute', top: 0, right: 0,
             width: 36, height: 36, borderRadius: 10,
-            border: thread.starred ? '1px solid rgba(255,210,120,.75)' : '1px solid rgba(255,255,255,.18)',
-            background: thread.starred ? 'rgba(255,210,120,.14)' : 'rgba(255,255,255,.06)',
-            color: '#ffd678',
+            border: thread.starred ? '1px solid rgba(255,210,120,.75)' : '1px solid rgba(10,12,20,.10)',
+            background: thread.starred ? 'rgba(255,210,120,.14)' : 'rgba(255,255,255,.78)',
+            color: '#A8791A',
             display: 'grid', placeItems: 'center',
-            boxShadow: thread.starred ? '0 6px 18px rgba(255,191,73,.25)' : 'none',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.6), 0 10px 24px rgba(18,28,45,.10)',
             opacity: thread.busy ? .6 : 1,
+            backdropFilter: 'blur(8px)',
           }}
         >
           {thread.starred ? '★' : '☆'}
@@ -303,50 +304,66 @@ export default function AIChatClient(props: AIChatClientProps) {
           <p style={{ textAlign: 'center', opacity: .75, marginTop: -4 }}>{subtitle}</p>
         )}
 
-        {/* MINI BADGE — только при активном Pro+ */}
+        {/* MINI BADGE — светлое «стекло», чёрный текст */}
         {proPlusActive && (
           <div style={{ display:'flex', justifyContent:'center', marginTop: 6 }}>
             <span
               style={{
                 display:'inline-flex', alignItems:'center', gap:8,
-                padding:'6px 10px', borderRadius: 999,
-                background:'rgba(255,210,120,.16)',
-                border:'1px solid rgba(255,210,120,.35)',
-                boxShadow:'inset 0 0 0 1px rgba(255,255,255,.04), 0 10px 26px rgba(255,191,73,.18)',
-                color:'#fff', fontWeight:700, fontSize:12, letterSpacing:.2
+                padding:'6px 12px', borderRadius: 999,
+                background: 'linear-gradient(135deg, rgba(255,210,120,.20), rgba(255,210,120,.10)), rgba(255,255,255,.72)',
+                border:'1px solid rgba(255,210,120,.45)',
+                boxShadow:'inset 0 1px 0 rgba(255,255,255,.55), 0 10px 26px rgba(255,191,73,.18)',
+                backdropFilter:'blur(10px) saturate(140%)',
+                color:'#0B0C10', fontWeight:700, fontSize:12, letterSpacing:.2
               }}
             >
-              <span aria-hidden>✨</span>
-              Pro+ активен
+              ✨ Pro+ активен
             </span>
           </div>
         )}
       </div>
 
-      {/* Лента сообщений */}
+      {/* Лента сообщений — светлые стеклянные пузыри */}
       <div ref={listRef} style={{ minHeight: 0, overflow: 'auto', padding: '4px 2px' }}>
-        {messages.filter(m => m.role !== 'system').map((m, i) => (
-          <div key={i} style={{
-            margin: '10px 0',
-            display: 'flex',
-            justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start'
-          }}>
-            <div
-              style={{
-                maxWidth: '86%',
-                padding: '10px 12px',
-                borderRadius: 14,
-                lineHeight: 1.5,
-                background: m.role === 'user' ? '#24304a' : '#1a2132',
-                border: '1px solid #2b3552',
-                whiteSpace: 'pre-wrap',
-                fontSize: 16
-              }}
-            >
-              {m.content}
+        {messages.filter(m => m.role !== 'system').map((m, i) => {
+          const isAssistant = m.role === 'assistant';
+
+          const bubbleBase: React.CSSProperties = {
+            maxWidth: '86%',
+            padding: '10px 12px',
+            borderRadius: 14,
+            lineHeight: 1.5,
+            whiteSpace: 'pre-wrap',
+            fontSize: 16,
+            wordBreak: 'break-word',
+            color: 'var(--text)', // ЧЁРНЫЙ/основной
+            backdropFilter: 'saturate(140%) blur(10px)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.55), 0 8px 24px rgba(18,28,45,.08)',
+          };
+
+          const bubbleStyle: React.CSSProperties = isAssistant
+            ? {
+                ...bubbleBase,
+                background: 'rgba(255,255,255,.80)',
+                border: '1px solid rgba(10,12,20,.10)',
+              }
+            : {
+                ...bubbleBase,
+                background: 'rgba(45,126,247,.10)',
+                border: '1px solid rgba(45,126,247,.22)',
+              };
+
+          return (
+            <div key={i} style={{
+              margin: '10px 0',
+              display: 'flex',
+              justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start'
+            }}>
+              <div style={bubbleStyle}>{m.content}</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {(loading || uploading) && (
           <div style={{ opacity: .6, fontSize: 13, padding: '6px 2px' }}>
             Думаю…
@@ -354,7 +371,7 @@ export default function AIChatClient(props: AIChatClientProps) {
         )}
       </div>
 
-      {/* Трей вложений */}
+      {/* Трей вложений — светлое стекло */}
       {!!attach.length && (
         <div
           ref={trayRef}
@@ -364,9 +381,10 @@ export default function AIChatClient(props: AIChatClientProps) {
             gap: 10,
             padding: '8px 4px',
             borderRadius: 14,
-            background: 'rgba(9, 13, 22, 0.6)',
-            border: '1px solid rgba(255,255,255,0.06)',
-            backdropFilter: 'saturate(160%) blur(8px)',
+            background: 'rgba(255,255,255,.78)',
+            border: '1px solid rgba(10,12,20,.10)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,.55)',
+            backdropFilter: 'saturate(140%) blur(8px)',
           }}
         >
           {attach.map(a => (
@@ -374,9 +392,10 @@ export default function AIChatClient(props: AIChatClientProps) {
               position: 'relative',
               width: 64, height: 64,
               borderRadius: 12,
-              border: '1px solid #2b3552',
+              border: '1px solid rgba(10,12,20,.10)',
               overflow: 'hidden',
               flex: '0 0 auto',
+              background: 'rgba(255,255,255,.75)',
             }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={a.previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -387,14 +406,14 @@ export default function AIChatClient(props: AIChatClientProps) {
                 style={{
                   position: 'absolute', top: -6, right: -6,
                   width: 26, height: 26, borderRadius: 999,
-                  border: '1px solid #2b3552', background: '#0e1422',
-                  color: '#fff', fontSize: 16, lineHeight: '22px'
+                  border: '1px solid rgba(10,12,20,.10)', background: 'rgba(255,255,255,.9)',
+                  color: '#0B0C10', fontSize: 16, lineHeight: '22px'
                 }}
               >×</button>
               {a.status === 'uploading' && (
                 <div style={{
                   position: 'absolute', left: 0, right: 0, bottom: 0,
-                  height: 5, background: 'rgba(255,255,255,.25)'
+                  height: 5, background: 'rgba(45,126,247,.25)'
                 }} />
               )}
             </div>
