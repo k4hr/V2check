@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { readLocale, type Locale, STRINGS } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
 import { authHeaders, ensureVkParams } from '@/lib/utils/authHeaders';
+import BackBtn from '@/components/BackBtn';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
@@ -53,13 +54,6 @@ function parseUserFromInitCookie(): MeResp['user'] {
   } catch { return null; }
 }
 function getInitDataFromCookie(): string { return getCookie('tg_init_data'); }
-function haptic(type: 'light' | 'medium' = 'light') {
-  try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
-}
-function goBackFallback() {
-  if (document.referrer && window.history.length > 1) history.back();
-  else window.location.href = '/home';
-}
 function formatDate(d: Date) {
   const dd = String(d.getDate()).padStart(2, '0');
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -156,17 +150,14 @@ export default function CabinetPage() {
       let endpoint = '/api/me';
       if (!initData && DEBUG && debugId) endpoint += `?id=${encodeURIComponent(debugId)}`;
 
-      // всегда строим заголовки через helper,
-      // он сам добавит X-Vk-Params / X-Tg-Init-Data если они доступны
       let headers = authHeaders(
         initData ? { 'X-Telegram-Init-Data': initData, 'X-Init-Data': initData } : {}
       );
 
       let resp = await fetch(endpoint, { method: 'POST', headers, cache: 'no-store' });
 
-      // если мы в VK и прилетела 401 — дотянем launch-параметры и попробуем ещё раз
       if (platform === 'vk' && resp.status === 401) {
-        const got = await ensureVkParams(); // вернёт true, если записал/нашёл vk_params
+        const got = await ensureVkParams();
         if (got) {
           headers = authHeaders(
             initData ? { 'X-Telegram-Init-Data': initData, 'X-Init-Data': initData } : {}
@@ -176,10 +167,7 @@ export default function CabinetPage() {
       }
 
       const data: MeResp = await resp.json().catch(() => ({ ok: false }));
-
       if (data?.provider) providerRef.current = data.provider;
-
-      // для VK сервер возвращает только telegramId — поле используем как «id …»
       if (data?.user) setUser(prev => prev ?? data.user);
 
       const sub = data?.subscription;
@@ -202,7 +190,6 @@ export default function CabinetPage() {
     }
   }
 
-  // При VK добираем нормальным именем через bridge (чисто косметика)
   async function loadVkProfileIfPossible() {
     if (providerRef.current !== 'vk' || platform !== 'vk') return;
     try {
@@ -238,18 +225,6 @@ export default function CabinetPage() {
   }
 
   useEffect(() => {
-    const tg: any = (window as any)?.Telegram?.WebApp;
-    try { tg?.ready?.(); tg?.expand?.(); } catch {}
-
-    try {
-      tg?.BackButton?.show?.();
-      const back = () => { haptic('light'); goBackFallback(); };
-      tg?.BackButton?.onClick?.(back);
-      return () => { tg?.BackButton?.hide?.(); tg?.BackButton?.offClick?.(back); };
-    } catch {}
-  }, []);
-
-  useEffect(() => {
     const WebApp: any = (window as any)?.Telegram?.WebApp;
     let u = WebApp?.initDataUnsafe?.user || null;
     if (!u) u = parseUserFromInitCookie();
@@ -257,24 +232,20 @@ export default function CabinetPage() {
 
     const initData = WebApp?.initData || getInitDataFromCookie();
     (async () => {
-      // если VK — попробуем заранее подтянуть vk_params (уменьшит вероятность 401)
       if (platform === 'vk') { try { await ensureVkParams(); } catch {} }
       if (initData) {
         await loadMe(initData);
       } else if (DEBUG) {
         await loadMe();
       } else {
-        await loadMe(); // VK без Telegram — всё равно попробуем по vk_params
+        await loadMe();
         setIsAdmin(false);
       }
       await loadVkProfileIfPossible();
       await checkAdmin(initData);
     })();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debugId, locale, platform]);
 
-  // В приветствии: если нет имени — показываем id из user.telegramId для VK
   const hello =
     (user?.first_name || '') +
       (user?.last_name ? ` ${user.last_name}` : '') ||
@@ -287,24 +258,7 @@ export default function CabinetPage() {
       <div className="safe" style={{ padding: 20, maxWidth: 720, margin: '0 auto', display:'flex', flexDirection:'column', gap:14 }}>
 
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-          <button
-            type="button"
-            onClick={() => { haptic('light'); goBackFallback(); }}
-            className="list-btn"
-            style={{
-              width: 120,
-              padding: '10px 14px',
-              borderRadius: 12,
-              background: '#171a21',
-              border: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8
-            }}
-          >
-            <span style={{ fontSize: 18, lineHeight: 1 }}>←</span>
-            <span style={{ fontWeight: 600 }}>{T.back}</span>
-          </button>
+          <BackBtn fallback="/home" label={T.back} />
 
           {isAdmin ? (
             <Link
