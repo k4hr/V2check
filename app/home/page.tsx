@@ -7,25 +7,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { STRINGS, readLocale, setLocaleEverywhere, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
 
-// Новости: данные и компонент (вынесены)
+// Новости: данные и компонент
 import { NEWS, type NewsItem } from './news';
 import NewsSection from './NewsSection';
 
 const LOCALES = [
-  { code: 'ru' as const, label: 'Русский',     flag: '🇷🇺' },
-  { code: 'uk' as const, label: 'Українська',  flag: '🇺🇦' },
-  { code: 'be' as const, label: 'Беларуская',  flag: '🇧🇾' },
-  { code: 'kk' as const, label: 'Қазақша',     flag: '🇰🇿' },
-  { code: 'uz' as const, label: "Oʻzbekcha",   flag: '🇺🇿' },
-  { code: 'ky' as const, label: 'Кыргызча',    flag: '🇰🇬' },
-  { code: 'fa' as const, label: 'فارسی',       flag: '🇮🇷' },
-  { code: 'hi' as const, label: 'हिन्दी',      flag: '🇮🇳' },
-  { code: 'en' as const, label: 'English',     flag: '🇬🇧' },
+  { code: 'ru' as const, label: 'Русский'     },
+  { code: 'uk' as const, label: 'Українська'  },
+  { code: 'be' as const, label: 'Беларуская'  },
+  { code: 'kk' as const, label: 'Қазақша'     },
+  { code: 'uz' as const, label: "Oʻzbekcha"   },
+  { code: 'ky' as const, label: 'Кыргызча'    },
+  { code: 'fa' as const, label: 'فارسی'       },
+  { code: 'hi' as const, label: 'हिन्दी'      },
+  { code: 'en' as const, label: 'English'     },
 ];
-
-function haptic(type:'light'|'medium'='light'){
-  try{ (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);}catch{}
-}
 
 export default function HomePage(){
   useEffect(()=>{ try{ ensureLocaleCookie({ sameSite: 'none', secure: true } as any); }catch{} }, []);
@@ -62,14 +58,13 @@ export default function HomePage(){
     if(saving) return;
     setSaving(true);
     setLocaleEverywhere(pendingLocale);
-    haptic('medium');
     const url=new URL(window.location.href);
     url.searchParams.set('_lng',String(Date.now()));
     window.location.replace(url.toString());
   }
-  function onCancel(){ setPendingLocale(currentLocale); setOpen(false); haptic('light'); }
+  function onCancel(){ setPendingLocale(currentLocale); setOpen(false); }
 
-  // Новости: фильтруем по локали (если у карточки указана locale)
+  // Новости по локали
   const visibleNews: NewsItem[] = useMemo(
     () => NEWS.filter(n => !n.locale || n.locale === (currentLocale === 'en' ? 'en' : 'ru')),
     [currentLocale]
@@ -81,18 +76,14 @@ export default function HomePage(){
       <p className="lm-subtitle" style={{textAlign:'center'}}>{L.subtitle}</p>
 
       <div className="lm-grid" style={{marginTop:16}}>
+        {/* Герой: стеклянно-золотая плашка */}
         <Link
           href={href('/home/ChatGPT')}
-          className="card"
-          style={{
-            textDecoration:'none',
-            background:'linear-gradient(135deg,#2f2411 0%, #3b2c12 45%, #4b3513 100%)',
-            border:'1px solid #ffd278',
-            boxShadow:'0 14px 36px rgba(255,191,73,.28), inset 0 0 0 1px rgba(255,255,255,.06)'
-          }}
+          className="card hero-card"
+          style={{ textDecoration:'none' }}
         >
           <span style={{flex:1,display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <span className="card__title" style={{fontWeight:800,letterSpacing:.4}}>
+            <span className="card__title gold-text" style={{fontSize:18}}>
               CHATGPT 5
             </span>
           </span>
@@ -100,22 +91,30 @@ export default function HomePage(){
         </Link>
 
         <Link href={href('/cabinet')} className="card" style={{textDecoration:'none'}}>
-          <span className="card__left"><span className="card__icon">👤</span><span className="card__title">{L.cabinet}</span></span>
+          <span className="card__left">
+            <span className="card__title">{L.cabinet}</span>
+          </span>
           <span className="card__chev">›</span>
         </Link>
 
         <Link href={href('/pro')} className="card card--pro" style={{textDecoration:'none'}}>
-          <span className="card__left"><span className="card__icon">⭐</span><span className="card__title">{L.buy} <span className="badge">{L.pro} / {L.proplus}</span></span></span>
+          <span className="card__left">
+            <span className="card__title">{L.buy} <span className="badge">{L.pro} / {L.proplus}</span></span>
+          </span>
           <span className="card__chev">›</span>
         </Link>
 
         <Link href={href('/home/pro')} className="card card--pro" style={{textDecoration:'none'}}>
-          <span className="card__left"><span className="card__icon">🧰</span><span className="card__title">{L.daily} <span className="badge">{L.pro}</span></span></span>
+          <span className="card__left">
+            <span className="card__title">{L.daily} <span className="badge">{L.pro}</span></span>
+          </span>
           <span className="card__chev">›</span>
         </Link>
 
         <Link href={href('/home/pro-plus')} className="card card--proplus" style={{textDecoration:'none'}}>
-          <span className="card__left"><span className="card__icon">🚀</span><span className="card__title">{L.expert} <span className="badge badge--gold">{L.proplus}</span></span></span>
+          <span className="card__left">
+            <span className="card__title">{L.expert} <span className="badge badge--gold">{L.proplus}</span></span>
+          </span>
           <span className="card__chev">›</span>
         </Link>
       </div>
@@ -125,17 +124,29 @@ export default function HomePage(){
           <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
             <button
               type="button"
-              onClick={()=>{setOpen(v=>!v);haptic('light');}}
+              onClick={()=>setOpen(v=>!v)}
               className="ghost-link"
               style={{textDecoration:'none'}}
               aria-expanded={open}
             >
-              🌐 {L.changeLang}
+              {L.changeLang}
             </button>
           </div>
 
           {open && (
-            <div style={{marginTop:12,border:'1px dashed #4a4e6a',background:'#141823',borderRadius:14,padding:14,maxWidth:560,marginLeft:'auto',marginRight:'auto'}}>
+            <div
+              style={{
+                marginTop:12,
+                border:'1px dashed rgba(45,126,247,.25)',
+                background:'rgba(255,255,255,.62)',
+                backdropFilter:'blur(10px)',
+                borderRadius:14,
+                padding:14,
+                maxWidth:560,
+                marginLeft:'auto',
+                marginRight:'auto'
+              }}
+            >
               <div style={{marginBottom:10,opacity:.8,fontSize:12,letterSpacing:.2}}>{L.chooseLang}</div>
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8}}>
                 {LOCALES.map(l=>{
@@ -147,12 +158,11 @@ export default function HomePage(){
                       className="list-btn"
                       style={{
                         display:'flex',alignItems:'center',gap:10,borderRadius:12,padding:'10px 12px',
-                        background:active?'#1e2434':'#171a21',
-                        border:active?'1px solid #6573ff':'1px solid var(--card-border)',
-                        boxShadow:active?'0 0 0 3px rgba(101,115,255,.15) inset':'none'
+                        background: active ? 'rgba(255,255,255,.82)' : 'rgba(255,255,255,.68)',
+                        border: active ? '1px solid #6573ff' : '1px solid var(--card-border)',
+                        boxShadow: active ? '0 0 0 3px rgba(101,115,255,.15) inset' : 'none'
                       }}
                     >
-                      <span style={{width:22,textAlign:'center'}}>{l.flag}</span>
                       <span style={{fontWeight:600}}>{l.label}</span>
                     </button>
                   );
@@ -160,7 +170,7 @@ export default function HomePage(){
               </div>
 
               <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:12}}>
-                <button type="button" onClick={onCancel} className="list-btn" style={{padding:'10px 14px',borderRadius:12,background:'#1a1f2b',border:'1px solid var(--card-border)'}}>
+                <button type="button" onClick={onCancel} className="list-btn" style={{padding:'10px 14px',borderRadius:12}}>
                   {STRINGS[currentLocale].cancel}
                 </button>
                 <button
@@ -168,7 +178,13 @@ export default function HomePage(){
                   onClick={onSave}
                   disabled={saving || pendingLocale===currentLocale}
                   className="list-btn"
-                  style={{padding:'10px 14px',borderRadius:12,background:saving?'#2a3150':'#2e3560',border:'1px solid #4b57b3',opacity: saving ? 0.7 : 1}}
+                  style={{
+                    padding:'10px 14px',
+                    borderRadius:12,
+                    background: 'linear-gradient(180deg, rgba(45,126,247,.12), rgba(45,126,247,.08))',
+                    border: '1px solid #4b57b3',
+                    opacity: saving ? 0.7 : 1
+                  }}
                 >
                   {STRINGS[currentLocale].save}
                 </button>
@@ -178,7 +194,6 @@ export default function HomePage(){
         </>
       )}
 
-      {/* ---------- Блок новостей (вынесен в компонент) ---------- */}
       <NewsSection
         locale={currentLocale === 'en' ? 'en' : 'ru'}
         items={visibleNews}
