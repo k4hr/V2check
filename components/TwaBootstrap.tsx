@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 
 function getTelegramInitDataString(): string {
   try {
     const wa: any = (window as any)?.Telegram?.WebApp;
     if (wa?.initData && typeof wa.initData === 'string') return wa.initData;
 
-    // Фолбэк: из хэша (#tgWebAppData=...)
     const hash = window.location.hash?.startsWith('#')
       ? window.location.hash.slice(1)
       : window.location.hash || '';
@@ -17,10 +17,11 @@ function getTelegramInitDataString(): string {
   } catch { return ''; }
 }
 
-export default function TwaBootstrap({ children }: { children: React.ReactNode }) {
+export default function TwaBootstrap({ children }: { children: ReactNode }) {
   useEffect(() => {
     const wa: any = (window as any)?.Telegram?.WebApp;
-    try { wa?.ready?.(); wa?.expand?.(); } catch {}
+
+    // ready/expand уже делаем в TMAInit — здесь не дублируем
 
     // 1) собрать и сохранить initData
     let init = getTelegramInitDataString();
@@ -28,7 +29,8 @@ export default function TwaBootstrap({ children }: { children: React.ReactNode }
       if (!init) init = localStorage.getItem('tg_init_data') || '';
       if (init) {
         localStorage.setItem('tg_init_data', init);
-        document.cookie = `tg_init_data=${encodeURIComponent(init)}; path=/; max-age=86400`;
+        // Фикс: кука безопасная для WebView
+        document.cookie = `tg_init_data=${encodeURIComponent(init)}; Path=/; Max-Age=86400; SameSite=None; Secure`;
       }
     } catch {}
 
