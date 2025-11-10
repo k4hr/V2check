@@ -6,11 +6,13 @@ export default function TMAInit() {
   useEffect(() => {
     const tg = (window as any)?.Telegram?.WebApp;
     try {
-      tg?.ready();   // сообщаем Telegram, что всё отрендерилось
-      tg?.expand();  // просим фуллскрин
-      // при желании можно:
-      // tg?.setHeaderColor('secondary_bg_color');
-      // tg?.setBackgroundColor('#0d0f14');
+      // Сообщаем Telegram, что всё отрендерилось, и просим фуллскрин
+      tg?.ready?.();
+      tg?.expand?.();
+
+      // ФИКС СВЕТЛОЙ ТЕМЫ: светлый хедер/фон под наш UI
+      tg?.setHeaderColor?.('#F5F7FA');     // вместо 'secondary_bg_color'
+      tg?.setBackgroundColor?.('#F5F7FA'); // фиксированный светлый цвет
     } catch {
       // молчим, если не в TWA
     }
