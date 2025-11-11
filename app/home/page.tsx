@@ -24,21 +24,24 @@ export default function HomePage() {
     } catch {}
     try { document.documentElement.lang = locale; } catch {}
 
+    // Фичадетект blur (на совсем старых webview может не быть)
     try {
       const ok = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
       document.documentElement.classList.toggle('no-frost', !ok);
     } catch {}
   }, [locale]);
 
+  // cache-buster в URL, чтобы webview не отдавал старый CSS
   const suffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
       const sp = new URLSearchParams(u.search);
       sp.set('welcomed', '1');
+      sp.set('_v', 'hm6'); // <- обновляй при больших правках
       const id = u.searchParams.get('id'); if (id) sp.set('id', id);
       const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1';
-    } catch { return '?welcomed=1'; }
+      return s ? `?${s}` : '?welcomed=1&_v=hm6';
+    } catch { return '?welcomed=1&_v=hm6'; }
   }, []);
   const href = (p: string) => `${p}${suffix}` as Route;
 
@@ -47,7 +50,7 @@ export default function HomePage() {
 
   return (
     <main className="home">
-      {/* Анимированные «обои» под стекло */}
+      {/* Наш анимированный фон (поверх layout.lm-bg, но под контентом) */}
       <div className="bg" aria-hidden />
 
       <header className="hdr">
@@ -55,7 +58,7 @@ export default function HomePage() {
         <p className="sub">{L.subtitle}</p>
       </header>
 
-      {/* Блоки идут сверху под заголовком */}
+      {/* Блоки СВЕРХУ под заголовком */}
       <section className="stack">
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
@@ -65,6 +68,7 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
+        {/* Центральная стеклянная капсула */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
@@ -79,31 +83,44 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* полноширинная стеклянная док-панель снизу */}
+      {/* Док внизу */}
       <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
         <b>{L.cabinet}</b>
       </a>
 
       <style jsx>{`
-        /* Нет скролла у мини-приложения */
+        /* ——— Глобальные правки ТОЛЬКО для этой страницы ——— */
         :global(html, body, #__next){ height:100%; overflow:hidden; }
         :global(*){ -webkit-tap-highlight-color: transparent; }
-        :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
+        /* Убираем глобальный фон из layout, чтобы не мешал нашему */
+        :global(.lm-bg){ display:none !important; }
 
+        /* Переопределяем глобальный .card из globals.css,
+           иначе он делает белую плашку поверх нашего стекла */
+        :global(.lm-page) .card.glass{
+          background: rgba(255,255,255,.20) !important;
+          border: 1px solid rgba(15,23,42,.22) !important;
+          box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55) !important;
+          -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
+                  backdrop-filter: blur(18px) saturate(180%) !important;
+        }
+        :global(.lm-page) .card.glass::before{
+          content:''; position:absolute; inset:0; border-radius:18px; pointer-events:none;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
+          background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.10) 40%, transparent 70%);
+        }
+
+        /* ——— Страница ——— */
         .home{
-          position:relative;
-          height:100dvh;
-          display:grid;
-          grid-template-rows:auto 1fr;
+          position:relative; z-index:1;
+          height:100dvh; display:grid; grid-template-rows:auto 1fr;
           color:var(--text,#0f172a);
           padding:16px 14px 0;
         }
 
-        /* ===== ПЕРЕЛИВАЮЩИЙСЯ ФОН (GPU-friendly) =====
-           conic-gradient на ::before ВРАЩАЕМ,
-           радиальные пятна на ::after МЕДЛЕННО «ПЛАВАЮТ» */
+        /* Перелив фона (медленный + дешёвый для GPU) */
         .bg{
-          position:fixed; inset:0; z-index:-1; overflow:hidden;
+          position:fixed; inset:0; z-index:0; overflow:hidden;
           background: linear-gradient(180deg, #dff5f1 0%, #eaf3ff 100%);
         }
         .bg::before{
@@ -119,7 +136,7 @@ export default function HomePage() {
           );
           filter: blur(60px) saturate(140%);
           will-change: transform;
-          animation: spinBg 60s linear infinite; /* медленнее текста */
+          animation: spinBg 60s linear infinite;
           opacity:.55;
         }
         .bg::after{
@@ -133,9 +150,9 @@ export default function HomePage() {
         }
         @keyframes spinBg { to { transform: translate(-50%, -50%) rotate(360deg); } }
         @keyframes floatBg {
-          0%   { transform: translate3d(0,0,0) scale(1); }
-          50%  { transform: translate3d(2%, -1%, 0) scale(1.02); }
-          100% { transform: translate3d(-2%, 1%, 0) scale(1); }
+          0% { transform: translate3d(0,0,0) scale(1); }
+          50% { transform: translate3d(2%,-1%,0) scale(1.02); }
+          100% { transform: translate3d(-2%,1%,0) scale(1); }
         }
 
         .hdr{ text-align:center; margin-bottom:10px; }
@@ -143,45 +160,23 @@ export default function HomePage() {
         .sub{ opacity:.75; margin:0; }
 
         .stack{
-          display:grid;
-          gap:16px;
-          align-content:start;
-          justify-items:center;
+          display:grid; gap:16px; align-content:start; justify-items:center;
           padding-bottom: calc(env(safe-area-inset-bottom,0px) + 88px);
           min-height:0;
         }
         .stack > *{ width:min(92vw, 640px); }
 
-        /* --- стекло --- */
-        .glass{
-          position:relative;
-          border-radius:18px;
-          background: rgba(255,255,255,.20);
-          border: 1px solid rgba(15,23,42,.22);
-          box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55);
-          -webkit-backdrop-filter: blur(18px) saturate(180%);
-          backdrop-filter: blur(18px) saturate(180%);
-          transform: translateZ(0);
-        }
-        .glass::before{
-          content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
-          background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.10) 40%, transparent 70%);
-        }
-        :global(.no-frost) .glass,
-        :global(.no-frost) .glass-cta,
-        :global(.no-frost) .dock{ -webkit-backdrop-filter:none; backdrop-filter:none; background: rgba(255,255,255,.90); }
-
-        .card{ position:relative; padding:16px; }
+        /* Пульс + ореол (остаётся как был) */
+        .card{ position:relative; padding:16px; border-radius:18px; }
         .card__text{ min-width:0; }
         .card__title{ display:block; font-size:18px; margin-bottom:6px; }
         .card__desc{ display:block; opacity:.78; font-size:14px; line-height:1.25; }
         .card__chev{ font-size:22px; opacity:.45; position:absolute; right:14px; top:50%; transform:translateY(-50%); }
-
         .pulse{ animation: cardPulse 2.4s ease-in-out infinite; }
         .pulse::after{
-          content:''; position:absolute; inset:-2px; border-radius:inherit;
+          content:''; position:absolute; inset:-2px; border-radius:inherit; pointer-events:none;
           box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent);
-          opacity:0; pointer-events:none; animation: halo 2.4s ease-in-out infinite;
+          opacity:0; animation: halo 2.4s ease-in-out infinite;
         }
         @keyframes cardPulse{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
         @keyframes halo{
@@ -189,9 +184,10 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 10px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
+        /* Золото для Expert */
         .gold{
-          border-color: rgba(218,165,32,.6);
-          box-shadow: 0 18px 36px rgba(215,170,60,.18), inset 0 1px 0 rgba(255,245,205,.75);
+          border-color: rgba(218,165,32,.6) !important;
+          box-shadow: 0 18px 36px rgba(215,170,60,.18), inset 0 1px 0 rgba(255,245,205,.75) !important;
         }
         .gold::before{
           background:
@@ -204,6 +200,7 @@ export default function HomePage() {
           50%{opacity:1; box-shadow:0 0 0 14px rgba(255,215,120,.22)}
         }
 
+        /* Центральная стеклянная капсула (не зависит от глобального .card) */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
@@ -211,7 +208,7 @@ export default function HomePage() {
           border: 1px solid rgba(15,23,42,.32);
           box-shadow: 0 28px 54px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(190%);
-          backdrop-filter: blur(18px) saturate(190%);
+                  backdrop-filter: blur(18px) saturate(190%);
         }
         .glass-cta::before{
           content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
@@ -231,20 +228,19 @@ export default function HomePage() {
         .gpt__chev{ font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
+        /* Док снизу */
         .dock{
           position:fixed; left:0; right:0;
           bottom:calc(env(safe-area-inset-bottom,0px));
           padding:14px max(16px, env(safe-area-inset-left,0px));
           text-align:center; font-weight:800;
-          color:#0f172a; z-index:10;
+          color:#0f172a; z-index:2;
           background: rgba(255,255,255,.92);
           border-top:1px solid rgba(15,23,42,.16);
           box-shadow:0 -10px 28px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.68);
           -webkit-backdrop-filter: blur(12px) saturate(160%);
-          backdrop-filter: blur(12px) saturate(160%);
+                  backdrop-filter: blur(12px) saturate(160%);
         }
-
-        @media (min-width:760px){ .glass-cta{ min-height:140px; } }
       `}</style>
     </main>
   );
