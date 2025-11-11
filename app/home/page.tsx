@@ -22,10 +22,12 @@ export default function HomePage() {
       document.documentElement.style.setProperty('--accent', accent);
       document.documentElement.style.setProperty('--text',   text);
     } catch {}
+    try { document.documentElement.lang = locale; } catch {}
+
+    // фолбэк, если blur недоступен
     try {
-      const support = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
-      document.documentElement.classList.toggle('no-frost', !support);
-      document.documentElement.lang = locale;
+      const ok = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
+      document.documentElement.classList.toggle('no-frost', !ok);
     } catch {}
   }, [locale]);
 
@@ -52,7 +54,7 @@ export default function HomePage() {
       </header>
 
       <section className="center">
-        {/* верх — стекло + пульс */}
+        {/* ВЕРХ — стекло + пульс */}
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.daily}</b>
@@ -61,13 +63,13 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* центр — стеклянная капсула с переливом */}
+        {/* ЦЕНТР — стеклянная капсула с переливом (реально видимая рамка и мягкая тень) */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
-        {/* низ — стекло + золото */}
+        {/* НИЗ — стекло + пульс + золотой ореол */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -78,7 +80,9 @@ export default function HomePage() {
       </section>
 
       {/* полноширинная стеклянная панель внизу */}
-      <a href={href('/cabinet')} className="dock"><b>{L.cabinet}</b></a>
+      <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
+        <b>{L.cabinet}</b>
+      </a>
 
       <style jsx>{`
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
@@ -88,6 +92,8 @@ export default function HomePage() {
           color:var(--text,#0f172a);
           padding:16px 14px calc(env(safe-area-inset-bottom,0px) + 72px);
           max-width:980px; margin:0 auto;
+
+          /* подложка, чтобы стекло было что размывать */
           background:
             radial-gradient(120vmax 80vmax at 15% 25%, rgba(140,180,255,.12), transparent 60%),
             radial-gradient(120vmax 80vmax at 85% 85%, rgba(140,255,200,.12), transparent 60%);
@@ -96,108 +102,113 @@ export default function HomePage() {
         .title{ margin:6px 0 4px; }
         .sub{ opacity:.75; margin:0; }
 
+        /* центрируем три кнопки */
         .center{
           display:grid; gap:16px; justify-items:center; align-content:center;
           min-height:calc(100dvh - 240px);
         }
         .center > *{ width:min(92vw, 640px); }
 
-        /* === НАСТОЯЩЕЕ СТЕКЛО === */
+        /* --- СТЕКЛО (рабочее) --- */
         .glass{
-          position:relative; border-radius:18px; padding:16px; overflow:hidden;
+          position:relative;
+          border-radius:18px;
           background: rgba(255,255,255,.26);
           border: 1px solid rgba(15,23,42,.16);
-          box-shadow: 0 22px 44px rgba(15,23,42,.12), 0 1px 0 rgba(255,255,255,.55) inset;
+          box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(180%);
           backdrop-filter: blur(18px) saturate(180%);
+          transform: translateZ(0);
         }
         .glass::before{
-          content:''; position:absolute; inset:0; pointer-events:none;
+          content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
           background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.10) 40%, transparent 70%);
         }
         :global(.no-frost) .glass,
         :global(.no-frost) .glass-cta,
         :global(.no-frost) .dock{
           -webkit-backdrop-filter:none; backdrop-filter:none;
-          background: rgba(255,255,255,.35);
+          background: rgba(255,255,255,.45);
         }
 
-        .card{ display:grid; grid-template-columns:1fr auto; align-items:center; }
-        .card__text{ min-width:0; position:relative; z-index:1; }
+        /* карточки */
+        .card{ position:relative; padding:16px; }
+        .card__text{ min-width:0; }
         .card__title{ display:block; font-size:18px; margin-bottom:6px; }
-        .card__desc{ display:block; opacity:.82; font-size:14px; line-height:1.25; }
-        .card__chev{ font-size:22px; opacity:.50; padding-left:10px; position:relative; z-index:1; }
+        .card__desc{ display:block; opacity:.78; font-size:14px; line-height:1.25; }
+        .card__chev{ font-size:22px; opacity:.45; position:absolute; right:14px; top:50%; transform:translateY(-50%); }
 
-        /* Пульс + ореол */
-        .pulse{ animation: cardPulse 2.6s ease-in-out infinite; }
+        /* пульс */
+        .pulse{ animation: cardPulse 2.4s ease-in-out infinite; }
         .pulse::after{
-          content:''; position:absolute; inset:-2px; border-radius:inherit; z-index:0;
-          --pulse-clr: color-mix(in oklab, var(--accent,#4c82ff) 18%, transparent);
-          box-shadow:0 0 0 0 var(--pulse-clr); opacity:0; pointer-events:none;
-          animation: halo 2.6s ease-in-out infinite;
+          content:''; position:absolute; inset:-2px; border-radius:inherit;
+          box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent);
+          opacity:0; pointer-events:none;
+          animation: halo 2.4s ease-in-out infinite;
         }
         @keyframes cardPulse{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
         @keyframes halo{
-          0%,100%{opacity:0; box-shadow:0 0 0 0 var(--pulse-clr)}
-          50%{opacity:.9; box-shadow:0 0 0 10px var(--pulse-clr)}
+          0%,100%{opacity:0; box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent)}
+          50%{opacity:.9; box-shadow:0 0 0 8px color-mix(in oklab, var(--accent,#4c82ff) 10%, transparent)}
         }
 
-        /* Золото для Expert */
-        .gold{
-          --pulse-clr: rgba(255,215,120,.30);
-          border-color: rgba(250,204,21,.45);
-          background: rgba(255,245,200,.22);
-        }
+        /* золотая подсветка Expert поверх стекла */
+        .gold{ border-color: rgba(218,165,32,.45); box-shadow: 0 18px 36px rgba(255,196,56,.14), inset 0 1px 0 rgba(255,245,205,.65); }
         .gold::before{
-          background: linear-gradient(180deg, rgba(255,240,180,.38), rgba(255,255,255,.10) 46%, transparent 72%);
+          background:
+            radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.22), rgba(255,210,120,.08) 70%),
+            linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.10) 40%, transparent 70%);
+        }
+        .gold::after{ animation: goldHalo 2.6s ease-in-out infinite; }
+        @keyframes goldHalo{
+          0%,100%{opacity:.2; box-shadow:0 0 0 0 rgba(255,215,120,.0)}
+          50%{opacity:.9; box-shadow:0 0 0 10px rgba(255,215,120,.18)}
         }
 
-        /* Капсула вокруг CHATGPT 5 */
+        /* центральная стеклянная капсула */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
           background: rgba(255,255,255,.22);
-          border: 1px solid rgba(15,23,42,.14);
-          box-shadow: 0 26px 52px rgba(15,23,42,.14), 0 1px 0 rgba(255,255,255,.55) inset;
+          border: 1px solid rgba(15,23,42,.20);
+          box-shadow: 0 26px 52px rgba(15,23,42,.14), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(180%);
           backdrop-filter: blur(18px) saturate(180%);
+          transform: translateZ(0);
         }
         .glass-cta::before{
-          content:''; position:absolute; inset:0; pointer-events:none;
+          content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
           background:
             radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.45), transparent 60%),
-            linear-gradient(180deg, rgba(255,255,255,.12), transparent 40%),
-            linear-gradient(0deg, rgba(255,255,255,.10), transparent 60%);
+            linear-gradient(180deg, rgba(255,255,255,.12), transparent 40%);
         }
         .gpt__shimmer{
-          position:relative; z-index:1;
           justify-self:center; font-weight:900; letter-spacing:.02em;
-          font-size:clamp(52px, 10vw, 70px); line-height:1;
-          background: conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
+          font-size:clamp(50px, 10vw, 68px); line-height:1;
+          background:conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
           background-size:200% 200%;
           -webkit-background-clip:text; background-clip:text; color:transparent;
           text-shadow:0 0 28px rgba(141,160,255,.18);
           animation: shimmer 6s ease-in-out infinite;
         }
-        .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
+        .gpt__chev{ font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-        /* Низ — стеклянная полоса */
+        /* низ — стеклянная док-панель */
         .dock{
-          position:fixed; left:0; right:0; bottom:calc(env(safe-area-inset-bottom,0px));
-          padding:14px 18px; text-align:center; font-weight:900; letter-spacing:.01em;
+          position:fixed; left:0; right:0;
+          bottom:calc(env(safe-area-inset-bottom,0px));
+          padding:14px max(16px, env(safe-area-inset-left,0px));
+          text-align:center; font-weight:800;
           color:#0f172a; z-index:10;
-          background: rgba(255,255,255,.28);
-          border-top: 1px solid rgba(15,23,42,.18);
-          box-shadow: 0 -10px 30px rgba(15,23,42,.10), 0 1px 0 rgba(255,255,255,.55) inset;
-          -webkit-backdrop-filter: blur(16px) saturate(180%);
-          backdrop-filter: blur(16px) saturate(180%);
+          background: rgba(255,255,255,.88);
+          border-top:1px solid rgba(15,23,42,.12);
+          box-shadow:0 -8px 24px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.6);
+          -webkit-backdrop-filter: blur(12px) saturate(160%);
+          backdrop-filter: blur(12px) saturate(160%);
         }
 
-        @media (min-width:760px){
-          .center > *{ width:min(86vw, 760px); }
-          .glass-cta{ min-height:140px; }
-        }
+        @media (min-width:760px){ .glass-cta{ min-height:140px; } }
       `}</style>
     </main>
   );
