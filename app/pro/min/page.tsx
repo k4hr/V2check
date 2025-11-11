@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { Plan, Tier } from '@/lib/pricing';
 import { getPrices, getVkRubKopecks } from '@/lib/pricing';
 import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
+import BackBtn from '@/app/components/BackBtn';
 
 const tier: Tier = 'PRO';
 
@@ -115,14 +116,8 @@ export default function ProMinPage() {
   }), [pricesRubK]);
 
   useEffect(() => {
-    const tg: any = (window as any)?.Telegram?.WebApp;
-    try { tg?.ready?.(); tg?.expand?.(); } catch {}
-    try {
-      tg?.BackButton?.show?.();
-      const back = () => { if (document.referrer) history.back(); else window.location.href = '/pro'; };
-      tg?.BackButton?.onClick?.(back);
-      return () => { tg?.BackButton?.hide?.(); tg?.BackButton?.offClick?.(back); };
-    } catch {}
+    const w: any = window;
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
     try { document.documentElement.lang = locale; } catch {}
   }, [locale]);
 
@@ -180,7 +175,6 @@ export default function ProMinPage() {
     }
   }
 
-  // Спец-кнопка «Пробный день» (1 ₽ → потом месяц)
   async function buyTrial() {
     await buyCard('MONTH', { trial: true });
   }
@@ -188,7 +182,6 @@ export default function ProMinPage() {
   const entries = Object.entries(pricesStars) as [Plan, typeof pricesStars[Plan]][];
 
   const T = {
-    back: S.back || 'Назад',
     title: locale === 'en' ? 'LiveManager Pro — payment' : 'LiveManager Pro — оплата',
     starsHeader: locale === 'en' ? 'Pay in Telegram Stars' : 'Оплата в Telegram Stars',
     cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
@@ -200,9 +193,7 @@ export default function ProMinPage() {
   return (
     <main>
       <div className="safe">
-        <button type="button" onClick={() => (document.referrer ? history.back() : (window.location.href = '/pro'))} className="back">
-          <span>←</span><b>{T.back}</b>
-        </button>
+        <BackBtn fallback="/pro" />
 
         <h1 className="title">{T.title}</h1>
         {msg && <p className="err">{msg}</p>}
@@ -211,10 +202,10 @@ export default function ProMinPage() {
         {/* Card / RUB — СВЕРХУ */}
         <h3 className="section">{T.cardHeader}</h3>
         <div className="card-grid">
-          {/* ПРОБНЫЙ ДЕНЬ — перед месячным тарифом */}
+          {/* ПРОБНЫЙ ДЕНЬ — красная подсветка */}
           <button
             type="button"
-            className="card-row"
+            className="card-row card-row--trial glass"
             disabled={!!busy && busy !== 'MONTH'}
             onClick={buyTrial}
           >
@@ -222,7 +213,6 @@ export default function ProMinPage() {
               <span className="bank">💳</span>
               <b className="name">{T.trialName}</b>
             </div>
-            {/* бейджик убран, оставляем пустую плашку для выравнивания */}
             <span className="sale sale--empty" aria-hidden />
             <div className="price-wrap">
               <span className="price-new">{formatRUB(100, locale)}</span>
@@ -236,8 +226,15 @@ export default function ProMinPage() {
             const newRub = pricesRubDiscounted[p];
             const hasSale = !!CARD_DISCOUNT[p];
             const can = !busy || busy === p;
+            const gold = p === 'MONTH'; // золотая подсветка месяца
             return (
-              <button key={p} type="button" className="card-row" disabled={!can} onClick={() => buyCard(p)}>
+              <button
+                key={p}
+                type="button"
+                className={`card-row glass ${gold ? 'card-row--gold' : ''}`}
+                disabled={!can}
+                onClick={() => buyCard(p)}
+              >
                 <div className="card-left">
                   <span className="bank">💳</span>
                   <b className="name">{TITLES[p]}</b>
@@ -260,13 +257,19 @@ export default function ProMinPage() {
         </div>
         <small className="subnote">{T.cardNote}</small>
 
-        {/* Stars — СНИЗУ */}
+        {/* Stars — СНИЗУ (белые стеклянные) */}
         <h3 className="section">{T.starsHeader}</h3>
         <div className="list">
           {entries.map(([key, cfg]) => {
             const can = !busy || busy === key;
             return (
-              <button key={key} disabled={!can} onClick={() => buyStars(key)} className="row" aria-label={`${TITLES[key]} — ${cfg.amount} ⭐`}>
+              <button
+                key={key}
+                disabled={!can}
+                onClick={() => buyStars(key)}
+                className="row glass"
+                aria-label={`${TITLES[key]} — ${cfg.amount} ⭐`}
+              >
                 <span className="left">
                   <span className="dot">🟣</span>
                   <b className="name">{TITLES[key]}</b>
@@ -288,33 +291,76 @@ export default function ProMinPage() {
         .section { margin:6px 2px 2px; opacity:.9; }
         .err { color:#ff4d6d; text-align:center; }
         .info { opacity:.7; text-align:center; }
-        .back { width:120px; padding:10px 14px; border-radius:12px; background:#171a21; border:1px solid var(--border); display:flex; align-items:center; gap:8px; }
+
+        /* Общий стеклянный белый стиль */
+        .glass {
+          background: rgba(255,255,255,.78);
+          color: #0d1220;
+          border: 1px solid rgba(0,0,0,.08);
+          box-shadow:
+            0 10px 28px rgba(17, 23, 40, .12),
+            inset 0 0 0 1px rgba(255,255,255,.55);
+          backdrop-filter: saturate(160%) blur(14px);
+          -webkit-backdrop-filter: saturate(160%) blur(14px);
+        }
 
         /* Stars */
         .list { display:grid; gap:12px; }
-        .row { width:100%; border:1px solid #333; border-radius:14px; padding:14px 18px; display:grid; grid-template-columns:1fr auto; align-items:center; column-gap:12px; background:#121621; }
+        .row {
+          width:100%; border-radius:14px; padding:14px 18px;
+          display:grid; grid-template-columns:1fr auto; align-items:center; column-gap:12px;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+        }
+        .row:hover { transform: translateY(-1px); }
         .left { display:flex; align-items:center; gap:10px; min-width:0; }
         .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
         .star :global(svg){ display:block; }
-        .chev { opacity:.6; }
+        .chev { opacity:.45; }
 
         /* Card block */
         .card-grid { display:grid; gap:10px; }
         .card-row {
-          position:relative; width:100%; border:1px solid rgba(120,170,255,.25); border-radius:14px; padding:14px 16px;
-          display:grid; grid-template-columns:1fr auto auto auto; grid-template-areas:"left sale price chev"; align-items:center; column-gap:12px;
-          background: radial-gradient(120% 140% at 10% 0%, rgba(76,130,255,.12), rgba(255,255,255,.03));
-          box-shadow: 0 10px 35px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04);
+          position:relative; width:100%; border-radius:14px; padding:14px 16px;
+          display:grid; grid-template-columns:1fr auto auto auto; grid-template-areas:"left sale price chev";
+          align-items:center; column-gap:12px;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
         }
+        .card-row:hover { transform: translateY(-1px); }
         .card-left { grid-area:left; display:flex; align-items:center; gap:10px; min-width:0; }
-        .bank { width:30px; height:30px; border-radius:10px; display:grid; place-items:center; background: rgba(120,170,255,.16); border:1px solid rgba(120,170,255,.22); }
-        .sale { grid-area:sale; padding:4px 8px; border-radius:10px; font-size:12px; background:rgba(76,130,255,.18); border:1px solid rgba(120,170,255,.35); white-space:nowrap; }
+        .bank {
+          width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
+          background: rgba(0,0,0,.04); border:1px solid rgba(0,0,0,.08);
+        }
+        .sale { grid-area:sale; padding:4px 8px; border-radius:10px; font-size:12px;
+          background: rgba(91,140,255,.18); border:1px solid rgba(91,140,255,.38); white-space:nowrap; }
         .sale--empty { visibility:hidden; padding:0; border:0; }
         .price-wrap { grid-area:price; display:flex; flex-direction:column; align-items:flex-end; line-height:1.05; }
         .price-new { font-weight:800; }
         .price-old { opacity:.55; text-decoration:line-through; font-size:13px; }
         .subnote { opacity:.7; margin-top:-4px; }
-        button:disabled { opacity:.6; }
+        button:disabled { opacity:.75; }
+
+        /* Золотой месяц (RUB) */
+        .card-row--gold {
+          border-color: rgba(255,191,73,.55);
+          box-shadow:
+            0 12px 34px rgba(255,191,73,.20),
+            inset 0 0 0 1px rgba(255,210,120,.55);
+          background:
+            linear-gradient(135deg, rgba(255,210,120,.18), rgba(255,191,73,.12)),
+            rgba(255,255,255,.78);
+        }
+
+        /* Красный «Пробный день» */
+        .card-row--trial {
+          border-color: rgba(255,99,99,.45);
+          box-shadow:
+            0 12px 34px rgba(255,99,99,.18),
+            inset 0 0 0 1px rgba(255,255,255,.55);
+          background:
+            linear-gradient(135deg, rgba(255,120,120,.18), rgba(255,90,90,.10)),
+            rgba(255,255,255,.78);
+        }
 
         @media (max-width:380px){
           .card-row { grid-template-columns:1fr auto; grid-template-areas:"left chev" "sale chev" "price chev"; row-gap:6px; }
