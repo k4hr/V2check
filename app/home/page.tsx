@@ -34,11 +34,11 @@ export default function HomePage() {
     try {
       const u = new URL(window.location.href);
       const sp = new URLSearchParams(u.search);
-      sp.set('welcomed', '1'); sp.set('_v', 'hm10');
+      sp.set('welcomed', '1'); sp.set('_v', 'hm11');
       const id = u.searchParams.get('id'); if (id) sp.set('id', id);
       const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1&_v=hm10';
-    } catch { return '?welcomed=1&_v=hm10'; }
+      return s ? `?${s}` : '?welcomed=1&_v=hm11';
+    } catch { return '?welcomed=1&_v=hm11'; }
   }, []);
   const href = (p: string) => `${p}${suffix}` as Route;
 
@@ -48,7 +48,7 @@ export default function HomePage() {
 
   return (
     <main className="home">
-      {/* Живой фон (реальные элементы) */}
+      {/* Живой фон */}
       <div className="bg" aria-hidden>
         <i className="bg__conic" />
         <b className="bg__blobs" />
@@ -68,12 +68,13 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* Акцентная кнопка CHATGPT 5 */}
+        {/* CHATGPT 5 — пульсирующая кнопка */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
+        {/* Эксперт центр — нежное золотое стекло */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -89,7 +90,7 @@ export default function HomePage() {
       </a>
 
       <style jsx>{`
-        /* базовые глушилки */
+        /* глушим глобальный фон/скролл */
         :global(html, body, #__next){ height:100%; overflow:hidden; }
         :global(*){ -webkit-tap-highlight-color: transparent; }
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
@@ -110,21 +111,15 @@ export default function HomePage() {
           padding:16px 14px 0;
         }
 
-        /* ===== Фон (ускорено на ~30%) ===== */
+        /* Фон (ускорено на ~30%) */
         .bg{ position:fixed; inset:0; z-index:0; overflow:hidden;
              background: radial-gradient(120% 100% at 50% 0%, #dff5f1, #eaf3ff 70%); }
         .bg__conic{
           position:absolute; left:50%; top:50%;
           width:220vmax; height:220vmax; transform:translate(-50%,-50%) rotate(0deg);
-          background: conic-gradient(
-            from 0deg,
-            rgba(42,214,205,.30),
-            rgba(146,220,255,.28),
-            rgba(255,210,160,.26),
-            rgba(42,214,205,.30)
-          );
+          background: conic-gradient(from 0deg, rgba(42,214,205,.30), rgba(146,220,255,.28), rgba(255,210,160,.26), rgba(42,214,205,.30));
           filter: blur(60px) saturate(140%); will-change: transform;
-          animation: spinBg 12.6s linear infinite; /* было 18s */
+          animation: spinBg 12.6s linear infinite;
           opacity:.55;
         }
         .bg__blobs{
@@ -132,7 +127,7 @@ export default function HomePage() {
           background:
             radial-gradient(90vmax 60vmax at 18% 22%, rgba(42,214,205,.22), transparent 60%),
             radial-gradient(90vmax 60vmax at 82% 86%, rgba(92,170,255,.20), transparent 60%);
-          will-change: transform; animation: floatBg 8.4s ease-in-out infinite alternate; /* было 12s */
+          will-change: transform; animation: floatBg 8.4s ease-in-out infinite alternate;
           opacity:.85;
         }
         @keyframes spinBg { to { transform: translate(-50%,-50%) rotate(360deg); } }
@@ -174,25 +169,31 @@ export default function HomePage() {
         @keyframes cardPulse{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
         @keyframes halo{
           0%,100%{opacity:0; box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent)}
-          50%{opacity:.9; box-shadow:0 0 0 10px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
+          50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
-        .gold{
-          border-color: rgba(218,165,32,.6) !important;
-          box-shadow: 0 18px 36px rgba(215,170,60,.18), inset 0 1px 0 rgba(255,245,205,.75) !important;
-        }
-
-        /* ===== CHATGPT 5 — «кнопка» как карточка ===== */
+        /* CHATGPT 5 — кнопка + пульсация надписи */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:20px 18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
-          background: rgba(255,255,255,.28);            /* плотнее, чем было */
-          border: 1px solid rgba(15,23,42,.26);         /* чуть контраста */
+          background: rgba(255,255,255,.28);
+          border: 1px solid rgba(15,23,42,.26);
           box-shadow: 0 26px 52px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.6);
           -webkit-backdrop-filter: blur(18px) saturate(190%);
                   backdrop-filter: blur(18px) saturate(190%);
           transition: transform .08s ease, box-shadow .12s ease;
         }
+        /* мягкий пульсирующий ореол вокруг всей кнопки */
+        .gpt.glass-cta::after{
+          content:''; position:absolute; inset:-3px; border-radius:inherit; pointer-events:none;
+          box-shadow:0 0 0 0 rgba(120,150,255,.18);
+          opacity:0; animation: gptRing 1.9s ease-in-out infinite;
+        }
+        @keyframes gptRing{
+          0%,100%{opacity:0; box-shadow:0 0 0 0 rgba(120,150,255,.18)}
+          50%{opacity:.9; box-shadow:0 0 0 12px rgba(120,150,255,.14)}
+        }
+
         .glass-cta:active{ transform: translateY(1px) scale(.995); }
         .glass-cta::before{
           content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
@@ -201,7 +202,7 @@ export default function HomePage() {
             linear-gradient(180deg, rgba(255,255,255,.18), transparent 45%);
         }
         .gpt__shimmer{
-          position:relative; z-index:1;
+          position:relative; z-index:1; display:inline-block; transform-origin:center;
           justify-self:center; font-weight:900; letter-spacing:.02em;
           font-size:clamp(50px, 10vw, 68px); line-height:1;
           background:conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
@@ -209,18 +210,38 @@ export default function HomePage() {
           -webkit-background-clip:text; background-clip:text; color:transparent;
           -webkit-text-fill-color: transparent;
           text-shadow:0 0 28px rgba(141,160,255,.18);
-          animation: shimmer 6s ease-in-out infinite;
+          /* shimmer + лёгкий поп-пульс */
+          animation: shimmer 6s ease-in-out infinite, gptPop 1.9s ease-in-out infinite;
+        }
+        @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes gptPop{
+          0%,100%{ transform: scale(1); text-shadow:0 0 28px rgba(141,160,255,.18); }
+          50%{ transform: scale(1.045); text-shadow:0 0 40px rgba(141,160,255,.28); }
         }
         .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
-        @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-        /* ===== Узкая кнопка снизу по центру ===== */
+        /* Эксперт центр — нежное золотое стекло */
+        .card.gold{
+          background:
+            linear-gradient(135deg, rgba(255,207,92,.20), rgba(255,184,58,.14)),
+            rgba(255,255,255,.26) !important;
+          border: 1px solid rgba(215,170,60,.42) !important;
+          box-shadow: 0 22px 44px rgba(215,170,60,.14), inset 0 1px 0 rgba(255,245,205,.72) !important;
+        }
+        .card.gold::before{
+          content:''; position:absolute; inset:0; border-radius:18px; pointer-events:none;
+          background:
+            radial-gradient(120% 140% at 14% 0%, rgba(255,221,150,.30), rgba(255,221,150,.10) 70%),
+            linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.10) 40%, transparent 70%);
+        }
+
+        /* Узкая кнопка снизу по центру */
         .dock{
           position:fixed;
           left:50%; right:auto;
           transform: translateX(-50%);
           bottom: calc(env(safe-area-inset-bottom,0px) + 8px);
-          width: min(560px, 50vw);        /* 50% экрана */
+          width: min(560px, 50vw);
           padding: 14px 18px;
           text-align:center; font-weight:800;
           color:#0f172a; z-index:2;
