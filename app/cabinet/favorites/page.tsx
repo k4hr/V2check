@@ -38,7 +38,6 @@ function localeToBCP47(l: Locale): string {
     default:   return 'ru-RU';
   }
 }
-
 function formatDT(iso: string, l: Locale) {
   const d = new Date(iso);
   const tag = localeToBCP47(l);
@@ -54,6 +53,12 @@ export default function FavoritesPage() {
   const L = STRINGS[locale] ?? STRINGS.ru;
   const _ = (key: keyof typeof L, fallback?: string) =>
     (L as any)[key] ?? (STRINGS.ru as any)[key] ?? fallback ?? String(key);
+
+  const titleText = useMemo(() => _('favorites', 'Избранное'), [locale]);
+  const emptyText = useMemo(
+    () => (_('favoritesEmpty', 'Здесь будут сохраняться ваши чаты, при активной подписке Pro+')),
+    [locale]
+  );
 
   // suffix для всех внутренних ссылок (welcomed=1 + переносим id)
   const linkSuffix = useMemo(() => {
@@ -79,12 +84,6 @@ export default function FavoritesPage() {
 
   const [items, setItems] = useState<Fav[]>([]);
   const [err, setErr] = useState<string | null>(null);
-
-  const titleText = useMemo(() => _('favorites', 'Избранное'), [locale]);
-  const emptyText = useMemo(
-    () => (_('favoritesEmpty', 'Здесь будут сохраняться ваши чаты, при активной подписке Pro+')),
-    [locale]
-  );
 
   async function load() {
     try {
@@ -181,9 +180,12 @@ export default function FavoritesPage() {
                 ? ((raw + (raw.includes('?') ? '&' : '?') + linkSuffix.slice(1)) as Route)
                 : (`/cabinet${linkSuffix}` as Route);
 
+            // ВАЖНО: legacyBehavior, чтобы класс точно попал на <a>
             return (
-              <Link key={it.id} href={withSuffix} className="item glass">
-                {CardInner}
+              <Link key={it.id} href={withSuffix} legacyBehavior>
+                <a className="item glass" aria-label={`Открыть: ${it.title || _('untitled','Без названия')}`}>
+                  {CardInner}
+                </a>
               </Link>
             );
           })}
@@ -192,9 +194,9 @@ export default function FavoritesPage() {
 
       <style jsx>{`
         .page { padding: 20px; max-width: 780px; margin: 0 auto; }
-        .title { text-align: center; margin: 6px 0 12px; }
+        .title { text-align: center; margin: 6px 0 12px; color: #0d1220; }
         .err { color: #ff4d6d; text-align: center; }
-        .empty { text-align: center; opacity: .75; margin: 16px auto; max-width: 680px; }
+        .empty { text-align: center; opacity: .75; margin: 16px auto; max-width: 680px; color: #0d1220; }
 
         /* Белое стекло */
         .glass {
@@ -211,7 +213,7 @@ export default function FavoritesPage() {
         .list { margin: 0 auto; max-width: 680px; display: grid; gap: 10px; }
 
         .item {
-          text-decoration: none;
+          text-decoration: none !important;
           border-radius: 14px;
           padding: 12px 14px;
           display: grid;
@@ -229,10 +231,6 @@ export default function FavoritesPage() {
         .item__right { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
         .item__dt { opacity: .75; font-size: 12px; line-height: 1.05; text-align: right; }
         .item__chev { opacity: .45; font-size: 20px; }
-
-        @media (max-width: 420px) {
-          .item { padding: 12px; }
-        }
       `}</style>
     </div>
   );
