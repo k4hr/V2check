@@ -29,35 +29,36 @@ export default function HomePage() {
     } catch {}
   }, [locale]);
 
-  // cache-buster, чтобы вебвью точно подтянул новые стили
+  // cache-buster, чтобы webview точно забрал новые стили
   const suffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
       const sp = new URLSearchParams(u.search);
-      sp.set('welcomed', '1');
-      sp.set('_v', 'hm8');
+      sp.set('welcomed', '1'); sp.set('_v', 'hm9');
       const id = u.searchParams.get('id'); if (id) sp.set('id', id);
       const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1&_v=hm8';
-    } catch { return '?welcomed=1&_v=hm8'; }
+      return s ? `?${s}` : '?welcomed=1&_v=hm9';
+    } catch { return '?welcomed=1&_v=hm9'; }
   }, []);
   const href = (p: string) => `${p}${suffix}` as Route;
 
   const dailyDesc  = (L as any).dailyDesc  || 'Быстрые ежедневные инструменты и автоматизации.';
   const expertDesc = (L as any).expertDesc || 'Продвинутые промпты, рецепты и профессиональные сценарии.';
-  const appTitle   = (L as any).appTitle   || 'LiveManager'; // <- fallback для заголовка
+  const appTitle   = (L as any).appTitle   || 'LiveManager';
 
   return (
     <main className="home">
-      {/* наш анимированный фон */}
-      <div className="bg" aria-hidden />
+      {/* Живой фон — используем реальные элементы вместо ::before/::after */}
+      <div className="bg" aria-hidden>
+        <i className="bg__conic" />
+        <b className="bg__blobs" />
+      </div>
 
       <header className="hdr">
         <h1 className="title">{appTitle}</h1>
         <p className="sub">{L.subtitle}</p>
       </header>
 
-      {/* блоки сверху под заголовком */}
       <section className="stack">
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
@@ -67,7 +68,6 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* центральная капсула с градиентным текстом */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
@@ -82,30 +82,24 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* док внизу */}
       <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
         <b>{L.cabinet}</b>
       </a>
 
       <style jsx>{`
-        /* ——— глушим чужой глобальный фон и скролл ——— */
+        /* глушим глобальный фон и скролл */
         :global(html, body, #__next){ height:100%; overflow:hidden; }
         :global(*){ -webkit-tap-highlight-color: transparent; }
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
-        :global(.lm-bg){ display:none !important; } /* ВАЖНО: иначе твой фон не виден и «не двигается» */
+        :global(.lm-bg){ display:none !important; }
 
-        /* переопределяем глобальный .card (иначе белая плашка вместо стекла) */
+        /* возвращаем «стекло», перекрытое globals.css */
         :global(.lm-page) .card.glass{
           background: rgba(255,255,255,.20) !important;
           border: 1px solid rgba(15,23,42,.22) !important;
           box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55) !important;
           -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
                   backdrop-filter: blur(18px) saturate(180%) !important;
-        }
-        :global(.lm-page) .card.glass::before{
-          content:''; position:absolute; inset:0; border-radius:18px; pointer-events:none;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
-          background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.10) 40%, transparent 70%);
         }
 
         .home{
@@ -115,45 +109,45 @@ export default function HomePage() {
           padding:16px 14px 0;
         }
 
-        /* перелив фона — заметный и плавный */
-        .bg{
-          position:fixed; inset:0; z-index:0; overflow:hidden;
-          background: linear-gradient(180deg, #dff5f1 0%, #eaf3ff 100%);
-        }
-        .bg::before{
-          content:''; position:absolute; left:50%; top:50%;
-          width: 220vmax; height: 220vmax;
-          transform: translate(-50%, -50%) rotate(0deg);
+        /* ====== ЖИВОЙ ФОН на «детях» ====== */
+        .bg{ position:fixed; inset:0; z-index:0; overflow:hidden;
+             background: radial-gradient(120% 100% at 50% 0%, #dff5f1, #eaf3ff 70%); }
+        .bg__conic{
+          position:absolute; left:50%; top:50%;
+          width:220vmax; height:220vmax; transform:translate(-50%,-50%) rotate(0deg);
           background: conic-gradient(
             from 0deg,
-            rgba(40,210,200,.20),
-            rgba(140,220,255,.18),
-            rgba(255,220,160,.14),
-            rgba(40,210,200,.20)
+            rgba(42,214,205,.30),
+            rgba(146,220,255,.28),
+            rgba(255,210,160,.26),
+            rgba(42,214,205,.30)
           );
-          filter: blur(60px) saturate(140%);
-          will-change: transform;
-          animation: spinBg 40s linear infinite; /* чуть быстрее, чтобы движение было очевидно */
+          filter: blur(60px) saturate(140%); will-change: transform;
+          animation: spinBg 18s linear infinite; /* заметно вращается */
           opacity:.55;
         }
-        .bg::after{
-          content:''; position:absolute; inset:-12%;
+        .bg__blobs{
+          position:absolute; inset:-12%;
           background:
-            radial-gradient(70vmax 50vmax at 18% 22%, rgba(40,210,200,.22), transparent 60%),
-            radial-gradient(70vmax 50vmax at 82% 86%, rgba(90,180,255,.20), transparent 60%);
-          will-change: transform;
-          animation: floatBg 24s ease-in-out infinite alternate;
+            radial-gradient(90vmax 60vmax at 18% 22%, rgba(42,214,205,.22), transparent 60%),
+            radial-gradient(90vmax 60vmax at 82% 86%, rgba(92,170,255,.20), transparent 60%);
+          will-change: transform; animation: floatBg 12s ease-in-out infinite alternate;
           opacity:.85;
         }
-        @keyframes spinBg { to { transform: translate(-50%, -50%) rotate(360deg); } }
+        @keyframes spinBg { to { transform: translate(-50%,-50%) rotate(360deg); } }
         @keyframes floatBg {
           0% { transform: translate3d(0,0,0) scale(1); }
-          50% { transform: translate3d(2%,-1%,0) scale(1.02); }
-          100% { transform: translate3d(-2%,1%,0) scale(1); }
+          100%{ transform: translate3d(-3%,2%,0) scale(1.02); }
         }
 
-        .hdr{ text-align:center; margin-bottom:10px; }
-        .title{ margin:6px 0 4px; font-weight:800; letter-spacing:-.02em; }
+        .hdr{ text-align:center; margin-bottom:10px; position:relative; z-index:2; }
+        .title{
+          margin:6px 0 4px; font-weight:800; letter-spacing:-.02em;
+          font-size:32px; line-height:1.1;
+          color:var(--text,#0f172a);
+          -webkit-text-fill-color: currentColor !important; /* принудительно вернуть цвет */
+          background:none !important;                        /* на случай протечек клипов */
+        }
         .sub{ opacity:.75; margin:0; }
 
         .stack{
@@ -185,16 +179,6 @@ export default function HomePage() {
           border-color: rgba(218,165,32,.6) !important;
           box-shadow: 0 18px 36px rgba(215,170,60,.18), inset 0 1px 0 rgba(255,245,205,.75) !important;
         }
-        .gold::before{
-          background:
-            radial-gradient(120% 140% at 14% 0%, rgba(255,210,120,.30), rgba(255,210,120,.12) 70%),
-            linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.10) 40%, transparent 70%);
-        }
-        .gold::after{ animation: goldHalo 2.6s ease-in-out infinite; }
-        @keyframes goldHalo{
-          0%,100%{opacity:.25; box-shadow:0 0 0 0 rgba(255,215,120,.0)}
-          50%{opacity:1; box-shadow:0 0 0 14px rgba(255,215,120,.22)}
-        }
 
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:18px;
@@ -206,8 +190,7 @@ export default function HomePage() {
                   backdrop-filter: blur(18px) saturate(190%);
         }
         .glass-cta::before{
-          content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-          z-index:0; /* псевдоэлемент ниже текста, иначе «съедает» градиент */
+          content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
           background:
             radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.58), transparent 62%),
             linear-gradient(180deg, rgba(255,255,255,.18), transparent 45%);
@@ -219,7 +202,7 @@ export default function HomePage() {
           background:conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
           background-size:200% 200%;
           -webkit-background-clip:text; background-clip:text; color:transparent;
-          -webkit-text-fill-color: transparent; /* критично для iOS WebView */
+          -webkit-text-fill-color: transparent;
           text-shadow:0 0 28px rgba(141,160,255,.18);
           animation: shimmer 6s ease-in-out infinite;
         }
