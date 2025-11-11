@@ -1,119 +1,78 @@
+/* path: app/home/page.tsx */
 'use client';
 
 import Link from 'next/link';
 import type { Route } from 'next';
-import { useEffect, useMemo, useState } from 'react';
-import { STRINGS, readLocale, setLocaleEverywhere, ensureLocaleCookie, type Locale } from '@/lib/i18n';
+import { useEffect, useMemo } from 'react';
+import { STRINGS, readLocale, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 import MiniDock from '@/app/components/MiniDock';
 
 export default function HomePage(){
   useEffect(()=>{ try{ ensureLocaleCookie({ sameSite:'none', secure:true } as any);}catch{} },[]);
   const locale = useMemo<Locale>(()=>readLocale(),[]);
-  const L = STRINGS[locale];
-
-  const [open,setOpen]=useState(false);
-  const [pendingLocale,setPendingLocale]=useState<Locale>(locale);
-  const [saving,setSaving]=useState(false);
+  const L = STRINGS[locale] ?? STRINGS.ru;
 
   useEffect(()=>{
     const w:any=window;
     try{ w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); }catch{}
     try{ document.documentElement.lang=locale; }catch{}
-    if(open) window.scrollTo({ top:document.body.scrollHeight, behavior:'smooth' });
-  },[locale,open]);
+  },[locale]);
 
   const suffix = useMemo(()=>{
     try{
       const u=new URL(window.location.href);
       const sp=new URLSearchParams(u.search);
       sp.set('welcomed','1');
-      const id=u.searchParams.get('id'); if (id) sp.set('id',id);
+      const id=u.searchParams.get('id'); if(id) sp.set('id',id);
       const s=sp.toString(); return s?`?${s}`:'?welcomed=1';
     }catch{ return '?welcomed=1'; }
   },[]);
   const href = (p:string)=>`${p}${suffix}` as Route;
 
-  async function onSave(){
-    if(saving) return;
-    setSaving(true);
-    setLocaleEverywhere(pendingLocale);
-    const url=new URL(window.location.href);
-    url.searchParams.set('_lng',String(Date.now()));
-    window.location.replace(url.toString());
-  }
+  // описания с фолбэками
+  const dailyDesc   = (L as any).dailyDesc   || (locale==='en' ? 'Quick daily tools and automations.' : 'Быстрые ежедневные инструменты и автоматизации.');
+  const expertDesc  = (L as any).expertDesc  || (locale==='en' ? 'Advanced prompts, recipes and pro workflows.' : 'Продвинутые промпты, рецепты и профессиональные сценарии.');
 
   return (
     <main className="home">
       <h1 className="title">{L.appTitle}</h1>
       <p className="subtitle">{L.subtitle}</p>
 
-      {/* БЕНТО: большой hero + две половинки */}
+      {/* Бенто: большой герой и две вытянутые плитки */}
       <section className="bento">
-        <Link href={href('/home/ChatGPT')} legacyBehavior>
-          <a className="tile tile--hero glass">
-            <span className="tile__content">
-              <span className="hero__label">CHATGPT&nbsp;5</span>
-            </span>
-            <span className="chev">›</span>
-            <span className="hero__glow" aria-hidden />
-          </a>
+        {/* HERO CHATGPT 5 */}
+        <Link href={href('/home/ChatGPT')} className="tile tile--hero glass" aria-label="Открыть ChatGPT 5">
+          <div className="hero__center">
+            <span className="hero__label">CHATGPT&nbsp;5</span>
+          </div>
+          <span className="chev" aria-hidden>›</span>
+          <span className="hero__glow" aria-hidden />
         </Link>
 
-        <Link href={href('/home/pro')} legacyBehavior>
-          <a className="tile glass">
-            <span className="tile__content">
-              <span className="tile__title">{L.daily} <span className="badge">{L.pro}</span></span>
-            </span>
-            <span className="chev">›</span>
-          </a>
+        {/* ЕЖЕДНЕВНЫЕ ЗАДАЧИ */}
+        <Link href={href('/home/pro')} className="tile tile--tall glass">
+          <div className="tile__inner">
+            <div className="tile__title">{L.daily}</div>
+            <div className="tile__desc">{dailyDesc}</div>
+          </div>
+          <span className="chev" aria-hidden>›</span>
         </Link>
 
-        <Link href={href('/home/pro-plus')} legacyBehavior>
-          <a className="tile glass tile--gold">
-            <span className="tile__content">
-              <span className="tile__title">{L.expert} <span className="badge badge--gold">{L.proplus}</span></span>
-            </span>
-            <span className="chev">›</span>
-          </a>
+        {/* ЭКСПЕРТ-ЦЕНТР (пульс) */}
+        <Link href={href('/home/pro-plus')} className="tile tile--tall glass tile--pulse">
+          <div className="tile__inner">
+            <div className="tile__title">{L.expert}</div>
+            <div className="tile__desc">{expertDesc}</div>
+          </div>
+          <span className="chev" aria-hidden>›</span>
+          <span className="pulse__halo" aria-hidden />
         </Link>
       </section>
 
-      {/* Кнопка «Сменить язык» — маленькая и стеклянная */}
-      <div style={{marginTop:18,display:'flex',justifyContent:'center'}}>
-        <button type="button" onClick={()=>setOpen(v=>!v)} className="ghost-btn glass">{L.changeLang}</button>
-      </div>
+      {/* отступ под док */}
+      <div style={{height:96}} />
 
-      {open && (
-        <div className="lang-sheet glass">
-          <div className="lang-title">{L.chooseLang}</div>
-          <div className="lang-grid">
-            {[
-              {code:'ru',label:'Русский'},{code:'uk',label:'Українська'},
-              {code:'be',label:'Беларуская'},{code:'kk',label:'Қазақша'},
-              {code:'uz',label:'Oʻzbekcha'},{code:'ky',label:'Кыргызча'},
-              {code:'fa',label:'فارسی'},{code:'hi',label:'हिन्दी'},
-              {code:'en',label:'English'},
-            ].map(l=>{
-              const active = pendingLocale===l.code;
-              return (
-                <button key={l.code} onClick={()=>setPendingLocale(l.code as Locale)}
-                  className={`lang-btn ${active?'lang-btn--active':''}`}>{l.label}</button>
-              );
-            })}
-          </div>
-          <div className="lang-actions">
-            <button type="button" className="btn glass" onClick={()=>setOpen(false)}>{STRINGS[locale].cancel}</button>
-            <button type="button" className="btn btn--primary glass" disabled={pendingLocale===locale||saving} onClick={onSave}>
-              {STRINGS[locale].save}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* отступ, чтобы контент не прятался за доком */}
-      <div style={{height:80}} />
-
-      {/* фиксированная мини-панель снизу */}
+      {/* мини-док снизу */}
       <MiniDock />
 
       <style jsx>{`
@@ -121,71 +80,76 @@ export default function HomePage(){
         .title{ text-align:center; margin:0 0 6px; }
         .subtitle{ text-align:center; opacity:.8; margin:0 0 14px; }
 
-        /* стекло */
+        /* белое стекло — прозрачно и единообразно */
         .glass{
-          background: rgba(255,255,255,.78);
+          background: rgba(255,255,255,.68);
           color:#0d1220;
           border:1px solid rgba(0,0,0,.08);
-          box-shadow: 0 12px 32px rgba(17,23,40,.12), inset 0 0 0 1px rgba(255,255,255,.55);
+          box-shadow: 0 12px 32px rgba(17,23,40,.10), inset 0 0 0 1px rgba(255,255,255,.55);
           backdrop-filter: saturate(160%) blur(14px);
           -webkit-backdrop-filter: saturate(160%) blur(14px);
         }
 
-        /* бенто-сетка */
+        /* сетка */
         .bento{
-          display:grid; gap:12px;
+          display:grid; gap:14px;
           grid-template-columns:repeat(2,minmax(0,1fr));
           grid-template-areas:
             "hero hero"
             "daily expert";
         }
         .tile{
-          position:relative; border-radius:16px; padding:16px;
+          position:relative; border-radius:18px; padding:16px;
           display:grid; grid-template-columns:1fr auto; align-items:center;
-          transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease;
-          text-decoration:none; color:inherit;
+          text-decoration:none; color:inherit; overflow:hidden;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
         }
         .tile:hover{ transform: translateY(-1px); }
-        .tile__content{ display:flex; align-items:center; gap:10px; min-width:0; }
-        .tile__title{ font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .badge{ margin-left:8px; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:800;
-          background:rgba(45,126,247,.08); border:1px solid rgba(45,126,247,.35); }
-        .badge--gold{ background:rgba(231,186,82,.16); border-color:rgba(231,186,82,.45); }
-        .chev{ opacity:.45; font-size:20px; }
+        .chev{ position:absolute; right:14px; top:50%; transform:translateY(-50%); opacity:.45; font-size:20px; }
 
-        .tile--hero{
-          grid-area: hero; min-height:100px; overflow:hidden; isolation:isolate;
-        }
+        /* HERO */
+        .tile--hero{ grid-area:hero; min-height:128px; }
+        .hero__center{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
         .hero__label{
-          font-weight:900; letter-spacing:.06em; font-size:18px;
-          background:linear-gradient(180deg,#DFC77E,#B28A3A);
+          font-weight:900; letter-spacing:.06em;
+          font-size: clamp(28px, 7.4vw, 56px);
+          background: conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
+          background-size:200% 200%;
           -webkit-background-clip:text; background-clip:text; color:transparent;
-          text-shadow:0 0 24px rgba(221,187,110,.25);
+          animation: shimmer 7s ease-in-out infinite;
+          text-shadow: 0 0 26px rgba(141,160,255,.22);
         }
         .hero__glow{
           position:absolute; inset:-30%;
-          background:radial-gradient(60% 60% at 30% 20%, rgba(231,186,82,.28), transparent 60%);
-          filter:blur(18px); z-index:-1; pointer-events:none; animation:glow 3.2s ease-in-out infinite;
+          background: radial-gradient(60% 60% at 40% 30%, rgba(140,160,255,.25), transparent 60%);
+          filter: blur(20px); z-index:-1; pointer-events:none;
         }
-        @keyframes glow{ 0%,100%{opacity:.55; transform:translate3d(0,0,0)} 50%{opacity:.9; transform:translate3d(4px,-4px,0)} }
+        @keyframes shimmer { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
+        /* Вытянутые карточки */
+        .tile--tall{ min-height:160px; align-items:flex-start; }
         .bento :global(a:nth-of-type(2)){ grid-area: daily; }
         .bento :global(a:nth-of-type(3)){ grid-area: expert; }
-        .tile--gold{ border-color:rgba(231,186,82,.45); box-shadow:0 12px 32px rgba(231,186,82,.12), inset 0 0 0 1px rgba(255,255,255,.55); }
 
-        .ghost-btn{ border:none; padding:10px 14px; border-radius:12px; font-weight:700; }
+        .tile__inner{ display:flex; flex-direction:column; gap:8px; }
+        .tile__title{ font-weight:900; letter-spacing:.02em; }
+        .tile__desc{ opacity:.8; line-height:1.25; font-size:14px; padding-right:28px; }
 
-        .lang-sheet{ margin:14px auto 0; padding:14px; border-radius:16px; max-width:560px; }
-        .lang-title{ opacity:.85; font-size:12px; margin-bottom:10px; letter-spacing:.2px; }
-        .lang-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
-        .lang-btn{ padding:10px 12px; border-radius:12px; border:1px solid rgba(0,0,0,.08); background:rgba(255,255,255,.68); font-weight:600; }
-        .lang-btn--active{ background:rgba(255,255,255,.88); border:1px solid #6573ff; box-shadow:0 0 0 3px rgba(101,115,255,.15) inset; }
-        .lang-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
-        .btn{ padding:10px 14px; border-radius:12px; border:1px solid rgba(0,0,0,.08); }
-        .btn--primary{ border-color:#4b57b3; background:linear-gradient(180deg, rgba(45,126,247,.12), rgba(45,126,247,.08)); }
+        /* Пульс для эксперт-центра */
+        .tile--pulse{ animation: softPulse 2.8s ease-in-out infinite; }
+        .pulse__halo{
+          position:absolute; inset:-20%;
+          background: radial-gradient(40% 40% at 50% 50%, rgba(140,160,255,.25), transparent 60%);
+          filter: blur(18px); z-index:-1; pointer-events:none;
+          animation: halo 2.8s ease-in-out infinite;
+        }
+        @keyframes softPulse{ 0%,100%{ box-shadow: 0 12px 32px rgba(17,23,40,.10), inset 0 0 0 1px rgba(255,255,255,.55); }
+                               50%    { box-shadow: 0 16px 40px rgba(17,23,40,.14), inset 0 0 0 1px rgba(255,255,255,.62); } }
+        @keyframes halo{ 0%,100%{ opacity:.5; transform:scale(1);} 50%{ opacity:.9; transform:scale(1.04);} }
 
-        @media (min-width:720px){
-          .tile--hero{ min-height:120px; }
+        @media (min-width:760px){
+          .tile--hero{ min-height:150px; }
+          .tile--tall{ min-height:180px; }
         }
       `}</style>
     </main>
