@@ -23,9 +23,7 @@ export default function HomePage() {
       document.documentElement.style.setProperty('--text',   text);
     } catch {}
     try {
-      const support =
-        CSS.supports('backdrop-filter: blur(10px)') ||
-        CSS.supports('-webkit-backdrop-filter: blur(10px)');
+      const support = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
       document.documentElement.classList.toggle('no-frost', !support);
       document.documentElement.lang = locale;
     } catch {}
@@ -54,7 +52,7 @@ export default function HomePage() {
       </header>
 
       <section className="center">
-        {/* ВЕРХ — стекло + пульс */}
+        {/* верх — стекло + пульс */}
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.daily}</b>
@@ -63,13 +61,13 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* ЦЕНТР — стеклянная капсула с переливом текста */}
+        {/* центр — стеклянная капсула с переливом */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
-        {/* НИЗ — стекло + золотой пульс/подсветка */}
+        {/* низ — стекло + золото */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -79,10 +77,8 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* Низ — полноширинная стеклянная панель */}
-      <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
-        <b>{L.cabinet}</b>
-      </a>
+      {/* полноширинная стеклянная панель внизу */}
+      <a href={href('/cabinet')} className="dock"><b>{L.cabinet}</b></a>
 
       <style jsx>{`
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
@@ -90,14 +86,13 @@ export default function HomePage() {
         .home{
           min-height:100dvh; display:grid; grid-template-rows:auto 1fr auto;
           color:var(--text,#0f172a);
-          padding:16px 14px calc(env(safe-area-inset-bottom,0px) + 76px);
+          padding:16px 14px calc(env(safe-area-inset-bottom,0px) + 72px);
           max-width:980px; margin:0 auto;
-          /* фон под стекло — лёгкие пятна, чтоб был контраст */
           background:
             radial-gradient(120vmax 80vmax at 15% 25%, rgba(140,180,255,.12), transparent 60%),
             radial-gradient(120vmax 80vmax at 85% 85%, rgba(140,255,200,.12), transparent 60%);
         }
-        .hdr{ text-align:center; margin-bottom:8px; }
+        .hdr{ text-align:center; margin-bottom:6px; }
         .title{ margin:6px 0 4px; }
         .sub{ opacity:.75; margin:0; }
 
@@ -105,26 +100,21 @@ export default function HomePage() {
           display:grid; gap:16px; justify-items:center; align-content:center;
           min-height:calc(100dvh - 240px);
         }
-        .center > *{ width:min(92vw, 680px); }
+        .center > *{ width:min(92vw, 640px); }
 
-        /* === Настоящее стекло === */
+        /* === НАСТОЯЩЕЕ СТЕКЛО === */
         .glass{
           position:relative; border-radius:18px; padding:16px; overflow:hidden;
-          background: rgba(255,255,255,.26);              /* прозрачность */
-          border: 1px solid rgba(15,23,42,.16);           /* тонкая граница */
-          box-shadow:
-            0 22px 44px rgba(15,23,42,.12),
-            0 1px 0 rgba(255,255,255,.55) inset;
+          background: rgba(255,255,255,.26);
+          border: 1px solid rgba(15,23,42,.16);
+          box-shadow: 0 22px 44px rgba(15,23,42,.12), 0 1px 0 rgba(255,255,255,.55) inset;
           -webkit-backdrop-filter: blur(18px) saturate(180%);
           backdrop-filter: blur(18px) saturate(180%);
         }
-        /* блик/белая плёнка сверху — усиливает «стекло» */
         .glass::before{
           content:''; position:absolute; inset:0; pointer-events:none;
-          background:
-            linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.10) 40%, transparent 70%);
+          background: linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.10) 40%, transparent 70%);
         }
-        /* если нет поддержки blur — оставляем полупрозрачность, но не делаем белую подложку */
         :global(.no-frost) .glass,
         :global(.no-frost) .glass-cta,
         :global(.no-frost) .dock{
@@ -138,7 +128,7 @@ export default function HomePage() {
         .card__desc{ display:block; opacity:.82; font-size:14px; line-height:1.25; }
         .card__chev{ font-size:22px; opacity:.50; padding-left:10px; position:relative; z-index:1; }
 
-        /* Мягкий пульс + ореол; цвет берётся из --pulse-clr */
+        /* Пульс + ореол */
         .pulse{ animation: cardPulse 2.6s ease-in-out infinite; }
         .pulse::after{
           content:''; position:absolute; inset:-2px; border-radius:inherit; z-index:0;
@@ -152,24 +142,22 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 10px var(--pulse-clr)}
         }
 
-        /* Золотая подсветка для Expert */
+        /* Золото для Expert */
         .gold{
-          --pulse-clr: rgba(255,215,128,.26);
+          --pulse-clr: rgba(255,215,120,.30);
           border-color: rgba(250,204,21,.45);
+          background: rgba(255,245,200,.22);
         }
         .gold::before{
-          background:
-            linear-gradient(180deg, rgba(255,240,180,.38), rgba(255,255,255,.10) 46%, transparent 72%);
+          background: linear-gradient(180deg, rgba(255,240,180,.38), rgba(255,255,255,.10) 46%, transparent 72%);
         }
-        .gold{ background: rgba(255,245,200,.22); }
 
-        /* Центральная капсула вокруг CHATGPT 5 */
+        /* Капсула вокруг CHATGPT 5 */
         .glass-cta{
-          position:relative; display:grid; grid-template-columns:1fr auto;
-          align-items:center; justify-items:center; min-height:124px; padding:18px;
-          border-radius:22px; overflow:hidden;
+          position:relative; border-radius:22px; min-height:120px; padding:18px;
+          display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
           background: rgba(255,255,255,.22);
-          border: 1px solid rgba(15,23,42,.18);
+          border: 1px solid rgba(15,23,42,.14);
           box-shadow: 0 26px 52px rgba(15,23,42,.14), 0 1px 0 rgba(255,255,255,.55) inset;
           -webkit-backdrop-filter: blur(18px) saturate(180%);
           backdrop-filter: blur(18px) saturate(180%);
@@ -194,7 +182,7 @@ export default function HomePage() {
         .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-        /* Низ — полноширинная стеклянная панель */
+        /* Низ — стеклянная полоса */
         .dock{
           position:fixed; left:0; right:0; bottom:calc(env(safe-area-inset-bottom,0px));
           padding:14px 18px; text-align:center; font-weight:900; letter-spacing:.01em;
