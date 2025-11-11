@@ -55,9 +55,8 @@ export default function HomePage() {
         <p className="sub">{L.subtitle}</p>
       </header>
 
-      {/* Блоки идут СВЕРХУ под заголовком, как по стандарту */}
+      {/* Блоки идут сверху под заголовком */}
       <section className="stack">
-        {/* ВЕРХ — стекло + пульс */}
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.daily}</b>
@@ -66,13 +65,11 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* СЕРЕДИНА — стеклянная капсула с переливом текста */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
-        {/* НИЗ — стекло + пульс + золотой ореол */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -91,50 +88,71 @@ export default function HomePage() {
         /* Нет скролла у мини-приложения */
         :global(html, body, #__next){ height:100%; overflow:hidden; }
         :global(*){ -webkit-tap-highlight-color: transparent; }
-        :global(a:focus), :global(a:focus-visible){ outline:none; }
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
 
         .home{
           position:relative;
           height:100dvh;
           display:grid;
-          grid-template-rows:auto 1fr; /* док фиксируем отдельно */
+          grid-template-rows:auto 1fr;
           color:var(--text,#0f172a);
           padding:16px 14px 0;
         }
 
-        /* Переливающийся бирюзовый фон на весь экран */
+        /* ===== ПЕРЕЛИВАЮЩИЙСЯ ФОН (GPU-friendly) =====
+           conic-gradient на ::before ВРАЩАЕМ,
+           радиальные пятна на ::after МЕДЛЕННО «ПЛАВАЮТ» */
         .bg{
-          position:fixed; inset:0; z-index:-1;
-          background:
-            radial-gradient(110vmax 80vmax at 12% 18%, rgba(40,210,200,.26), transparent 60%),
-            radial-gradient(110vmax 80vmax at 86% 84%, rgba(90,180,255,.24), transparent 58%),
-            conic-gradient(from 0deg at 50% 50%, rgba(40,210,200,.20), rgba(140,220,255,.18), rgba(40,210,200,.20));
-          background-size: 160% 160%, 160% 160%, 300% 300%;
-          animation: aquaFlow 16s linear infinite;
+          position:fixed; inset:0; z-index:-1; overflow:hidden;
+          background: linear-gradient(180deg, #dff5f1 0%, #eaf3ff 100%);
         }
-        @keyframes aquaFlow{
-          0%   { background-position: 0% 0%, 100% 100%, 0% 50%; }
-          50%  { background-position: 100% 50%, 0% 50%, 100% 50%; }
-          100% { background-position: 0% 0%, 100% 100%, 0% 50%; }
+        .bg::before{
+          content:''; position:absolute; left:50%; top:50%;
+          width: 220vmax; height: 220vmax;
+          transform: translate(-50%, -50%) rotate(0deg);
+          background: conic-gradient(
+            from 0deg,
+            rgba(40,210,200,.20),
+            rgba(140,220,255,.18),
+            rgba(255,220,160,.14),
+            rgba(40,210,200,.20)
+          );
+          filter: blur(60px) saturate(140%);
+          will-change: transform;
+          animation: spinBg 60s linear infinite; /* медленнее текста */
+          opacity:.55;
+        }
+        .bg::after{
+          content:''; position:absolute; inset:-12%;
+          background:
+            radial-gradient(70vmax 50vmax at 18% 22%, rgba(40,210,200,.22), transparent 60%),
+            radial-gradient(70vmax 50vmax at 82% 86%, rgba(90,180,255,.20), transparent 60%);
+          will-change: transform;
+          animation: floatBg 24s ease-in-out infinite alternate;
+          opacity:.85;
+        }
+        @keyframes spinBg { to { transform: translate(-50%, -50%) rotate(360deg); } }
+        @keyframes floatBg {
+          0%   { transform: translate3d(0,0,0) scale(1); }
+          50%  { transform: translate3d(2%, -1%, 0) scale(1.02); }
+          100% { transform: translate3d(-2%, 1%, 0) scale(1); }
         }
 
         .hdr{ text-align:center; margin-bottom:10px; }
         .title{ margin:6px 0 4px; }
         .sub{ opacity:.75; margin:0; }
 
-        /* Стеклянные блоки СВЕРХУ (без вертикального центрирования) */
         .stack{
           display:grid;
           gap:16px;
-          align-content:start; /* <- вверх */
+          align-content:start;
           justify-items:center;
-          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 88px); /* место под док */
+          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 88px);
           min-height:0;
         }
         .stack > *{ width:min(92vw, 640px); }
 
-        /* БАЗОВОЕ СТЕКЛО (карточки) */
+        /* --- стекло --- */
         .glass{
           position:relative;
           border-radius:18px;
@@ -159,7 +177,6 @@ export default function HomePage() {
         .card__desc{ display:block; opacity:.78; font-size:14px; line-height:1.25; }
         .card__chev{ font-size:22px; opacity:.45; position:absolute; right:14px; top:50%; transform:translateY(-50%); }
 
-        /* Пульс + ореол */
         .pulse{ animation: cardPulse 2.4s ease-in-out infinite; }
         .pulse::after{
           content:''; position:absolute; inset:-2px; border-radius:inherit;
@@ -172,7 +189,6 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 10px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
-        /* ЗОЛОТО ДЛЯ ЭКСПЕРТ-ЦЕНТРА */
         .gold{
           border-color: rgba(218,165,32,.6);
           box-shadow: 0 18px 36px rgba(215,170,60,.18), inset 0 1px 0 rgba(255,245,205,.75);
@@ -188,7 +204,6 @@ export default function HomePage() {
           50%{opacity:1; box-shadow:0 0 0 14px rgba(255,215,120,.22)}
         }
 
-        /* ЦЕНТРАЛЬНАЯ КАПСУЛА — рамка и стекло видимы всегда */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
@@ -216,7 +231,6 @@ export default function HomePage() {
         .gpt__chev{ font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-        /* Нижняя стеклянная док-панель на всю ширину */
         .dock{
           position:fixed; left:0; right:0;
           bottom:calc(env(safe-area-inset-bottom,0px));
