@@ -5,6 +5,7 @@ import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import type { Route } from 'next';
 import { readLocale, type Locale, STRINGS } from '@/lib/i18n';
+import BackBtn from '@/app/components/BackBtn';
 
 const DEBUG = process.env.NEXT_PUBLIC_ALLOW_BROWSER_DEBUG === '1';
 
@@ -71,6 +72,8 @@ export default function FavoritesPage() {
     try {
       document.documentElement.lang = locale;
       document.documentElement.dir = locale === 'fa' ? 'rtl' : 'ltr';
+      const WebApp: any = (window as any)?.Telegram?.WebApp;
+      WebApp?.ready?.(); WebApp?.expand?.();
     } catch {}
   }, [locale]);
 
@@ -82,7 +85,6 @@ export default function FavoritesPage() {
     () => (_('favoritesEmpty', 'Здесь будут сохраняться ваши чаты, при активной подписке Pro+')),
     [locale]
   );
-  const backToCabinet = useMemo(() => (_('backToCabinet', 'Назад в кабинет')), [locale]);
 
   async function load() {
     try {
@@ -100,14 +102,12 @@ export default function FavoritesPage() {
         if (id && /^\d{3,15}$/.test(id)) qs = `?id=${encodeURIComponent(id)}`;
       }
 
-      // берём избранные треды
       const res = await fetch(`/api/favorites/threads${qs}`, { method: 'GET', headers, cache: 'no-store' });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data?.ok) throw new Error(data?.error || 'LOAD_FAILED');
 
       const threads = Array.isArray(data.threads) ? data.threads : [];
       const mapped: Fav[] = threads.map((t: any) => {
-        // после ?thread=… добавляем &welcomed=1 (+ debug id если есть)
         const idSuffix = `&welcomed=1${qs ? `&${qs.slice(1)}` : ''}`;
         const when = String(t.updatedAt || t.lastUsedAt || new Date().toISOString());
         return {
@@ -128,26 +128,22 @@ export default function FavoritesPage() {
   }
 
   useEffect(() => {
-    try {
-      const WebApp: any = (window as any)?.Telegram?.WebApp;
-      WebApp?.ready?.(); WebApp?.expand?.();
-    } catch {}
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]);
 
   return (
-    <div style={{ padding: 20 }}>
-      <h1 style={{ textAlign: 'center' }}>{titleText}</h1>
+    <div className="page">
+      <BackBtn fallback={`/cabinet${linkSuffix}` as Route} />
 
-      {err && <p style={{ color: 'crimson', textAlign: 'center' }}>{err}</p>}
+      <h1 className="title">{titleText}</h1>
+
+      {err && <p className="err">{err}</p>}
 
       {items.length === 0 ? (
-        <p style={{ textAlign: 'center', opacity: .75, margin: '16px auto', maxWidth: 680 }}>
-          {emptyText}
-        </p>
+        <p className="empty">{emptyText}</p>
       ) : (
-        <div style={{ margin: '0 auto', maxWidth: 680, display: 'grid', gap: 8 }}>
+        <div className="list">
           {items.map((it) => {
             const raw = (it.url || '').trim();
             const isExternal = /^https?:\/\//i.test(raw);
@@ -156,59 +152,37 @@ export default function FavoritesPage() {
 
             const CardInner = (
               <>
-                <span className="list-btn__left" style={{ minWidth: 0, display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span className="list-btn__emoji">⭐</span>
-                  <b
-                    style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      display: 'block',
-                      maxWidth: '100%',
-                    }}
-                    title={it.title || _('untitled', 'Без названия')}
-                  >
+                <span className="item__left">
+                  <span className="item__emoji">⭐</span>
+                  <b className="item__title" title={it.title || _('untitled', 'Без названия')}>
                     {it.title || _('untitled', 'Без названия')}
                   </b>
                 </span>
-
-                <span
-                  className="list-btn__right"
-                  style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}
-                >
-                  <span style={{ opacity: .75, fontSize: 12, lineHeight: 1.05, textAlign: 'right' }}>
+                <span className="item__right">
+                  <span className="item__dt">
                     <div>{date}</div>
                     <div>{time}</div>
                   </span>
-                  <span className="list-btn__chev">›</span>
+                  <span className="item__chev">›</span>
                 </span>
               </>
             );
 
-            const commonStyle = {
-              textDecoration: 'none',
-              border: '1px solid #333',
-              borderRadius: 12,
-              padding: '12px 14px',
-              display: 'grid',
-              gridTemplateColumns: '1fr auto',
-              alignItems: 'center',
-              gap: 12,
-              overflow: 'hidden',
-              background: '#121621',
-            } as const;
-
             if (isExternal) {
               return (
-                <a key={it.id} href={raw} target="_blank" rel="noreferrer" className="list-btn" style={commonStyle}>
+                <a key={it.id} href={raw} target="_blank" rel="noreferrer" className="item glass">
                   {CardInner}
                 </a>
               );
             }
 
-            const safeInternal: Route = (isInternal ? (raw + (raw.includes('?') ? '&' : '?') + linkSuffix.slice(1)) : `/cabinet${linkSuffix}`) as Route;
+            const withSuffix =
+              isInternal
+                ? ((raw + (raw.includes('?') ? '&' : '?') + linkSuffix.slice(1)) as Route)
+                : (`/cabinet${linkSuffix}` as Route);
+
             return (
-              <Link key={it.id} href={safeInternal} className="list-btn" style={commonStyle}>
+              <Link key={it.id} href={withSuffix} className="item glass">
                 {CardInner}
               </Link>
             );
@@ -216,17 +190,50 @@ export default function FavoritesPage() {
         </div>
       )}
 
-      <div style={{ height: 16 }} />
+      <style jsx>{`
+        .page { padding: 20px; max-width: 780px; margin: 0 auto; }
+        .title { text-align: center; margin: 6px 0 12px; }
+        .err { color: #ff4d6d; text-align: center; }
+        .empty { text-align: center; opacity: .75; margin: 16px auto; max-width: 680px; }
 
-      <Link href={`/cabinet${linkSuffix}` as Route} className="list-btn" style={{ textDecoration: 'none' }}>
-        <span className="list-btn__left">
-          <span className="list-btn__emoji">◀</span>
-          <b>{backToCabinet}</b>
-        </span>
-        <span className="list-btn__right">
-          <span className="list-btn__chev">›</span>
-        </span>
-      </Link>
+        /* Белое стекло */
+        .glass {
+          background: rgba(255,255,255,.78);
+          color: #0d1220;
+          border: 1px solid rgba(0,0,0,.08);
+          box-shadow:
+            0 10px 28px rgba(17,23,40,.12),
+            inset 0 0 0 1px rgba(255,255,255,.55);
+          backdrop-filter: saturate(160%) blur(14px);
+          -webkit-backdrop-filter: saturate(160%) blur(14px);
+        }
+
+        .list { margin: 0 auto; max-width: 680px; display: grid; gap: 10px; }
+
+        .item {
+          text-decoration: none;
+          border-radius: 14px;
+          padding: 12px 14px;
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 12px;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+        }
+        .item:hover { transform: translateY(-1px); }
+        .item__left { min-width: 0; display: flex; gap: 10px; align-items: center; }
+        .item__emoji { width: 24px; height: 24px; display: grid; place-items: center; }
+        .item__title {
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; max-width: 100%;
+        }
+        .item__right { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+        .item__dt { opacity: .75; font-size: 12px; line-height: 1.05; text-align: right; }
+        .item__chev { opacity: .45; font-size: 20px; }
+
+        @media (max-width: 420px) {
+          .item { padding: 12px; }
+        }
+      `}</style>
     </div>
   );
 }
