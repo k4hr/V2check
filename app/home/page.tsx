@@ -22,10 +22,8 @@ export default function HomePage() {
       document.documentElement.style.setProperty('--accent', accent);
       document.documentElement.style.setProperty('--text',   text);
     } catch {}
-
     try { document.documentElement.lang = locale; } catch {}
 
-    // есть ли поддержка blur-а?
     try {
       const ok = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
       document.documentElement.classList.toggle('no-frost', !ok);
@@ -49,13 +47,15 @@ export default function HomePage() {
 
   return (
     <main className="home">
+      {/* Обои под стекло */}
+      <div className="bg" aria-hidden />
+
       <header className="hdr">
         <h1 className="title">{L.appTitle}</h1>
         <p className="sub">{L.subtitle}</p>
       </header>
 
       <section className="center">
-        {/* ВЕРХ — стекло + пульс */}
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.daily}</b>
@@ -64,13 +64,11 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* ЦЕНТР — заметная стеклянная капсула с переливом */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
-        {/* НИЗ — стекло + пульс + золотой ореол */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -80,43 +78,52 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* полноширинная стеклянная док-панель снизу */}
       <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
         <b>{L.cabinet}</b>
       </a>
 
       <style jsx>{`
-        :global(html, body, #__next){ height:100%; overflow:hidden; } /* ВЫКЛЮЧАЕМ СКРОЛЛ ВООБЩЕ */
+        /* Глобально: фикс высоты и запрет скролла, вырубить iOS подсветки */
+        :global(html, body, #__next){ height:100%; overflow:hidden; }
+        :global(*){ -webkit-tap-highlight-color: transparent; }
+        :global(a:focus), :global(a:focus-visible){ outline:none; }
+
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
 
         .home{
-          height:100dvh; display:grid; grid-template-rows:auto 1fr; /* док фиксируем отдельно */
+          position:relative;
+          height:100dvh; display:grid; grid-template-rows:auto 1fr;
           color:var(--text,#0f172a);
-          padding:16px 14px 0; /* без нижнего паддинга — иначе из-за фикс-дока будет скролл */
-
-          /* фон под стекло */
-          background:
-            radial-gradient(120vmax 80vmax at 15% 25%, rgba(140,180,255,.12), transparent 60%),
-            radial-gradient(120vmax 80vmax at 85% 85%, rgba(140,255,200,.12), transparent 60%);
+          padding:16px 14px 0;
         }
+
+        /* Обои — заметные градиенты и лёгкий шум, чтобы blur что-то размывал */
+        .bg{
+          position:fixed; inset:0; z-index:-1;
+          background:
+            radial-gradient(120vmax 80vmax at 18% 22%, rgba(110,150,255,.25), transparent 60%),
+            radial-gradient(120vmax 80vmax at 82% 86%, rgba(120,255,210,.22), transparent 58%),
+            radial-gradient(100vmax 70vmax at 60% 30%, rgba(255,220,160,.18), transparent 60%),
+            linear-gradient(180deg, #eef3ff 0%, #f4fff8 100%);
+        }
+
         .hdr{ text-align:center; margin-bottom:6px; }
         .title{ margin:6px 0 4px; }
         .sub{ opacity:.75; margin:0; }
 
-        /* центрируем три кнопки; добавляем отступ, чтобы док не перекрывал */
         .center{
           display:grid; gap:16px; justify-items:center; align-content:center;
           padding-bottom: calc(env(safe-area-inset-bottom,0px) + 88px);
-          min-height:0; /* чтобы грид не распирал контейнер */
+          min-height:0;
         }
         .center > *{ width:min(92vw, 640px); }
 
-        /* БАЗОВОЕ СТЕКЛО */
+        /* БАЗОВОЕ СТЕКЛО (карточки) */
         .glass{
           position:relative;
           border-radius:18px;
-          background: rgba(255,255,255,.26);
-          border: 1px solid rgba(15,23,42,.18);
+          background: rgba(255,255,255,.22);
+          border: 1px solid rgba(15,23,42,.22);
           box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(180%);
           backdrop-filter: blur(18px) saturate(180%);
@@ -128,60 +135,58 @@ export default function HomePage() {
         }
         :global(.no-frost) .glass,
         :global(.no-frost) .glass-cta,
-        :global(.no-frost) .dock{
-          -webkit-backdrop-filter:none; backdrop-filter:none;
-          background: rgba(255,255,255,.45);
-        }
+        :global(.no-frost) .dock{ -webkit-backdrop-filter:none; backdrop-filter:none; background: rgba(255,255,255,.88); }
 
-        /* карточки */
         .card{ position:relative; padding:16px; }
         .card__text{ min-width:0; }
         .card__title{ display:block; font-size:18px; margin-bottom:6px; }
         .card__desc{ display:block; opacity:.78; font-size:14px; line-height:1.25; }
         .card__chev{ font-size:22px; opacity:.45; position:absolute; right:14px; top:50%; transform:translateY(-50%); }
 
-        /* пульс */
+        /* Пульс + ореол */
         .pulse{ animation: cardPulse 2.4s ease-in-out infinite; }
         .pulse::after{
           content:''; position:absolute; inset:-2px; border-radius:inherit;
           box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent);
-          opacity:0; pointer-events:none;
-          animation: halo 2.4s ease-in-out infinite;
+          opacity:0; pointer-events:none; animation: halo 2.4s ease-in-out infinite;
         }
         @keyframes cardPulse{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
         @keyframes halo{
           0%,100%{opacity:0; box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent)}
-          50%{opacity:.9; box-shadow:0 0 0 8px color-mix(in oklab, var(--accent,#4c82ff) 10%, transparent)}
+          50%{opacity:.9; box-shadow:0 0 0 10px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
-        /* золотая подсветка Expert */
-        .gold{ border-color: rgba(218,165,32,.55); box-shadow: 0 18px 36px rgba(255,196,56,.14), inset 0 1px 0 rgba(255,245,205,.7); }
+        /* ЗОЛОТО ДЛЯ ЭКСПЕРТ-ЦЕНТРА */
+        .gold{
+          border-color: rgba(218,165,32,.6);
+          box-shadow: 0 18px 36px rgba(215,170,60,.18), inset 0 1px 0 rgba(255,245,205,.75);
+        }
         .gold::before{
           background:
-            radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.28), rgba(255,210,120,.10) 70%),
-            linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.10) 40%, transparent 70%);
+            radial-gradient(120% 140% at 14% 0%, rgba(255,210,120,.30), rgba(255,210,120,.12) 70%),
+            linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.10) 40%, transparent 70%);
         }
         .gold::after{ animation: goldHalo 2.6s ease-in-out infinite; }
         @keyframes goldHalo{
-          0%,100%{opacity:.2; box-shadow:0 0 0 0 rgba(255,215,120,.0)}
-          50%{opacity:.95; box-shadow:0 0 0 12px rgba(255,215,120,.20)}
+          0%,100%{opacity:.25; box-shadow:0 0 0 0 rgba(255,215,120,.0)}
+          50%{opacity:1; box-shadow:0 0 0 14px rgba(255,215,120,.22)}
         }
 
-        /* ЦЕНТРАЛЬНАЯ СТЕКЛЯННАЯ КАПСУЛА — заметная рамка */
+        /* ЦЕНТРАЛЬНАЯ КАПСУЛА — явная рамка и стекло */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
-          background: rgba(255,255,255,.20);
-          border: 1px solid rgba(15,23,42,.26); /* темнее, чтобы рамка точно читалась */
-          box-shadow: 0 28px 54px rgba(15,23,42,.15), inset 0 1px 0 rgba(255,255,255,.55);
+          background: rgba(255,255,255,.18);
+          border: 1px solid rgba(15,23,42,.32); /* контрастнее */
+          box-shadow: 0 28px 54px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(190%);
           backdrop-filter: blur(18px) saturate(190%);
         }
         .glass-cta::before{
           content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
           background:
-            radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.55), transparent 62%),
-            linear-gradient(180deg, rgba(255,255,255,.16), transparent 45%);
+            radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.58), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.18), transparent 45%);
         }
         .gpt__shimmer{
           justify-self:center; font-weight:900; letter-spacing:.02em;
@@ -195,16 +200,16 @@ export default function HomePage() {
         .gpt__chev{ font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-        /* стеклянная док-панель снизу (fixed) */
+        /* Нижняя стеклянная док-панель */
         .dock{
           position:fixed; left:0; right:0;
           bottom:calc(env(safe-area-inset-bottom,0px));
           padding:14px max(16px, env(safe-area-inset-left,0px));
           text-align:center; font-weight:800;
           color:#0f172a; z-index:10;
-          background: rgba(255,255,255,.90);
-          border-top:1px solid rgba(15,23,42,.14);
-          box-shadow:0 -8px 24px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.65);
+          background: rgba(255,255,255,.92);
+          border-top:1px solid rgba(15,23,42,.16);
+          box-shadow:0 -10px 28px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.68);
           -webkit-backdrop-filter: blur(12px) saturate(160%);
           backdrop-filter: blur(12px) saturate(160%);
         }
