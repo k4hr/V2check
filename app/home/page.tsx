@@ -34,11 +34,11 @@ export default function HomePage() {
     try {
       const u = new URL(window.location.href);
       const sp = new URLSearchParams(u.search);
-      sp.set('welcomed', '1'); sp.set('_v', 'hm11');
+      sp.set('welcomed', '1'); sp.set('_v', 'hm12');
       const id = u.searchParams.get('id'); if (id) sp.set('id', id);
       const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1&_v=hm11';
-    } catch { return '?welcomed=1&_v=hm11'; }
+      return s ? `?${s}` : '?welcomed=1&_v=hm12';
+    } catch { return '?welcomed=1&_v=hm12'; }
   }, []);
   const href = (p: string) => `${p}${suffix}` as Route;
 
@@ -68,7 +68,7 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* CHATGPT 5 — пульсирующая кнопка */}
+        {/* CHATGPT 5 — пульсирует только текст */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
@@ -172,7 +172,7 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
-        /* CHATGPT 5 — кнопка + пульсация надписи */
+        /* CHATGPT 5 — кнопка (стекло) + пульс надписи без масштаба */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:20px 18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
@@ -183,17 +183,6 @@ export default function HomePage() {
                   backdrop-filter: blur(18px) saturate(190%);
           transition: transform .08s ease, box-shadow .12s ease;
         }
-        /* мягкий пульсирующий ореол вокруг всей кнопки */
-        .gpt.glass-cta::after{
-          content:''; position:absolute; inset:-3px; border-radius:inherit; pointer-events:none;
-          box-shadow:0 0 0 0 rgba(120,150,255,.18);
-          opacity:0; animation: gptRing 1.9s ease-in-out infinite;
-        }
-        @keyframes gptRing{
-          0%,100%{opacity:0; box-shadow:0 0 0 0 rgba(120,150,255,.18)}
-          50%{opacity:.9; box-shadow:0 0 0 12px rgba(120,150,255,.14)}
-        }
-
         .glass-cta:active{ transform: translateY(1px) scale(.995); }
         .glass-cta::before{
           content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
@@ -202,7 +191,7 @@ export default function HomePage() {
             linear-gradient(180deg, rgba(255,255,255,.18), transparent 45%);
         }
         .gpt__shimmer{
-          position:relative; z-index:1; display:inline-block; transform-origin:center;
+          position:relative; z-index:1; display:inline-block;
           justify-self:center; font-weight:900; letter-spacing:.02em;
           font-size:clamp(50px, 10vw, 68px); line-height:1;
           background:conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
@@ -210,13 +199,21 @@ export default function HomePage() {
           -webkit-background-clip:text; background-clip:text; color:transparent;
           -webkit-text-fill-color: transparent;
           text-shadow:0 0 28px rgba(141,160,255,.18);
-          /* shimmer + лёгкий поп-пульс */
-          animation: shimmer 6s ease-in-out infinite, gptPop 1.9s ease-in-out infinite;
+          /* только shimmer + мягкий световой пульс, БЕЗ масштаба */
+          animation: shimmer 6s ease-in-out infinite, gptPulse 1.9s ease-in-out infinite;
         }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
-        @keyframes gptPop{
-          0%,100%{ transform: scale(1); text-shadow:0 0 28px rgba(141,160,255,.18); }
-          50%{ transform: scale(1.045); text-shadow:0 0 40px rgba(141,160,255,.28); }
+        @keyframes gptPulse{
+          0%,100%{
+            opacity:.92;
+            filter: brightness(1);
+            text-shadow:0 0 24px rgba(141,160,255,.18);
+          }
+          50%{
+            opacity:1;
+            filter: brightness(1.18);
+            text-shadow:0 0 46px rgba(141,160,255,.36);
+          }
         }
         .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
 
@@ -235,7 +232,7 @@ export default function HomePage() {
             linear-gradient(180deg, rgba(255,255,255,.30), rgba(255,255,255,.10) 40%, transparent 70%);
         }
 
-        /* Узкая кнопка снизу по центру */
+        /* Узкая кнопка снизу по центру (50% ширины) */
         .dock{
           position:fixed;
           left:50%; right:auto;
