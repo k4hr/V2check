@@ -34,11 +34,11 @@ export default function HomePage() {
     try {
       const u = new URL(window.location.href);
       const sp = new URLSearchParams(u.search);
-      sp.set('welcomed', '1'); sp.set('_v', 'hm14');
+      sp.set('welcomed', '1'); sp.set('_v', 'hm15');
       const id = u.searchParams.get('id'); if (id) sp.set('id', id);
       const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1&_v=hm14';
-    } catch { return '?welcomed=1&_v=hm14'; }
+      return s ? `?${s}` : '?welcomed=1&_v=hm15';
+    } catch { return '?welcomed=1&_v=hm15'; }
   }, []);
   const href = (p: string) => `${p}${suffix}` as Route;
 
@@ -68,13 +68,13 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* CHATGPT 5 — почти прозрачное стекло */}
-        <Link href={href('/home/ChatGPT')} className="card glass glass-cta gpt" aria-label="CHATGPT 5">
+        {/* CHATGPT 5 — СВОЯ стеклянная капсула без .card/.glass */}
+        <Link href={href('/home/ChatGPT')} className="glass-cta gpt" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
-        {/* Эксперт центр — нежное золотое стекло (поверх всего) */}
+        {/* Эксперт центр — нежное золото, принудительно поверх глобальных правил */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold raise" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -96,7 +96,7 @@ export default function HomePage() {
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
         :global(.lm-bg){ display:none !important; }
 
-        /* базовое стекло карточек (как и раньше) */
+        /* базовое стекло карточек */
         :global(.lm-page) .card.glass{
           background: rgba(255,255,255,.20) !important;
           border: 1px solid rgba(15,23,42,.22) !important;
@@ -154,7 +154,7 @@ export default function HomePage() {
         }
         .stack > *{ width:min(92vw, 640px); }
 
-        /* База карточек */
+        /* Карточки */
         .card{ position:relative; padding:16px; border-radius:18px; }
         .card__text{ min-width:0; }
         .card__title{ display:block; font-size:18px; margin-bottom:6px; }
@@ -173,34 +173,24 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
-        /* CHATGPT 5 — почти невидимое стекло + пульс текста */
+        /* ===== CHATGPT 5 — ПРЕДЕЛЬНО ПРОЗРАЧНОЕ СТЕКЛО ===== */
         .glass-cta{
-          position:relative;
-          z-index:3;
-          isolation:isolate;
-          border-radius:22px;
-          min-height:120px;
-          padding:20px 18px;
+          /* отдельный слой, не наследует .card.glass */
+          position:relative; z-index:3; isolation:isolate;
+          border-radius:22px; min-height:120px; padding:20px 18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
-          /* Супер-прозрачно и «легко» */
-          background: rgba(255,255,255,.08) !important;
-          border: 1px solid rgba(15,23,42,.14) !important;
-          box-shadow: 0 16px 28px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.50) !important;
-          -webkit-backdrop-filter: blur(12px) saturate(140%) !important;
-                  backdrop-filter: blur(12px) saturate(140%) !important;
-          transition: transform .08s ease, box-shadow .12s ease;
+          background: rgba(255,255,255,.06) !important;
+          border: 1px solid rgba(15,23,42,.12) !important;
+          box-shadow: 0 8px 16px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.45) !important;
+          -webkit-backdrop-filter: blur(10px) saturate(130%) !important;
+                  backdrop-filter: blur(10px) saturate(130%) !important;
         }
         .glass-cta::before{
           content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
           background:
-            radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.38), transparent 62%),
-            linear-gradient(180deg, rgba(255,255,255,.10), transparent 45%);
+            radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.30), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.08), transparent 45%) !important;
         }
-        /* без яркого бордера поверх — оставляем едва заметный внутренний хайлайт */
-        .glass-cta::after{ content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:2;
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-        }
-
         .gpt__shimmer{
           position:relative; z-index:1; display:inline-block;
           justify-self:center; font-weight:900; letter-spacing:.02em;
@@ -212,37 +202,27 @@ export default function HomePage() {
           text-shadow:0 0 28px rgba(141,160,255,.18);
           animation: shimmer 6s ease-in-out infinite, gptPulse 1.9s ease-in-out infinite;
         }
+        .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
         @keyframes gptPulse{
-          0%,100%{ opacity:.92; filter:brightness(1);   text-shadow:0 0 24px rgba(141,160,255,.18); }
+          0%,100%{ opacity:.92; filter:brightness(1); text-shadow:0 0 24px rgba(141,160,255,.18); }
           50%    { opacity:1;    filter:brightness(1.18); text-shadow:0 0 46px rgba(141,160,255,.36); }
         }
-        .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
 
-        /* Эксперт центр — принудительное мягкое золото и «поднятие» слоя */
+        /* ===== Эксперт центр — МЯГКОЕ ЗОЛОТО, ПОВЫШЕННАЯ СПЕЦИФИЧНОСТЬ ===== */
         .raise{ z-index:2; isolation:isolate; }
-        .card.gold,
-        .card.gold.glass,
-        .stack .card.gold{
+        :global(.lm-page) .card.gold{
           background:
             linear-gradient(140deg, rgba(255,225,150,.22), rgba(255,205,120,.10)),
             rgba(255,255,255,.20) !important;
           border: 1px solid rgba(215,170,60,.55) !important;
           box-shadow: 0 22px 44px rgba(215,170,60,.20), inset 0 1px 0 rgba(255,245,205,.85) !important;
         }
-        .card.gold::before{
+        :global(.lm-page) .card.gold::before{
           content:''; position:absolute; inset:0; border-radius:18px; pointer-events:none; z-index:0;
           background:
             radial-gradient(120% 160% at 12% 0%, rgba(255,220,140,.35), rgba(255,220,140,0) 65%),
             linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.08) 50%, transparent 80%) !important;
-        }
-        .card.gold::after{
-          content:''; position:absolute; inset:-2px; border-radius:inherit; pointer-events:none; z-index:1;
-          box-shadow:0 0 0 0 rgba(255,215,120,0); animation: goldHalo 2.8s ease-in-out infinite;
-        }
-        @keyframes goldHalo{
-          0%,100%{opacity:.25; box-shadow:0 0 0 0 rgba(255,215,120,.0)}
-          50%{opacity:1; box-shadow:0 0 0 14px rgba(255,215,120,.18)}
         }
 
         /* Узкая кнопка снизу по центру (50% ширины) */
