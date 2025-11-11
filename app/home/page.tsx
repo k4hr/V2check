@@ -22,9 +22,10 @@ export default function HomePage() {
       document.documentElement.style.setProperty('--accent', accent);
       document.documentElement.style.setProperty('--text',   text);
     } catch {}
+
     try { document.documentElement.lang = locale; } catch {}
 
-    // фолбэк, если blur недоступен
+    // есть ли поддержка blur-а?
     try {
       const ok = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
       document.documentElement.classList.toggle('no-frost', !ok);
@@ -63,7 +64,7 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* ЦЕНТР — стеклянная капсула с переливом (реально видимая рамка и мягкая тень) */}
+        {/* ЦЕНТР — заметная стеклянная капсула с переливом */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
@@ -79,21 +80,21 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* полноширинная стеклянная панель внизу */}
+      {/* полноширинная стеклянная док-панель снизу */}
       <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
         <b>{L.cabinet}</b>
       </a>
 
       <style jsx>{`
+        :global(html, body, #__next){ height:100%; overflow:hidden; } /* ВЫКЛЮЧАЕМ СКРОЛЛ ВООБЩЕ */
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
 
         .home{
-          min-height:100dvh; display:grid; grid-template-rows:auto 1fr auto;
+          height:100dvh; display:grid; grid-template-rows:auto 1fr; /* док фиксируем отдельно */
           color:var(--text,#0f172a);
-          padding:16px 14px calc(env(safe-area-inset-bottom,0px) + 72px);
-          max-width:980px; margin:0 auto;
+          padding:16px 14px 0; /* без нижнего паддинга — иначе из-за фикс-дока будет скролл */
 
-          /* подложка, чтобы стекло было что размывать */
+          /* фон под стекло */
           background:
             radial-gradient(120vmax 80vmax at 15% 25%, rgba(140,180,255,.12), transparent 60%),
             radial-gradient(120vmax 80vmax at 85% 85%, rgba(140,255,200,.12), transparent 60%);
@@ -102,19 +103,20 @@ export default function HomePage() {
         .title{ margin:6px 0 4px; }
         .sub{ opacity:.75; margin:0; }
 
-        /* центрируем три кнопки */
+        /* центрируем три кнопки; добавляем отступ, чтобы док не перекрывал */
         .center{
           display:grid; gap:16px; justify-items:center; align-content:center;
-          min-height:calc(100dvh - 240px);
+          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 88px);
+          min-height:0; /* чтобы грид не распирал контейнер */
         }
         .center > *{ width:min(92vw, 640px); }
 
-        /* --- СТЕКЛО (рабочее) --- */
+        /* БАЗОВОЕ СТЕКЛО */
         .glass{
           position:relative;
           border-radius:18px;
           background: rgba(255,255,255,.26);
-          border: 1px solid rgba(15,23,42,.16);
+          border: 1px solid rgba(15,23,42,.18);
           box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(180%);
           backdrop-filter: blur(18px) saturate(180%);
@@ -152,35 +154,34 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 8px color-mix(in oklab, var(--accent,#4c82ff) 10%, transparent)}
         }
 
-        /* золотая подсветка Expert поверх стекла */
-        .gold{ border-color: rgba(218,165,32,.45); box-shadow: 0 18px 36px rgba(255,196,56,.14), inset 0 1px 0 rgba(255,245,205,.65); }
+        /* золотая подсветка Expert */
+        .gold{ border-color: rgba(218,165,32,.55); box-shadow: 0 18px 36px rgba(255,196,56,.14), inset 0 1px 0 rgba(255,245,205,.7); }
         .gold::before{
           background:
-            radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.22), rgba(255,210,120,.08) 70%),
+            radial-gradient(120% 140% at 12% 0%, rgba(255,210,120,.28), rgba(255,210,120,.10) 70%),
             linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.10) 40%, transparent 70%);
         }
         .gold::after{ animation: goldHalo 2.6s ease-in-out infinite; }
         @keyframes goldHalo{
           0%,100%{opacity:.2; box-shadow:0 0 0 0 rgba(255,215,120,.0)}
-          50%{opacity:.9; box-shadow:0 0 0 10px rgba(255,215,120,.18)}
+          50%{opacity:.95; box-shadow:0 0 0 12px rgba(255,215,120,.20)}
         }
 
-        /* центральная стеклянная капсула */
+        /* ЦЕНТРАЛЬНАЯ СТЕКЛЯННАЯ КАПСУЛА — заметная рамка */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
-          background: rgba(255,255,255,.22);
-          border: 1px solid rgba(15,23,42,.20);
-          box-shadow: 0 26px 52px rgba(15,23,42,.14), inset 0 1px 0 rgba(255,255,255,.55);
-          -webkit-backdrop-filter: blur(18px) saturate(180%);
-          backdrop-filter: blur(18px) saturate(180%);
-          transform: translateZ(0);
+          background: rgba(255,255,255,.20);
+          border: 1px solid rgba(15,23,42,.26); /* темнее, чтобы рамка точно читалась */
+          box-shadow: 0 28px 54px rgba(15,23,42,.15), inset 0 1px 0 rgba(255,255,255,.55);
+          -webkit-backdrop-filter: blur(18px) saturate(190%);
+          backdrop-filter: blur(18px) saturate(190%);
         }
         .glass-cta::before{
           content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
           background:
-            radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.45), transparent 60%),
-            linear-gradient(180deg, rgba(255,255,255,.12), transparent 40%);
+            radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.55), transparent 62%),
+            linear-gradient(180deg, rgba(255,255,255,.16), transparent 45%);
         }
         .gpt__shimmer{
           justify-self:center; font-weight:900; letter-spacing:.02em;
@@ -194,16 +195,16 @@ export default function HomePage() {
         .gpt__chev{ font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-        /* низ — стеклянная док-панель */
+        /* стеклянная док-панель снизу (fixed) */
         .dock{
           position:fixed; left:0; right:0;
           bottom:calc(env(safe-area-inset-bottom,0px));
           padding:14px max(16px, env(safe-area-inset-left,0px));
           text-align:center; font-weight:800;
           color:#0f172a; z-index:10;
-          background: rgba(255,255,255,.88);
-          border-top:1px solid rgba(15,23,42,.12);
-          box-shadow:0 -8px 24px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.6);
+          background: rgba(255,255,255,.90);
+          border-top:1px solid rgba(15,23,42,.14);
+          box-shadow:0 -8px 24px rgba(15,23,42,.10), inset 0 1px 0 rgba(255,255,255,.65);
           -webkit-backdrop-filter: blur(12px) saturate(160%);
           backdrop-filter: blur(12px) saturate(160%);
         }
