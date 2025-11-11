@@ -47,7 +47,7 @@ export default function HomePage() {
 
   return (
     <main className="home">
-      {/* Обои под стекло */}
+      {/* Анимированные «обои» под стекло */}
       <div className="bg" aria-hidden />
 
       <header className="hdr">
@@ -55,7 +55,9 @@ export default function HomePage() {
         <p className="sub">{L.subtitle}</p>
       </header>
 
-      <section className="center">
+      {/* Блоки идут СВЕРХУ под заголовком, как по стандарту */}
+      <section className="stack">
+        {/* ВЕРХ — стекло + пульс */}
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.daily}</b>
@@ -64,11 +66,13 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
+        {/* СЕРЕДИНА — стеклянная капсула с переливом текста */}
         <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
+        {/* НИЗ — стекло + пульс + золотой ореол */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -78,51 +82,63 @@ export default function HomePage() {
         </Link>
       </section>
 
+      {/* полноширинная стеклянная док-панель снизу */}
       <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
         <b>{L.cabinet}</b>
       </a>
 
       <style jsx>{`
-        /* Глобально: фикс высоты и запрет скролла, вырубить iOS подсветки */
+        /* Нет скролла у мини-приложения */
         :global(html, body, #__next){ height:100%; overflow:hidden; }
         :global(*){ -webkit-tap-highlight-color: transparent; }
         :global(a:focus), :global(a:focus-visible){ outline:none; }
-
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
 
         .home{
           position:relative;
-          height:100dvh; display:grid; grid-template-rows:auto 1fr;
+          height:100dvh;
+          display:grid;
+          grid-template-rows:auto 1fr; /* док фиксируем отдельно */
           color:var(--text,#0f172a);
           padding:16px 14px 0;
         }
 
-        /* Обои — заметные градиенты и лёгкий шум, чтобы blur что-то размывал */
+        /* Переливающийся бирюзовый фон на весь экран */
         .bg{
           position:fixed; inset:0; z-index:-1;
           background:
-            radial-gradient(120vmax 80vmax at 18% 22%, rgba(110,150,255,.25), transparent 60%),
-            radial-gradient(120vmax 80vmax at 82% 86%, rgba(120,255,210,.22), transparent 58%),
-            radial-gradient(100vmax 70vmax at 60% 30%, rgba(255,220,160,.18), transparent 60%),
-            linear-gradient(180deg, #eef3ff 0%, #f4fff8 100%);
+            radial-gradient(110vmax 80vmax at 12% 18%, rgba(40,210,200,.26), transparent 60%),
+            radial-gradient(110vmax 80vmax at 86% 84%, rgba(90,180,255,.24), transparent 58%),
+            conic-gradient(from 0deg at 50% 50%, rgba(40,210,200,.20), rgba(140,220,255,.18), rgba(40,210,200,.20));
+          background-size: 160% 160%, 160% 160%, 300% 300%;
+          animation: aquaFlow 16s linear infinite;
+        }
+        @keyframes aquaFlow{
+          0%   { background-position: 0% 0%, 100% 100%, 0% 50%; }
+          50%  { background-position: 100% 50%, 0% 50%, 100% 50%; }
+          100% { background-position: 0% 0%, 100% 100%, 0% 50%; }
         }
 
-        .hdr{ text-align:center; margin-bottom:6px; }
+        .hdr{ text-align:center; margin-bottom:10px; }
         .title{ margin:6px 0 4px; }
         .sub{ opacity:.75; margin:0; }
 
-        .center{
-          display:grid; gap:16px; justify-items:center; align-content:center;
-          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 88px);
+        /* Стеклянные блоки СВЕРХУ (без вертикального центрирования) */
+        .stack{
+          display:grid;
+          gap:16px;
+          align-content:start; /* <- вверх */
+          justify-items:center;
+          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 88px); /* место под док */
           min-height:0;
         }
-        .center > *{ width:min(92vw, 640px); }
+        .stack > *{ width:min(92vw, 640px); }
 
         /* БАЗОВОЕ СТЕКЛО (карточки) */
         .glass{
           position:relative;
           border-radius:18px;
-          background: rgba(255,255,255,.22);
+          background: rgba(255,255,255,.20);
           border: 1px solid rgba(15,23,42,.22);
           box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(180%);
@@ -135,7 +151,7 @@ export default function HomePage() {
         }
         :global(.no-frost) .glass,
         :global(.no-frost) .glass-cta,
-        :global(.no-frost) .dock{ -webkit-backdrop-filter:none; backdrop-filter:none; background: rgba(255,255,255,.88); }
+        :global(.no-frost) .dock{ -webkit-backdrop-filter:none; backdrop-filter:none; background: rgba(255,255,255,.90); }
 
         .card{ position:relative; padding:16px; }
         .card__text{ min-width:0; }
@@ -172,12 +188,12 @@ export default function HomePage() {
           50%{opacity:1; box-shadow:0 0 0 14px rgba(255,215,120,.22)}
         }
 
-        /* ЦЕНТРАЛЬНАЯ КАПСУЛА — явная рамка и стекло */
+        /* ЦЕНТРАЛЬНАЯ КАПСУЛА — рамка и стекло видимы всегда */
         .glass-cta{
           position:relative; border-radius:22px; min-height:120px; padding:18px;
           display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
-          background: rgba(255,255,255,.18);
-          border: 1px solid rgba(15,23,42,.32); /* контрастнее */
+          background: rgba(255,255,255,.16);
+          border: 1px solid rgba(15,23,42,.32);
           box-shadow: 0 28px 54px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.55);
           -webkit-backdrop-filter: blur(18px) saturate(190%);
           backdrop-filter: blur(18px) saturate(190%);
@@ -200,7 +216,7 @@ export default function HomePage() {
         .gpt__chev{ font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
 
-        /* Нижняя стеклянная док-панель */
+        /* Нижняя стеклянная док-панель на всю ширину */
         .dock{
           position:fixed; left:0; right:0;
           bottom:calc(env(safe-area-inset-bottom,0px));
