@@ -34,11 +34,11 @@ export default function HomePage() {
     try {
       const u = new URL(window.location.href);
       const sp = new URLSearchParams(u.search);
-      sp.set('welcomed', '1'); sp.set('_v', 'hm12');
+      sp.set('welcomed', '1'); sp.set('_v', 'hm13');
       const id = u.searchParams.get('id'); if (id) sp.set('id', id);
       const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1&_v=hm12';
-    } catch { return '?welcomed=1&_v=hm12'; }
+      return s ? `?${s}` : '?welcomed=1&_v=hm13';
+    } catch { return '?welcomed=1&_v=hm13'; }
   }, []);
   const href = (p: string) => `${p}${suffix}` as Route;
 
@@ -68,8 +68,8 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* CHATGPT 5 — пульсирует только текст */}
-        <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
+        {/* CHATGPT 5 — видимая стеклянная «карточка» */}
+        <Link href={href('/home/ChatGPT')} className="card glass glass-cta gpt" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
@@ -96,6 +96,7 @@ export default function HomePage() {
         :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
         :global(.lm-bg){ display:none !important; }
 
+        /* возвращаем стекло карточкам */
         :global(.lm-page) .card.glass{
           background: rgba(255,255,255,.20) !important;
           border: 1px solid rgba(15,23,42,.22) !important;
@@ -153,7 +154,7 @@ export default function HomePage() {
         }
         .stack > *{ width:min(92vw, 640px); }
 
-        /* Карточки */
+        /* База карточек */
         .card{ position:relative; padding:16px; border-radius:18px; }
         .card__text{ min-width:0; }
         .card__title{ display:block; font-size:18px; margin-bottom:6px; }
@@ -172,16 +173,30 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
-        /* CHATGPT 5 — кнопка (стекло) + пульс надписи без масштаба */
+        /* CHATGPT 5 — стекло + бордер поверх */
         .glass-cta{
-          position:relative; border-radius:22px; min-height:120px; padding:20px 18px;
-          display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
+          /* делаем её своим стеклянным слоем, выше соседей */
+          position:relative;
+          z-index:3;                 /* <- подняли слой */
+          isolation:isolate;         /* <- отдельный композиционный контекст */
+          border-radius:22px;
+          min-height:120px;
+          padding:20px 18px;
+          display:grid;
+          grid-template-columns:1fr auto;
+          align-items:center;
+          justify-items:center;
           background: rgba(255,255,255,.28);
           border: 1px solid rgba(15,23,42,.26);
           box-shadow: 0 26px 52px rgba(15,23,42,.18), inset 0 1px 0 rgba(255,255,255,.6);
           -webkit-backdrop-filter: blur(18px) saturate(190%);
                   backdrop-filter: blur(18px) saturate(190%);
           transition: transform .08s ease, box-shadow .12s ease;
+        }
+        /* чёткий видимый бордер поверх (на случай глюков blur-композитора) */
+        .glass-cta::after{
+          content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+          z-index:2; box-shadow: inset 0 0 0 1px rgba(15,23,42,.30);
         }
         .glass-cta:active{ transform: translateY(1px) scale(.995); }
         .glass-cta::before{
@@ -190,6 +205,7 @@ export default function HomePage() {
             radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.58), transparent 62%),
             linear-gradient(180deg, rgba(255,255,255,.18), transparent 45%);
         }
+
         .gpt__shimmer{
           position:relative; z-index:1; display:inline-block;
           justify-self:center; font-weight:900; letter-spacing:.02em;
@@ -199,21 +215,12 @@ export default function HomePage() {
           -webkit-background-clip:text; background-clip:text; color:transparent;
           -webkit-text-fill-color: transparent;
           text-shadow:0 0 28px rgba(141,160,255,.18);
-          /* только shimmer + мягкий световой пульс, БЕЗ масштаба */
           animation: shimmer 6s ease-in-out infinite, gptPulse 1.9s ease-in-out infinite;
         }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
         @keyframes gptPulse{
-          0%,100%{
-            opacity:.92;
-            filter: brightness(1);
-            text-shadow:0 0 24px rgba(141,160,255,.18);
-          }
-          50%{
-            opacity:1;
-            filter: brightness(1.18);
-            text-shadow:0 0 46px rgba(141,160,255,.36);
-          }
+          0%,100%{ opacity:.92; filter:brightness(1);   text-shadow:0 0 24px rgba(141,160,255,.18); }
+          50%    { opacity:1;    filter:brightness(1.18); text-shadow:0 0 46px rgba(141,160,255,.36); }
         }
         .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
 
