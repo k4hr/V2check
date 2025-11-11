@@ -6,15 +6,12 @@ import type { Route } from 'next';
 import { useEffect, useMemo } from 'react';
 
 function haptic(type: 'light' | 'medium' = 'light') {
-  try {
-    (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type);
-  } catch {}
+  try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
 }
 
 function setCookie(k: string, v: string) {
   try {
-    const maxAge = 60 * 60 * 24 * 365; // 1 год
-    // важно для iframe VK: SameSite=None; Secure
+    const maxAge = 60 * 60 * 24 * 365;
     document.cookie = `${k}=${encodeURIComponent(v)}; Path=/; Max-Age=${maxAge}; SameSite=None; Secure`;
   } catch {}
 }
@@ -28,15 +25,12 @@ export default function LandingPage() {
   const linkSuffix = useMemo(() => {
     try {
       const u = new URL(window.location.href);
-      const id = u.searchParams.get('id');
-      // добавляем welcomed=1 как запасной флаг
       const sp = new URLSearchParams(u.search);
       sp.set('welcomed', '1');
+      const id = u.searchParams.get('id');
       if (id) sp.set('id', id);
       return `?${sp.toString()}`;
-    } catch {
-      return '?welcomed=1';
-    }
+    } catch { return '?welcomed=1'; }
   }, []);
 
   return (
@@ -51,12 +45,9 @@ export default function LandingPage() {
 
         <Link
           href={`/home${linkSuffix}` as Route}
-          className="lp-cta"
+          className="lp-cta glass"
           aria-label="Начать"
-          onClick={() => {
-            setCookie('welcomed', '1'); // на случай, если third-party куки разрешены
-            haptic('medium');
-          }}
+          onClick={() => { setCookie('welcomed', '1'); haptic('medium'); }}
         >
           НАЧАТЬ
           <span className="lp-cta-glow" aria-hidden />
@@ -70,35 +61,81 @@ export default function LandingPage() {
           padding: 24px 16px calc(env(safe-area-inset-bottom, 0px) + 24px);
           display: grid;
           place-items: center;
-          color: var(--text);
+          color: #0d1220;
           background: transparent;
           overflow: hidden;
         }
         .lp-inner { width: 100%; max-width: 860px; text-align: center; }
+
+        /* Элегантный градиент-перелив на тексте */
         .lp-title { margin: 0 0 26px; line-height: 1.06; font-size: clamp(42px, 9vw, 90px); font-weight: 900; letter-spacing: -0.02em; text-wrap: balance; }
         .lp-gpt {
-          background: conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
-          background-size: 200% 200%;
+          background: linear-gradient(
+            120deg,
+            #8fa3ff 0%,
+            #b9adff 20%,
+            #ffd98b 40%,
+            #b6efe6 60%,
+            #a7b6ff 80%,
+            #8fa3ff 100%
+          );
+          background-size: 220% 220%;
           -webkit-background-clip: text; background-clip: text; color: transparent;
-          animation: shimmer 6s ease-in-out infinite; text-shadow: 0 0 28px rgba(141,160,255,.28); white-space: nowrap;
+          animation: shimmer 10s ease-in-out infinite;
+          text-shadow: 0 2px 30px rgba(160,175,255,.35);
+          letter-spacing: .01em;
         }
-        @keyframes shimmer { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        @keyframes shimmer {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+
+        /* Белое стекло для кнопки */
+        .glass {
+          background: rgba(255,255,255,.82);
+          color: #0d1220;
+          border: 1px solid rgba(13,18,32,.12);
+          box-shadow:
+            0 10px 28px rgba(17,23,40,.12),
+            inset 0 0 0 1px rgba(255,255,255,.55);
+          backdrop-filter: saturate(160%) blur(14px);
+          -webkit-backdrop-filter: saturate(160%) blur(14px);
+        }
+
         .lp-cta {
-          position: relative; display: inline-grid; place-items: center;
-          padding: 16px 30px; border-radius: 18px; font-weight: 900; letter-spacing: .06em;
-          text-decoration: none; color: #fff;
-          background: radial-gradient(120% 200% at 0% 0%, rgba(99,102,241,.35), transparent 52%), linear-gradient(135deg, #5a69ff, #3a7bff 48%, #7a5cff);
-          border: 1px solid rgba(110,134,255,.85);
-          box-shadow: 0 12px 38px rgba(63,99,241,.38), 0 0 0 1px rgba(255,255,255,.07) inset;
-          transform: translateZ(0);
-          transition: transform .08s ease, box-shadow .2s ease, filter .2s ease; isolation: isolate;
+          position: relative;
+          display: inline-grid; place-items: center;
+          padding: 16px 30px;
+          border-radius: 18px;
+          font-weight: 900;
+          letter-spacing: .06em;
+          text-decoration: none;
+          user-select: none;
+          transition: transform .12s ease, box-shadow .2s ease, border-color .2s ease;
+          isolation: isolate;
         }
-        .lp-cta:hover { transform: translateY(-1px); box-shadow: 0 16px 50px rgba(63,99,241,.48), 0 0 0 1px rgba(255,255,255,.09) inset; filter: brightness(1.06); }
+        .lp-cta:hover { transform: translateY(-1px); box-shadow: 0 16px 40px rgba(17,23,40,.16), inset 0 0 0 1px rgba(255,255,255,.6); }
         .lp-cta:active { transform: translateY(0); }
-        .lp-cta-glow { position: absolute; inset: -25%; border-radius: 24px; background: radial-gradient(60% 60% at 50% 50%, rgba(120,150,255,.35), rgba(120,150,255,.12) 40%, transparent 70%); filter: blur(18px); z-index: -1; animation: pulse 2.6s ease-in-out infinite; pointer-events: none; }
-        @keyframes pulse { 0%,100%{opacity:.55; transform:scale(1)} 50%{opacity:.85; transform:scale(1.03)} }
-        .lp-orb { position: absolute; width: 60vmin; height: 60vmin; border-radius: 50%; filter: blur(48px); opacity: .18; pointer-events: none; background: radial-gradient(closest-side, #7380ff, transparent 70%); }
-        .orb-tr { top: -18vmin; right: -18vmin; } .orb-bl { bottom: -22vmin; left: -22vmin; }
+        .lp-cta:focus-visible { outline: 0; box-shadow: 0 0 0 3px rgba(26,115,232,.25), inset 0 0 0 1px rgba(255,255,255,.6); }
+        .lp-cta-glow {
+          position: absolute; inset: -22%;
+          border-radius: 28px;
+          background: radial-gradient(60% 60% at 50% 50%, rgba(255,255,255,.65), rgba(255,255,255,0) 60%);
+          filter: blur(18px);
+          z-index: -1; pointer-events: none;
+          animation: pulse 2.6s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%,100%{opacity:.5; transform:scale(1)} 50%{opacity:.8; transform:scale(1.03)} }
+
+        /* Мягкие световые шары вокруг */
+        .lp-orb { position: absolute; width: 60vmin; height: 60vmin; border-radius: 50%; filter: blur(48px); opacity: .16; pointer-events: none; background: radial-gradient(closest-side, #9aa7ff, transparent 70%); }
+        .orb-tr { top: -18vmin; right: -18vmin; }
+        .orb-bl { bottom: -22vmin; left: -22vmin; }
+
+        @media (max-width: 420px) {
+          .lp-cta { padding: 14px 24px; border-radius: 16px; }
+        }
       `}</style>
     </main>
   );
