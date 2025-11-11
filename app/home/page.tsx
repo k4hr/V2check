@@ -5,151 +5,176 @@ import Link from 'next/link';
 import type { Route } from 'next';
 import { useEffect, useMemo } from 'react';
 import { STRINGS, readLocale, ensureLocaleCookie, type Locale } from '@/lib/i18n';
-import MiniDock from '@/app/components/MiniDock';
 
-export default function HomePage(){
-  useEffect(()=>{ try{ ensureLocaleCookie({ sameSite:'none', secure:true } as any);}catch{} },[]);
-  const locale = useMemo<Locale>(()=>readLocale(),[]);
+export default function HomePage() {
+  useEffect(() => { try { ensureLocaleCookie({ sameSite: 'none', secure: true } as any); } catch {} }, []);
+  const locale = useMemo<Locale>(() => readLocale(), []);
   const L = STRINGS[locale] ?? STRINGS.ru;
 
-  useEffect(()=>{
-    const w:any=window;
-    try{ w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); }catch{}
-    try{ document.documentElement.lang=locale; }catch{}
-  },[locale]);
+  useEffect(() => {
+    const w: any = window;
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
+    try { document.documentElement.lang = locale; } catch {}
+  }, [locale]);
 
-  const suffix = useMemo(()=>{
-    try{
-      const u=new URL(window.location.href);
-      const sp=new URLSearchParams(u.search);
-      sp.set('welcomed','1');
-      const id=u.searchParams.get('id'); if(id) sp.set('id',id);
-      const s=sp.toString(); return s?`?${s}`:'?welcomed=1';
-    }catch{ return '?welcomed=1'; }
-  },[]);
-  const href = (p:string)=>`${p}${suffix}` as Route;
+  const suffix = useMemo(() => {
+    try {
+      const u = new URL(window.location.href);
+      const sp = new URLSearchParams(u.search);
+      sp.set('welcomed', '1');
+      const id = u.searchParams.get('id'); if (id) sp.set('id', id);
+      const s = sp.toString();
+      return s ? `?${s}` : '?welcomed=1';
+    } catch { return '?welcomed=1'; }
+  }, []);
+  const href = (p: string) => `${p}${suffix}` as Route;
 
-  // описания с фолбэками
-  const dailyDesc   = (L as any).dailyDesc   || (locale==='en' ? 'Quick daily tools and automations.' : 'Быстрые ежедневные инструменты и автоматизации.');
-  const expertDesc  = (L as any).expertDesc  || (locale==='en' ? 'Advanced prompts, recipes and pro workflows.' : 'Продвинутые промпты, рецепты и профессиональные сценарии.');
+  const dailyDesc  = (L as any).dailyDesc  || 'Быстрые ежедневные инструменты и автоматизации.';
+  const expertDesc = (L as any).expertDesc || 'Продвинутые промпты, рецепты и профессиональные сценарии.';
 
   return (
     <main className="home">
-      <h1 className="title">{L.appTitle}</h1>
-      <p className="subtitle">{L.subtitle}</p>
+      <h1 className="hm-title">{L.appTitle}</h1>
+      <p className="hm-sub">{L.subtitle}</p>
 
-      {/* Бенто: большой герой и две вытянутые плитки */}
-      <section className="bento">
-        {/* HERO CHATGPT 5 */}
-        <Link href={href('/home/ChatGPT')} className="tile tile--hero glass" aria-label="Открыть ChatGPT 5">
-          <div className="hero__center">
-            <span className="hero__label">CHATGPT&nbsp;5</span>
+      <div className="stack">
+        {/* СВЕРХУ: Ежедневные задачи — стекло + пульс */}
+        <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
+          <div className="card__text">
+            <b className="card__title">{L.daily}</b>
+            <span className="card__desc">{dailyDesc}</span>
           </div>
-          <span className="chev" aria-hidden>›</span>
-          <span className="hero__glow" aria-hidden />
+          <span className="card__chev">›</span>
         </Link>
 
-        {/* ЕЖЕДНЕВНЫЕ ЗАДАЧИ */}
-        <Link href={href('/home/pro')} className="tile tile--tall glass">
-          <div className="tile__inner">
-            <div className="tile__title">{L.daily}</div>
-            <div className="tile__desc">{dailyDesc}</div>
-          </div>
-          <span className="chev" aria-hidden>›</span>
+        {/* ПО ЦЕНТРУ: CHATGPT 5 — большая стеклянная кнопка с переливом текста */}
+        <Link href={href('/home/ChatGPT')} className="gpt glass-cta" aria-label="CHATGPT 5">
+          <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
+          <span className="gpt__chev">›</span>
         </Link>
 
-        {/* ЭКСПЕРТ-ЦЕНТР (пульс) */}
-        <Link href={href('/home/pro-plus')} className="tile tile--tall glass tile--pulse">
-          <div className="tile__inner">
-            <div className="tile__title">{L.expert}</div>
-            <div className="tile__desc">{expertDesc}</div>
+        {/* СНИЗУ: Эксперт центр — стекло + пульс */}
+        <Link href={href('/home/pro-plus')} className="card glass pulse" style={{ textDecoration: 'none' }}>
+          <div className="card__text">
+            <b className="card__title">{L.expert}</b>
+            <span className="card__desc">{expertDesc}</span>
           </div>
-          <span className="chev" aria-hidden>›</span>
-          <span className="pulse__halo" aria-hidden />
+          <span className="card__chev">›</span>
         </Link>
-      </section>
+      </div>
 
-      {/* отступ под док */}
-      <div style={{height:96}} />
-
-      {/* мини-док снизу */}
-      <MiniDock />
+      {/* Низкая «док»-кнопка в кабинет (как просил ранее) */}
+      <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
+        <span className="dock__icon">👤</span>
+        <b>{L.cabinet}</b>
+      </a>
 
       <style jsx>{`
-        .home{ padding:20px; max-width:860px; margin:0 auto; }
-        .title{ text-align:center; margin:0 0 6px; }
-        .subtitle{ text-align:center; opacity:.8; margin:0 0 14px; }
+        .home {
+          min-height: 100dvh;
+          padding: 22px 16px calc(env(safe-area-inset-bottom, 0px) + 96px);
+          max-width: 980px; margin: 0 auto;
+        }
+        .hm-title { text-align:center; margin: 6px 0 4px; }
+        .hm-sub { text-align:center; opacity:.75; margin: 0 0 18px; }
 
-        /* белое стекло — прозрачно и единообразно */
-        .glass{
+        .stack { display:flex; flex-direction:column; gap:18px; align-items:stretch; }
+
+        /* Общий стиль стекла (светлый, прозрачный) */
+        .glass {
           background: rgba(255,255,255,.68);
-          color:#0d1220;
-          border:1px solid rgba(0,0,0,.08);
-          box-shadow: 0 12px 32px rgba(17,23,40,.10), inset 0 0 0 1px rgba(255,255,255,.55);
+          border: 1px solid rgba(15,23,42,.08);
+          border-radius: 18px;
+          box-shadow:
+            0 18px 36px rgba(15,23,42,.10),
+            0 1px 0 rgba(255,255,255,.6) inset;
           backdrop-filter: saturate(160%) blur(14px);
           -webkit-backdrop-filter: saturate(160%) blur(14px);
+          transform: translateZ(0);
         }
 
-        /* сетка */
-        .bento{
-          display:grid; gap:14px;
-          grid-template-columns:repeat(2,minmax(0,1fr));
-          grid-template-areas:
-            "hero hero"
-            "daily expert";
+        /* Вытянутые карточки с заголовком слева сверху и описанием ниже */
+        .card {
+          display:grid; grid-template-columns: 1fr auto; align-items:center;
+          padding: 16px 16px 14px;
         }
-        .tile{
-          position:relative; border-radius:18px; padding:16px;
-          display:grid; grid-template-columns:1fr auto; align-items:center;
-          text-decoration:none; color:inherit; overflow:hidden;
-          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+        .card__text { min-width: 0; }
+        .card__title {
+          display:block; font-size: 18px; margin-bottom: 6px;
         }
-        .tile:hover{ transform: translateY(-1px); }
-        .chev{ position:absolute; right:14px; top:50%; transform:translateY(-50%); opacity:.45; font-size:20px; }
+        .card__desc {
+          display:block; opacity:.78; font-size: 14px; line-height: 1.25;
+        }
+        .card__chev { font-size: 22px; opacity:.45; padding-left:10px; }
 
-        /* HERO */
-        .tile--hero{ grid-area:hero; min-height:128px; }
-        .hero__center{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
-        .hero__label{
-          font-weight:900; letter-spacing:.06em;
-          font-size: clamp(28px, 7.4vw, 56px);
+        /* Мягкий пульс (только на верхней и нижней) */
+        .pulse { animation: pulse 2.8s ease-in-out infinite; }
+        @keyframes pulse {
+          0%,100% { box-shadow:
+            0 18px 36px rgba(15,23,42,.10),
+            0 1px 0 rgba(255,255,255,.6) inset; transform: translateY(0); }
+          50%     { box-shadow:
+            0 22px 44px rgba(15,23,42,.12),
+            0 1px 0 rgba(255,255,255,.7) inset; transform: translateY(-1px); }
+        }
+
+        /* Большая центральная стеклянная кнопка */
+        .glass-cta {
+          position: relative;
+          display: grid; grid-template-columns: 1fr auto; align-items: center;
+          justify-items: center;
+          min-height: 120px;
+          padding: 18px 18px;
+          border-radius: 22px;
+          /* границы ещё более тонкие и мягкая тень */
+          background: rgba(255,255,255,.62);
+          border: 1px solid rgba(15,23,42,.06);
+          box-shadow:
+            0 20px 40px rgba(15,23,42,.10),
+            0 1px 0 rgba(255,255,255,.55) inset;
+        }
+        .gpt { text-decoration: none; }
+        .gpt__shimmer {
+          justify-self: center;
+          font-weight: 900;
+          letter-spacing: .02em;
+          font-size: clamp(42px, 9vw, 64px);
+          line-height: 1;
           background: conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
-          background-size:200% 200%;
-          -webkit-background-clip:text; background-clip:text; color:transparent;
-          animation: shimmer 7s ease-in-out infinite;
-          text-shadow: 0 0 26px rgba(141,160,255,.22);
+          background-size: 200% 200%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          text-shadow: 0 0 28px rgba(141,160,255,.18);
+          animation: shimmer 6s ease-in-out infinite;
         }
-        .hero__glow{
-          position:absolute; inset:-30%;
-          background: radial-gradient(60% 60% at 40% 30%, rgba(140,160,255,.25), transparent 60%);
-          filter: blur(20px); z-index:-1; pointer-events:none;
+        @keyframes shimmer {
+          0%{background-position:0% 50%}
+          50%{background-position:100% 50%}
+          100%{background-position:0% 50%}
         }
-        @keyframes shimmer { 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
+        .gpt__chev { font-size: 28px; opacity:.45; }
 
-        /* Вытянутые карточки */
-        .tile--tall{ min-height:160px; align-items:flex-start; }
-        .bento :global(a:nth-of-type(2)){ grid-area: daily; }
-        .bento :global(a:nth-of-type(3)){ grid-area: expert; }
-
-        .tile__inner{ display:flex; flex-direction:column; gap:8px; }
-        .tile__title{ font-weight:900; letter-spacing:.02em; }
-        .tile__desc{ opacity:.8; line-height:1.25; font-size:14px; padding-right:28px; }
-
-        /* Пульс для эксперт-центра */
-        .tile--pulse{ animation: softPulse 2.8s ease-in-out infinite; }
-        .pulse__halo{
-          position:absolute; inset:-20%;
-          background: radial-gradient(40% 40% at 50% 50%, rgba(140,160,255,.25), transparent 60%);
-          filter: blur(18px); z-index:-1; pointer-events:none;
-          animation: halo 2.8s ease-in-out infinite;
+        /* Нижняя мини-док кнопка "Кабинет" */
+        .dock {
+          position: fixed;
+          left: 50%;
+          bottom: calc(env(safe-area-inset-bottom, 0px) + 22px);
+          transform: translateX(-50%);
+          display: inline-flex; align-items: center; gap: 10px;
+          padding: 12px 18px;
+          border-radius: 16px;
+          text-decoration: none;
+          color: #0f172a;
+          background: rgba(255,255,255,.88);
+          border: 1px solid rgba(15,23,42,.08);
+          box-shadow: 0 14px 28px rgba(15,23,42,.12), 0 1px 0 rgba(255,255,255,.6) inset;
+          backdrop-filter: blur(12px);
         }
-        @keyframes softPulse{ 0%,100%{ box-shadow: 0 12px 32px rgba(17,23,40,.10), inset 0 0 0 1px rgba(255,255,255,.55); }
-                               50%    { box-shadow: 0 16px 40px rgba(17,23,40,.14), inset 0 0 0 1px rgba(255,255,255,.62); } }
-        @keyframes halo{ 0%,100%{ opacity:.5; transform:scale(1);} 50%{ opacity:.9; transform:scale(1.04);} }
+        .dock__icon { font-size: 18px; }
 
-        @media (min-width:760px){
-          .tile--hero{ min-height:150px; }
-          .tile--tall{ min-height:180px; }
+        @media (min-width: 760px) {
+          .glass-cta { min-height: 140px; }
         }
       `}</style>
     </main>
