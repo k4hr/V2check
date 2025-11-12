@@ -1,64 +1,57 @@
 /* path: app/api/admin/export/users/route.ts */
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
-function parseTgIdFromInitData(init: string | null): string | null {
+function parseAdminId(init: string | null) {
   try {
     if (!init) return null;
     const sp = new URLSearchParams(init);
-    const raw = sp.get('user');
-    if (!raw) return null;
-    const u = JSON.parse(raw);
-    const id = u?.id ?? u?.user?.id;
-    return id ? String(id) : null;
+    const u = sp.get('user');
+    if (!u) return null;
+    const j = JSON.parse(u);
+    return j?.id ? String(j.id) : null;
   } catch { return null; }
 }
-
-function isAdmin(tgId: string | null): boolean {
-  const list = (process.env.ADMIN_TG_IDS || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+function isAdmin(tgId: string | null) {
+  const list = (process.env.ADMIN_TG_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
   return !!(tgId && list.includes(tgId));
 }
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   try {
-    // проверяем админа
-    const headerInit = req.headers.get('x-init-data');
-    // (на всякий случай поддержим ?init=... из браузера)
     const url = new URL(req.url);
-    const qsInit = url.searchParams.get('init');
-    const adminId = parseTgIdFromInitData(headerInit || qsInit);
-    if (!isAdmin(adminId)) {
+    const format = (url.searchParams.get('format') || 'txt').toLowerCase();
+    // поддерживаем и заголовок, и query-параметр
+    const init = req.headers.get('x-init-data') || url.searchParams.get('init') || null;
+    if (!isAdmin(parseAdminId(init))) {
       return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 401 });
     }
 
-    // просто берём все записи, без not:null (поле non-nullable)
-    const rows = await prisma.user.findMany({
+    // Берём только тех, у кого есть хотя бы одно событие /start (StartEvent)
+    // Это гарантирует, что выгрузка = «нажали start», а не просто «были в приложении».
+    const users = await prisma.user.findMany({
+      where: { startEvents: { some: {} } },
       select: { telegramId: true },
-      orderBy: { id: 'asc' },
-      take: 200_000,
+      orderBy: { telegramId: 'asc' },
+      take: 500_000,
     });
 
-    // на всякий — фильтруем пустые строки/мусор
-    const ids = rows
-      .map(r => r.telegramId)
-      .filter(v => typeof v === 'string' && v.trim() !== '');
+    if (format === 'json') {
+      return NextResponse.json({ ok: true, count: users.length, users });
+    }
 
-    const body = ids.join('\n');
-
+    const body = users.map(u => u.telegramId).join('\n') + (users.length ? '\n' : '');
     return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
-        'Content-Disposition': 'attachment; filename="users-all.txt"',
-        'Cache-Control': 'no-store',
+        'Content-Disposition': 'attachment; filename="users-started.txt"',
       },
     });
-  } catch (e: any) {
+  } catch (e:any) {
     return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
   }
 }
