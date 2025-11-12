@@ -107,11 +107,32 @@ export default function AdminMetricsPage() {
     }
   }
 
+  // Кнопка «Скачать за всё время (TXT)» — с заголовком x-init-data
   function downloadAllTimeTxt() {
     const initData = (window as any)?.Telegram?.WebApp?.initData || '';
-    const qs = new URLSearchParams({ format: 'txt', init: initData || '' });
-    window.open(`/api/admin/export/users?${qs.toString()}`, '_blank');
-    haptic('medium');
+    (async () => {
+      try {
+        const r = await fetch('/api/admin/export/users?format=txt', {
+          method: 'GET',
+          headers: initData ? { 'x-init-data': initData } : {},
+          cache: 'no-store',
+        });
+        if (!r.ok) {
+          const j = await r.json().catch(() => ({} as any));
+          throw new Error(j?.error || `HTTP ${r.status}`);
+        }
+        const txt = await r.text();
+        const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'users-all.txt';
+        document.body.appendChild(a); a.click();
+        URL.revokeObjectURL(url); a.remove();
+        haptic('medium');
+      } catch (e:any) {
+        alert('Не удалось скачать: ' + String(e?.message || e));
+      }
+    })();
   }
 
   return (
