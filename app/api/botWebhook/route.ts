@@ -7,14 +7,10 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // --- токены и конфигурация ---
-const BOT_TOKEN  = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
-const WH_SECRET  = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'supersecret12345').trim();
-const APP_ORIGIN = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/, '');
-
-// важно: имя бота (без @) для deeplink в Main App
-const BOT_USERNAME = process.env.BOT_USERNAME || 'LiveManagBot';
-
-// стартовый параметр mini-app (для различения экрана старта, попадёт в start_param)
+const BOT_TOKEN   = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
+const WH_SECRET   = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'supersecret12345').trim();
+const APP_ORIGIN  = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/, '');
+const BOT_USERNAME = (process.env.BOT_USERNAME || 'LiveManagBot').replace(/^@/, ''); // без @
 const STARTAPP_PARAM = 'home';
 
 type TgUpdate = {
@@ -27,14 +23,14 @@ type TgUpdate = {
   message?: {
     message_id?: number;
     from?: { id?: number; username?: string };
-    chat?: { id?: number; username?: string; type?: string };
+    chat?: { id?: number; username?: string; type?: 'private'|'group'|'supergroup'|'channel' };
     text?: string;
     successful_payment?: {
       invoice_payload: string;
       telegram_payment_charge_id?: string;
       provider_payment_charge_id?: string;
       currency?: string;
-      total_amount?: number; // Stars (минорные единицы)
+      total_amount?: number;
     };
   };
 };
@@ -74,7 +70,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
     }
 
-    // Проверяем секрет от Telegram
+    // Секрет вебхука
     const got = (req.headers.get('x-telegram-bot-api-secret-token') || '').trim();
     if (WH_SECRET && got !== WH_SECRET) {
       console.warn('[botWebhook] Forbidden: bad secret', { got });
@@ -82,14 +78,15 @@ export async function POST(req: NextRequest) {
     }
 
     const update = (await req.json().catch(() => ({}))) as TgUpdate;
-    const text = update.message?.text?.trim();
+    const text   = update.message?.text?.trim();
     const chatId = update.message?.chat?.id || update.message?.from?.id;
+    const chatType = update.message?.chat?.type || 'private';
 
     // --- /support ---
     if (text && chatId && /^\/support\b/i.test(text)) {
       await tg('sendMessage', {
         chat_id: chatId,
-        text: 'При возникновении каких либо проблем — обращайтесь @seimngr',
+        text: 'При проблемах — @seimngr',
       });
       return NextResponse.json({ ok: true, stage: 'support_sent' });
     }
@@ -98,32 +95,40 @@ export async function POST(req: NextRequest) {
     if (text && chatId && /^\/start\b/i.test(text)) {
       const welcome =
         'Привет! Я твой персональный ассистент в Telegram.\n\n' +
-        '🚀 Внутри — набор ежедневных инструментов: планы, здоровье, дом, контент, идеи и многое другое.\n\n' +
-        'Нажми кнопку ниже, чтобы открыть приложение.';
+        '🚀 Внутри — набор ежедневных инструментов: планы, здоровье, дом, контент, идеи и другое.\n\n' +
+        'Выбери способ запуска:';
 
-      // Главная кнопка: deeplink в Main App (fullscreen согласно настройке BotFather)
-      const deeplink = `https://t.me/${BOT_USERNAME}/app?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
+      // КАНОНИЧНЫЙ deeplink без /app
+      const httpsDeeplink = `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
+      // Сырый deep-link через tg:// (часто спасает iOS при глюке с https-deeplink внутри чата)
+      const tgSchemeDeeplink = `tg://resolve?domain=${encodeURIComponent(BOT_USERNAME)}&app=1&startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
+      // Fallback Web App (внизу «в чате»)
+      const webAppUrl = APP_ORIGIN ? `${APP_ORIGIN}/home?tgWebAppStartParam=${encodeURIComponent(STARTAPP_PARAM)}` : '';
 
-      // Fallback-кнопка: открыть прямо в чате (web_app). Передаём tgWebAppStartParam,
-      // чтобы на клиенте видеть значение в initDataUnsafe.start_param.
-      const reply_markup = APP_ORIGIN
-        ? {
-            inline_keyboard: [
-              [{ text: 'Открыть в полноэкранном режиме', url: deeplink }],
-              [{ text: 'Открыть здесь (в чате)', web_app: { url: `${APP_ORIGIN}/home?tgWebAppStartParam=${encodeURIComponent(STARTAPP_PARAM)}` } }],
-            ],
-          }
-        : {
-            inline_keyboard: [[{ text: 'Открыть в полноэкранном режиме', url: deeplink }]],
-          };
+      let inline_keyboard: any[] = [];
+
+      if (chatType !== 'private') {
+        // В канале/группе — ведём в ЛС с ботом для fullscreen
+        inline_keyboard = [
+          [{ text: 'Открыть в личном чате (fullscreen)', url: httpsDeeplink }],
+        ];
+        if (webAppUrl) inline_keyboard.push([{ text: 'Открыть здесь (в чате)', web_app: { url: webAppUrl } }]);
+      } else {
+        // В личке — даём оба deeplink + fallback
+        inline_keyboard = [
+          [{ text: 'Открыть в полноэкранном режиме', url: httpsDeeplink }],
+          [{ text: 'Если не открывается — этот способ', url: tgSchemeDeeplink }],
+        ];
+        if (webAppUrl) inline_keyboard.push([{ text: 'Открыть здесь (в чате)', web_app: { url: webAppUrl } }]);
+      }
 
       await tg('sendMessage', {
         chat_id: chatId,
         text: welcome,
         disable_web_page_preview: true,
-        reply_markup,
+        reply_markup: { inline_keyboard },
       });
-      return NextResponse.json({ ok: true, stage: 'start_sent' });
+      return NextResponse.json({ ok: true, stage: 'start_sent', chatType });
     }
 
     // --- Pre-checkout fast ack ---
@@ -144,7 +149,7 @@ export async function POST(req: NextRequest) {
 
       const telegramId = String(chatId);
       const chargeId = sp.telegram_payment_charge_id || null;
-      const providerPaymentChargeId = sp.provider_payment_charge_id || null;
+      const providerChargeId = sp.provider_payment_charge_id || null;
 
       // идемпотентность
       if (chargeId) {
@@ -169,6 +174,7 @@ export async function POST(req: NextRequest) {
       const days = prices[plan].days;
       const until = addDays(from, days);
 
+      // лог платежа
       await prisma.payment.create({
         data: {
           userId: u.id,
@@ -180,10 +186,11 @@ export async function POST(req: NextRequest) {
           currency: sp.currency || 'XTR',
           days,
           telegramChargeId: chargeId || undefined,
-          providerPaymentChargeId: providerPaymentChargeId || undefined,
+          providerPaymentChargeId: providerChargeId || undefined,
         },
       });
 
+      // продление подписки
       await prisma.user.update({
         where: { id: u.id },
         data: { subscriptionUntil: until, plan: tier },
