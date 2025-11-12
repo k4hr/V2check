@@ -185,7 +185,7 @@ export default function ProSelectPage() {
 
           {/* Модель ИИ */}
           <div className="cell cell--label">{S.aiModel}</div>
-          <div className="cell">ChatGPT 5 mini</div>
+          <div className="cell">ChatGPT 4o</div>
           <div className="cell cell--proplus">ChatGPT 5</div>
 
           {/* Без ограничений */}
@@ -195,7 +195,7 @@ export default function ProSelectPage() {
 
           {/* Работа с файлами */}
           <div className="cell cell--label">{S.filesWork}</div>
-          <div className="cell"><span className="chip chip--no">⛔</span></div>
+          <div className="cell"><span className="chip chip--no">✅</span></div>
           <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
 
           {/* Продвинутые сценарии */}
