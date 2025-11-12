@@ -1,3 +1,4 @@
+// prisma/schema.prisma
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -10,23 +11,23 @@ datasource db {
 
 // ============ Users ============
 model User {
-  id                String     @id @default(cuid())
-  telegramId        String     @unique
-  username          String?
-  firstName         String?
-  lastName          String?
+  id                 String     @id @default(cuid())
+  telegramId         String     @unique
+  username           String?
+  firstName          String?
+  lastName           String?
 
   // --- VK (опционально) ---
-  vkUserId          String?    @unique
-  vkScreenName      String?
-  vkPhoto           String?
+  vkUserId           String?    @unique
+  vkScreenName       String?
+  vkPhoto            String?
 
   // подписка / тариф
-  plan              String?
-  subscriptionUntil DateTime?
+  plan               String?
+  subscriptionUntil  DateTime?
 
   // автоплатёж (ЮKassa)
-  ykCustomerId       String?   // при желании — ID Customer из YooKassa
+  ykCustomerId       String?   // ID Customer в YooKassa (опционально)
   ykPaymentMethodId  String?   // сохранённый payment_method.id для рекуррентных списаний
   autopayActive      Boolean   @default(false)
   autopayTier        String?
@@ -36,20 +37,39 @@ model User {
   trialStartedAt     DateTime?
 
   // аудит
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-  lastSeenAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  lastSeenAt         DateTime?
 
-  favorites         Favorite[]
-  cases             Case[]
-  payments          Payment[]
-  usageDaily        UsageDaily[]
+  favorites          Favorite[]
+  cases              Case[]
+  payments           Payment[]
+  usageDaily         UsageDaily[]
 
-  chatThreads       ChatThread[]
-  cardPayments      CardPayment[]
+  chatThreads        ChatThread[]
+  cardPayments       CardPayment[]
+  startEvents        StartEvent[]  // логи /start
 
   @@index([ykPaymentMethodId])
   @@index([autopayActive, autopayNextAt])
+}
+
+// ============ Логи нажатий /start ============
+model StartEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  chatId     String            // как строка: "123456789" или "-100123..."
+  username   String?           // что было в момент /start (если есть)
+  payload    String?           // startparam
+  via        String?           // 'private' | 'channel' | 'group' и т.п.
+  meta       Json?             // raw update кусок при желании
+  startedAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@index([chatId])
+  @@index([startedAt])
 }
 
 // ============ Суточный учёт запросов ============
@@ -218,20 +238,21 @@ model Payment {
 
 // ============ CardPayment (ЮKassa, RUB) ============
 model CardPayment {
-  id             String   @id @default(cuid())
-  createdAt      DateTime @default(now())
-  telegramId     String?
-  tier           String
-  plan           String
-  amountKopecks  Int
-  currency       String    @default("RUB")
-  paymentId      String    @unique
+  id              String   @id @default(cuid())
+  createdAt       DateTime @default(now())
+  telegramId      String?
+  tier            String
+  plan            String
+  amountKopecks   Int
+  currency        String    @default("RUB")
+  paymentId       String    @unique
   paymentMethodId String?
-  customerId     String?
-  isTrial        Boolean   @default(false)
-  meta           Json?
+  customerId      String?
+  isTrial         Boolean   @default(false)
+  meta            Json?
 
-  user           User?     @relation(fields: [telegramId], references: [telegramId])
+  // связь по уникальному User.telegramId (валидно в Prisma)
+  user            User?     @relation(fields: [telegramId], references: [telegramId])
 
   @@index([telegramId])
   @@index([tier])
