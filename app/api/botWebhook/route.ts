@@ -7,9 +7,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 // --- токены и конфигурация ---
-const BOT_TOKEN   = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
-const WH_SECRET   = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'supersecret12345').trim();
-const APP_ORIGIN  = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/, '');
+const BOT_TOKEN    = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
+const WH_SECRET    = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'supersecret12345').trim();
+const APP_ORIGIN   = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/, '');
 const BOT_USERNAME = (process.env.BOT_USERNAME || 'LiveManagBot').replace(/^@/, ''); // без @
 const STARTAPP_PARAM = 'home';
 
@@ -80,7 +80,6 @@ export async function POST(req: NextRequest) {
     const update = (await req.json().catch(() => ({}))) as TgUpdate;
     const text   = update.message?.text?.trim();
     const chatId = update.message?.chat?.id || update.message?.from?.id;
-    const chatType = update.message?.chat?.type || 'private';
 
     // --- /support ---
     if (text && chatId && /^\/support\b/i.test(text)) {
@@ -96,39 +95,22 @@ export async function POST(req: NextRequest) {
       const welcome =
         'Привет! Я твой персональный ассистент в Telegram.\n\n' +
         '🚀 Внутри — набор ежедневных инструментов: планы, здоровье, дом, контент, идеи и другое.\n\n' +
-        'Выбери способ запуска:';
+        'Нажми кнопку, чтобы открыть приложение.';
 
-      // КАНОНИЧНЫЙ deeplink без /app
+      // Каноничный deeplink в Main App (Fullscreen выставлен в BotFather)
       const httpsDeeplink = `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
-      // Сырый deep-link через tg:// (часто спасает iOS при глюке с https-deeplink внутри чата)
-      const tgSchemeDeeplink = `tg://resolve?domain=${encodeURIComponent(BOT_USERNAME)}&app=1&startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
-      // Fallback Web App (внизу «в чате»)
-      const webAppUrl = APP_ORIGIN ? `${APP_ORIGIN}/home?tgWebAppStartParam=${encodeURIComponent(STARTAPP_PARAM)}` : '';
-
-      let inline_keyboard: any[] = [];
-
-      if (chatType !== 'private') {
-        // В канале/группе — ведём в ЛС с ботом для fullscreen
-        inline_keyboard = [
-          [{ text: 'Открыть в личном чате (fullscreen)', url: httpsDeeplink }],
-        ];
-        if (webAppUrl) inline_keyboard.push([{ text: 'Открыть здесь (в чате)', web_app: { url: webAppUrl } }]);
-      } else {
-        // В личке — даём оба deeplink + fallback
-        inline_keyboard = [
-          [{ text: 'Открыть в полноэкранном режиме', url: httpsDeeplink }],
-          [{ text: 'Если не открывается — этот способ', url: tgSchemeDeeplink }],
-        ];
-        if (webAppUrl) inline_keyboard.push([{ text: 'Открыть здесь (в чате)', web_app: { url: webAppUrl } }]);
-      }
 
       await tg('sendMessage', {
         chat_id: chatId,
         text: welcome,
         disable_web_page_preview: true,
-        reply_markup: { inline_keyboard },
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: 'Открыть', url: httpsDeeplink }],
+          ],
+        },
       });
-      return NextResponse.json({ ok: true, stage: 'start_sent', chatType });
+      return NextResponse.json({ ok: true, stage: 'start_sent' });
     }
 
     // --- Pre-checkout fast ack ---
@@ -149,7 +131,7 @@ export async function POST(req: NextRequest) {
 
       const telegramId = String(chatId);
       const chargeId = sp.telegram_payment_charge_id || null;
-      const providerChargeId = sp.provider_payment_charge_id || null;
+      const providerPaymentChargeId = sp.provider_payment_charge_id || null;
 
       // идемпотентность
       if (chargeId) {
@@ -186,7 +168,7 @@ export async function POST(req: NextRequest) {
           currency: sp.currency || 'XTR',
           days,
           telegramChargeId: chargeId || undefined,
-          providerPaymentChargeId: providerChargeId || undefined,
+          providerPaymentChargeId: providerPaymentChargeId || undefined,
         },
       });
 
