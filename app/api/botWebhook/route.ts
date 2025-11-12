@@ -12,6 +12,7 @@ const WH_SECRET    = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRE
 const APP_ORIGIN   = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/, '');
 const BOT_USERNAME = (process.env.BOT_USERNAME || 'LiveManagBot').replace(/^@/, ''); // без @
 const STARTAPP_PARAM = 'home';
+const GAME_STARTAPP_PARAM = 'game';
 
 type TgUpdate = {
   update_id?: number;
@@ -83,11 +84,42 @@ export async function POST(req: NextRequest) {
 
     // --- /support ---
     if (text && chatId && /^\/support\b/i.test(text)) {
+      await tg('sendMessage', { chat_id: chatId, text: 'При проблемах — @seimngr' });
+      return NextResponse.json({ ok: true, stage: 'support_sent' });
+    }
+
+    // --- /10gpt --- розыгрыш
+    if (text && chatId && /^\/10gpt\b/i.test(text)) {
+      const msg =
+        '🎁 *Розыгрыш подписок CHATGPT 5*\n\n' +
+        'Разыгрываем *80 призов* среди пользователей приложения:\n' +
+        '• 10 годовых, 20 полугодовых и 50 месячных подписок.\n\n' +
+        '*Сроки.* До *01.01.2026* (включительно). Покупки в этот период участвуют автоматически.\n\n' +
+        '*Как участвовать*\n' +
+        '1) Оформите любую платную подписку в приложении.\n' +
+        '2) После успешной оплаты вы автоматически попадаете в таблицу участников.\n' +
+        '3) Каждая покупка даёт несколько записей — больше записей, выше шанс.\n\n' +
+        '*Сколько записей даёт тариф Pro*\n' +
+        'Неделя — 1 · Месяц — 2 · Полгода — 5 · Год — 10\n\n' +
+        '*Тариф Pro+* (как у Pro, но +2 к каждой позиции)\n' +
+        'Неделя — 3 · Месяц — 4 · Полгода — 7 · Год — 12\n\n' +
+        '*Прозрачность*\n' +
+        '• Фиксируем: ID пользователя, тариф/срок, дату/время, ID платежа, число записей (покупки суммируются).\n' +
+        '• Победителей выбираем случайно и публикуем список в приложении.\n' +
+        '• При возврате/отмене записи удаляются.\n\n' +
+        '_Участвуют только успешные оплаты. Один человек — один аккаунт. Призы не обмениваются на деньги._';
+
+      const deeplink = `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(GAME_STARTAPP_PARAM)}`;
+
       await tg('sendMessage', {
         chat_id: chatId,
-        text: 'При проблемах — @seimngr',
+        text: msg,
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true,
+        reply_markup: { inline_keyboard: [[{ text: 'Участвовать', url: deeplink }]] },
       });
-      return NextResponse.json({ ok: true, stage: 'support_sent' });
+
+      return NextResponse.json({ ok: true, stage: 'giveaway_sent' });
     }
 
     // --- /start ---
@@ -97,18 +129,13 @@ export async function POST(req: NextRequest) {
         '🚀 Внутри — набор ежедневных инструментов: планы, здоровье, дом, контент, идеи и другое.\n\n' +
         'Нажми кнопку, чтобы открыть приложение.';
 
-      // Каноничный deeplink в Main App (Fullscreen выставлен в BotFather)
       const httpsDeeplink = `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
 
       await tg('sendMessage', {
         chat_id: chatId,
         text: welcome,
         disable_web_page_preview: true,
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: 'Открыть', url: httpsDeeplink }],
-          ],
-        },
+        reply_markup: { inline_keyboard: [[{ text: 'Открыть', url: httpsDeeplink }]] },
       });
       return NextResponse.json({ ok: true, stage: 'start_sent' });
     }
@@ -182,7 +209,7 @@ export async function POST(req: NextRequest) {
         chat_id: chatId,
         text:
           `✅ Подписка активна до ${until.toISOString().slice(0, 10)}.\n` +
-          `Тариф: ${tier === 'PROPLUS' ? 'Pro+' : 'Pro'} — ${prices[plan].label}. Спасибо!`,
+          `Тариф: ${tier === 'PROPLUS' ? 'Pro+' : 'Pro'} — ${getPrices(tier)[plan].label}. Спасибо!`,
       });
 
       return NextResponse.json({ ok: true, stage: 'subscription_extended', tier, plan, until });
