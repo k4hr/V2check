@@ -23,7 +23,8 @@ type TgUpdate = {
   };
   message?: {
     message_id?: number;
-    from?: { id?: number; username?: string };
+    date?: number;
+    from?: { id?: number; username?: string; first_name?: string; last_name?: string };
     chat?: { id?: number; username?: string; type?: 'private'|'group'|'supergroup'|'channel' };
     text?: string;
     successful_payment?: {
@@ -36,13 +37,20 @@ type TgUpdate = {
   };
 };
 
+// --- мини-обёртка для Telegram API ---
 async function tg(method: string, payload: any) {
-  const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  return res.json();
+  if (!BOT_TOKEN) return null;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (e) {
+    console.error('[botWebhook] send error', method, e);
+    return null;
+  }
 }
 
 // subs2:TIER:PLAN  |  subs:PLAN (legacy → PRO)
@@ -68,53 +76,80 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     if (!BOT_TOKEN) {
-      return NextResponse.json({ ok: false, error: 'BOT_TOKEN_MISSING' }, { status: 500 });
+      // Возвращаем 200, чтобы TG не спамил ретраями — но в логи пишем ошибку
+      console.error('[botWebhook] BOT_TOKEN missing');
+      return NextResponse.json({ ok: true, error: 'BOT_TOKEN_MISSING' });
     }
 
     // Секрет вебхука
     const got = (req.headers.get('x-telegram-bot-api-secret-token') || '').trim();
     if (WH_SECRET && got !== WH_SECRET) {
+      // отвечаем 200 ok, чтобы не было ретраев
       console.warn('[botWebhook] Forbidden: bad secret', { got });
-      return NextResponse.json({ ok: false, error: 'WEBHOOK_FORBIDDEN' }, { status: 403 });
+      return NextResponse.json({ ok: true, skip: 'WEBHOOK_FORBIDDEN' });
     }
 
     const update = (await req.json().catch(() => ({}))) as TgUpdate;
-    const text   = update.message?.text?.trim();
-    const chatId = update.message?.chat?.id || update.message?.from?.id;
+    const msg    = update.message;
+    const text   = msg?.text?.trim() || '';
+    const chatId = msg?.chat?.id || msg?.from?.id;
+
+    // быстрые ветки, не требующие дальнейшей обработки
+    if (!msg || !chatId || msg.chat?.type !== 'private') {
+      return NextResponse.json({ ok: true, skip: 'no_private_message' });
+    }
+
+    // ---- апсёрт пользователя (для любой приватной активности) ----
+    const tgId = String(chatId);
+    const username = msg.from?.username || msg.chat?.username || null;
+    const firstName = msg.from?.first_name || null;
+    const lastName  = msg.from?.last_name || null;
+
+    const user = await prisma.user.upsert({
+      where: { telegramId: tgId },
+      create: {
+        telegramId: tgId,
+        username,
+        firstName,
+        lastName,
+        lastSeenAt: new Date(),
+      },
+      update: {
+        username: username || undefined,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+        lastSeenAt: new Date(),
+      },
+      select: { id: true, telegramId: true, username: true },
+    });
 
     // --- /support ---
-    if (text && chatId && /^\/support\b/i.test(text)) {
-      await tg('sendMessage', { chat_id: chatId, text: 'При проблемах — @seimngr' });
+    if (/^\/support\b/i.test(text)) {
+      await tg('sendMessage', {
+        chat_id: chatId,
+        text: '💬 Поддержка: @LiveManagerSupport',
+      });
       return NextResponse.json({ ok: true, stage: 'support_sent' });
     }
 
     // --- /10gpt --- розыгрыш
-    if (text && chatId && /^\/10gpt\b/i.test(text)) {
-      const msg =
-        '🎁 *Розыгрыш подписок CHATGPT 5*\n\n' +
-        'Разыгрываем *80 призов* среди пользователей приложения:\n' +
+    if (/^\/10gpt\b/i.test(text)) {
+      const msgBody =
+        '🎁 <b>Розыгрыш подписок CHATGPT 5</b>\n\n' +
+        'Разыгрываем 80 призов среди пользователей приложения:\n' +
         '• 10 годовых, 20 полугодовых и 50 месячных подписок.\n\n' +
-        '*Сроки.* До *01.01.2026* (включительно). Покупки в этот период участвуют автоматически.\n\n' +
-        '*Как участвовать*\n' +
+        '<b>Сроки.</b> До <b>01.01.2026</b> (включительно). Покупки в этот период участвуют автоматически.\n\n' +
+        '<b>Как участвовать</b>\n' +
         '1) Оформите любую платную подписку в приложении.\n' +
-        '2) После успешной оплаты вы автоматически попадаете в таблицу участников.\n' +
-        '3) Каждая покупка даёт несколько записей — больше записей, выше шанс.\n\n' +
-        '*Сколько записей даёт тариф Pro*\n' +
-        'Неделя — 1 · Месяц — 2 · Полгода — 5 · Год — 10\n\n' +
-        '*Тариф Pro+* (как у Pro, но +2 к каждой позиции)\n' +
-        'Неделя — 3 · Месяц — 4 · Полгода — 7 · Год — 12\n\n' +
-        '*Прозрачность*\n' +
-        '• Фиксируем: ID пользователя, тариф/срок, дату/время, ID платежа, число записей (покупки суммируются).\n' +
-        '• Победителей выбираем случайно и публикуем список в приложении.\n' +
-        '• При возврате/отмене записи удаляются.\n\n' +
-        '_Участвуют только успешные оплаты. Один человек — один аккаунт. Призы не обмениваются на деньги._';
+        '2) Каждая покупка = несколько записей (больше записей — выше шанс).\n\n' +
+        '<i>Прозрачность: фиксируем ID, тариф/срок, дату, ID платежа и число записей. Возвраты — записи удаляются.</i>';
 
       const deeplink = `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(GAME_STARTAPP_PARAM)}`;
 
       await tg('sendMessage', {
         chat_id: chatId,
-        text: msg,
-        parse_mode: 'Markdown',
+        text: msgBody,
+        parse_mode: 'HTML',
         disable_web_page_preview: true,
         reply_markup: { inline_keyboard: [[{ text: 'Участвовать', url: deeplink }]] },
       });
@@ -123,7 +158,20 @@ export async function POST(req: NextRequest) {
     }
 
     // --- /start ---
-    if (text && chatId && /^\/start\b/i.test(text)) {
+    if (/^\/start\b/i.test(text)) {
+      // логируем факт старта
+      const payload = text.slice(6).trim() || null;
+      await prisma.startEvent.create({
+        data: {
+          userId: user.id,
+          chatId: tgId,
+          username: user.username || null,
+          payload,
+          via: 'private',
+          // meta: update, // если захочешь хранить сырой апдейт
+        },
+      });
+
       const welcome =
         'Привет! Я твой персональный ассистент в Telegram.\n\n' +
         '🚀 Внутри — набор ежедневных инструментов: планы, здоровье, дом, контент, идеи и другое.\n\n' +
@@ -137,7 +185,22 @@ export async function POST(req: NextRequest) {
         disable_web_page_preview: true,
         reply_markup: { inline_keyboard: [[{ text: 'Открыть', url: httpsDeeplink }]] },
       });
+
       return NextResponse.json({ ok: true, stage: 'start_sent' });
+    }
+
+    // --- /help (и неизвестные команды) ---
+    if (/^\/help\b/i.test(text) || text.startsWith('/')) {
+      await tg('sendMessage', {
+        chat_id: chatId,
+        text:
+          '📖 Доступные команды:\n' +
+          '/start — активация\n' +
+          '/10gpt — розыгрыш\n' +
+          '/support — поддержка\n' +
+          '/help — помощь',
+      });
+      return NextResponse.json({ ok: true, stage: 'help_sent' });
     }
 
     // --- Pre-checkout fast ack ---
@@ -148,13 +211,12 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Успешная оплата / продление подписки ---
-    const sp = update.message?.successful_payment;
-    if (sp && chatId) {
+    const sp = msg.successful_payment;
+    if (sp) {
       const parsed = parsePayload(sp.invoice_payload);
-      if (!parsed) return NextResponse.json({ ok: false, error: 'BAD_PAYLOAD' }, { status: 400 });
+      if (!parsed) return NextResponse.json({ ok: true, error: 'BAD_PAYLOAD' });
 
       const { tier, plan } = parsed;
-      const username = update.message?.from?.username || update.message?.chat?.username || null;
 
       const telegramId = String(chatId);
       const chargeId = sp.telegram_payment_charge_id || null;
@@ -169,7 +231,7 @@ export async function POST(req: NextRequest) {
         if (exists) return NextResponse.json({ ok: true, stage: 'already_processed' });
       }
 
-      // upsert пользователя
+      // upsert пользователя (мог быть без планов)
       const u = await prisma.user.upsert({
         where: { telegramId },
         create: { telegramId, username: username || undefined, plan: tier },
@@ -215,9 +277,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, stage: 'subscription_extended', tier, plan, until });
     }
 
+    // если это обычное сообщение — можно молча игнорировать
     return NextResponse.json({ ok: true, noop: true });
   } catch (e: any) {
+    // Возвращаем 200, чтобы Telegram не ретраил, и логируем
     console.error('[botWebhook] Error:', e);
-    return NextResponse.json({ ok: false, error: e?.message || 'SERVER_ERROR' }, { status: 500 });
+    return NextResponse.json({ ok: true, error: e?.message || 'SERVER_ERROR' });
   }
 }
