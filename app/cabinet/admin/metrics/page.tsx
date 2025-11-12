@@ -107,7 +107,7 @@ export default function AdminMetricsPage() {
     }
   }
 
-  // Кнопка «Скачать за всё время (TXT)» — с заголовком x-init-data
+  // «Скачать за всё время (TXT)» — только те, кто нажал /start (через StartEvent)
   function downloadAllTimeTxt() {
     const initData = (window as any)?.Telegram?.WebApp?.initData || '';
     (async () => {
@@ -125,7 +125,7 @@ export default function AdminMetricsPage() {
         const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = 'users-all.txt';
+        a.href = url; a.download = 'users-started-all.txt';
         document.body.appendChild(a); a.click();
         URL.revokeObjectURL(url); a.remove();
         haptic('medium');
