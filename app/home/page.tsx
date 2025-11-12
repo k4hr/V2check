@@ -6,70 +6,52 @@ import type { Route } from 'next';
 import { useEffect, useMemo } from 'react';
 import { STRINGS, readLocale, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 
-// настройка deeplink для «догоняния» в fullscreen
-const BOT_USERNAME = 'LiveManagBot';
-const STARTAPP    = 'home';
+const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'LiveManagBot';
+const STARTAPP_PARAM = 'home';
 
 export default function HomePage() {
+  // cookies и локаль
   useEffect(() => { try { ensureLocaleCookie({ sameSite: 'none', secure: true } as any); } catch {} }, []);
   const locale = useMemo<Locale>(() => readLocale(), []);
   const L = STRINGS[locale] ?? STRINGS.ru;
 
+  // оформление и цвета из Telegram
   useEffect(() => {
     const tg: any = (window as any)?.Telegram?.WebApp;
-
-    // утилита: считаем, что полноэкран, если Telegram сообщил expand и высота почти равна окну
-    const isFullscreen = () => {
-      try {
-        const vh = Number(tg?.viewportHeight || 0);
-        const wh = Number(window.innerHeight || 0);
-        return Boolean(tg?.isExpanded) && vh > 0 && wh > 0 && vh / wh > 0.94;
-      } catch { return false; }
-    };
-
     try {
-      tg?.ready?.();
-      tg?.expand?.(); // сначала просим максимум доступной высоты
+      tg?.ready?.(); tg?.expand?.();
       tg?.setHeaderColor?.('secondary_bg_color');
       tg?.setBackgroundColor?.('#ffffff');
-
       const accent = tg?.themeParams?.button_color || '#4c82ff';
       const text   = tg?.themeParams?.text_color   || '#0f172a';
       document.documentElement.style.setProperty('--accent', accent);
       document.documentElement.style.setProperty('--text',   text);
-
-      // если НЕ fullscreen — один раз перезаходим через deeplink в режим fullscreen
-      const bounced = sessionStorage.getItem('tg-fs-bounced') === '1';
-      const openDeeplink = () => {
-        const url = `https://t.me/${BOT_USERNAME}/app?startapp=${STARTAPP}`;
-        if (typeof tg?.openTelegramLink === 'function') tg.openTelegramLink(url);
-        else window.location.href = url; // запасной вариант
-      };
-
-      // подождём один тик, чтобы Telegram успел применить expand() и отдать корректные размеры
-      setTimeout(() => {
-        if (!isFullscreen() && !bounced) {
-          sessionStorage.setItem('tg-fs-bounced', '1');
-          openDeeplink();
-        }
-      }, 120);
-
-      // если высота изменилась позже (iOS), ещё раз проверим и, если нужно, дожмём
-      tg?.onEvent?.('viewportChanged', () => {
-        const bouncedLater = sessionStorage.getItem('tg-fs-bounced') === '1';
-        if (!isFullscreen() && !bouncedLater) {
-          sessionStorage.setItem('tg-fs-bounced', '1');
-          openDeeplink();
-        }
-      });
     } catch {}
-
     try { document.documentElement.lang = locale; } catch {}
     try {
       const ok = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
       document.documentElement.classList.toggle('no-frost', !ok);
     } catch {}
   }, [locale]);
+
+  // ⚡️ Форсим fullscreen: если открылись не как Main App — один раз уходим в deeplink
+  useEffect(() => {
+    try {
+      const tg: any = (window as any)?.Telegram?.WebApp;
+      const params = new URLSearchParams(location.search);
+      const fromDeeplink = Boolean(tg?.initDataUnsafe?.start_param || params.get('tgWebAppStartParam'));
+      const alreadyTried = sessionStorage.getItem('__fs_fix_tried__');
+
+      // В чат-режиме у WebApp нет start_param. Если ещё не пытались — прыгаем в Main App.
+      if (!fromDeeplink && !alreadyTried && tg) {
+        sessionStorage.setItem('__fs_fix_tried__', '1');
+        const link = `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
+        // предпочтительно через Telegram API — так навигация не блокируется внутри того же чата
+        if (typeof tg.openTelegramLink === 'function') tg.openTelegramLink(link);
+        else window.location.href = link;
+      }
+    } catch {}
+  }, []);
 
   // cache-buster
   const suffix = useMemo(() => {
@@ -110,13 +92,13 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        {/* CHATGPT 5 — супер-прозрачная стеклянная капсула */}
+        {/* CHATGPT 5 — своя стеклянная капсула (максимально прозрачная) */}
         <Link href={href('/home/ChatGPT')} className="glass-cta gpt" aria-label="CHATGPT 5">
           <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
           <span className="gpt__chev">›</span>
         </Link>
 
-        {/* Эксперт центр — мягкое золото */}
+        {/* Эксперт центр — нежное золото */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold raise" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -152,7 +134,7 @@ export default function HomePage() {
           padding:16px 14px 0;
         }
 
-        /* фон */
+        /* Фон (ускорено) */
         .bg{ position:fixed; inset:0; z-index:0; overflow:hidden;
              background: radial-gradient(120% 100% at 50% 0%, #dff5f1, #eaf3ff 70%); }
         .bg__conic{
@@ -160,23 +142,27 @@ export default function HomePage() {
           width:220vmax; height:220vmax; transform:translate(-50%,-50%) rotate(0deg);
           background: conic-gradient(from 0deg, rgba(42,214,205,.30), rgba(146,220,255,.28), rgba(255,210,160,.26), rgba(42,214,205,.30));
           filter: blur(60px) saturate(140%); will-change: transform;
-          animation: spinBg 12.6s linear infinite; opacity:.55;
+          animation: spinBg 12.6s linear infinite;
+          opacity:.55;
         }
         .bg__blobs{
           position:absolute; inset:-12%;
           background:
             radial-gradient(90vmax 60vmax at 18% 22%, rgba(42,214,205,.22), transparent 60%),
             radial-gradient(90vmax 60vmax at 82% 86%, rgba(92,170,255,.20), transparent 60%);
-          will-change: transform; animation: floatBg 8.4s ease-in-out infinite alternate; opacity:.85;
+          will-change: transform; animation: floatBg 8.4s ease-in-out infinite alternate;
+          opacity:.85;
         }
         @keyframes spinBg { to { transform: translate(-50%,-50%) rotate(360deg); } }
-        @keyframes floatBg { 0% { transform: translate3d(0,0,0) scale(1);} 100%{ transform: translate3d(-3%,2%,0) scale(1.02);} }
+        @keyframes floatBg { 0% { transform: translate3d(0,0,0) scale(1); } 100%{ transform: translate3d(-3%,2%,0) scale(1.02); } }
 
         .hdr{ text-align:center; margin-bottom:10px; position:relative; z-index:2; }
         .title{
           margin:6px 0 4px; font-weight:800; letter-spacing:-.02em;
-          font-size:32px; line-height:1.1; color:var(--text,#0f172a);
-          -webkit-text-fill-color: currentColor !important; background:none !important;
+          font-size:32px; line-height:1.1;
+          color:var(--text,#0f172a);
+          -webkit-text-fill-color: currentColor !important;
+          background:none !important;
         }
         .sub{ opacity:.75; margin:0; }
 
@@ -187,7 +173,6 @@ export default function HomePage() {
         }
         .stack > *{ width:min(92vw, 640px); }
 
-        /* карточки */
         .card{ position:relative; padding:16px; border-radius:18px; }
         .card__text{ min-width:0; }
         .card__title{ display:block; font-size:18px; margin-bottom:6px; }
@@ -201,8 +186,10 @@ export default function HomePage() {
           opacity:0; animation: halo 2.4s ease-in-out infinite;
         }
         @keyframes cardPulse{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
-        @keyframes halo{ 0%,100%{opacity:0; box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent)}
-                         50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)} }
+        @keyframes halo{
+          0%,100%{opacity:0; box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent)}
+          50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
+        }
 
         /* CHATGPT 5 — предельно прозрачное стекло */
         .glass-cta{
@@ -234,10 +221,12 @@ export default function HomePage() {
         }
         .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
         @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
-        @keyframes gptPulse{ 0%,100%{ opacity:.92; filter:brightness(1); text-shadow:0 0 24px rgba(141,160,255,.18);}
-                             50%{ opacity:1; filter:brightness(1.18); text-shadow:0 0 46px rgba(141,160,255,.36);} }
+        @keyframes gptPulse{
+          0%,100%{ opacity:.92; filter:brightness(1); text-shadow:0 0 24px rgba(141,160,255,.18); }
+          50%    { opacity:1;    filter:brightness(1.18); text-shadow:0 0 46px rgba(141,160,255,.36); }
+        }
 
-        /* Эксперт центр — золото */
+        /* Эксперт центр — мягкое золото */
         .raise{ z-index:2; isolation:isolate; }
         :global(.lm-page) .card.gold{
           background:
@@ -253,16 +242,22 @@ export default function HomePage() {
             linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.08) 50%, transparent 80%) !important;
         }
 
-        /* нижняя кнопка */
+        /* Узкая кнопка снизу по центру */
         .dock{
-          position:fixed; left:50%; right:auto; transform: translateX(-50%);
+          position:fixed;
+          left:50%; right:auto;
+          transform: translateX(-50%);
           bottom: calc(env(safe-area-inset-bottom,0px) + 8px);
-          width: min(560px, 50vw); padding: 14px 18px;
-          text-align:center; font-weight:800; color:#0f172a; z-index:2;
+          width: min(560px, 50vw);
+          padding: 14px 18px;
+          text-align:center; font-weight:800;
+          color:#0f172a; z-index:2;
           background: rgba(255,255,255,.92);
-          border:1px solid rgba(15,23,42,.16); border-radius: 14px;
+          border:1px solid rgba(15,23,42,.16);
+          border-radius: 14px;
           box-shadow:0 10px 28px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.68);
-          -webkit-backdrop-filter: blur(12px) saturate(160%); backdrop-filter: blur(12px) saturate(160%);
+          -webkit-backdrop-filter: blur(12px) saturate(160%);
+                  backdrop-filter: blur(12px) saturate(160%);
         }
       `}</style>
     </main>
