@@ -6,20 +6,78 @@ import Link from 'next/link';
 import { STARS_TO_TON } from '@/lib/ton';
 import type { Plan, Tier } from '@/lib/pricing';
 
+/* ===== ТЕМА ИЗ TELEGRAM ===== */
+function hexToRgb(hex?: string){ if(!hex) return [0,0,0]; const h=hex.replace('#',''); return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)) as any; }
+function isDark(hex?:string){ const [r,g,b]=hexToRgb(hex); const L=(0.299*r+0.587*g+0.114*b)/255; return L<0.5; }
+function applyTgTheme(){
+  const tg:any = (window as any)?.Telegram?.WebApp;
+  const p = tg?.themeParams || {};
+  const dark = p.bg_color ? isDark(p.bg_color) : matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const vars: Record<string,string> = {
+    '--bg':    p.bg_color            || (dark ? '#0f121b' : '#f7f9ff'),
+    '--fg':    p.text_color          || (dark ? '#eef2ff' : '#0f172a'),
+    '--panel': p.secondary_bg_color  || (dark ? '#161c2b' : '#ffffff'),
+    '--panel-weak':                  dark ? '#121826' : '#f2f6ff',
+    '--border':                      dark ? 'rgba(255,255,255,.12)' : 'rgba(15,23,42,.14)',
+    '--accent': p.button_color       || '#4c82ff',
+    '--danger': '#ff5c7a',
+  };
+  Object.entries(vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+  try { tg?.setHeaderColor?.('secondary_bg_color'); tg?.setBackgroundColor?.(vars['--bg']); } catch {}
+}
+
+function ThemeCSS(){
+  return (
+    <style jsx global>{`
+      :root{
+        --bg:#f7f9ff; --fg:#0f172a; --panel:#ffffff; --panel-weak:#f2f6ff;
+        --border:rgba(15,23,42,.14); --accent:#4c82ff; --danger:#ff5c7a;
+      }
+      body{ background:var(--bg); color:var(--fg); }
+      .list-btn{
+        display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:12px 14px; border-radius:12px; font-weight:800;
+        background:var(--panel); color:var(--fg); border:1px solid var(--border);
+      }
+      .btn-accent{
+        background: color-mix(in oklab, var(--accent) 18%, var(--panel));
+        border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--border));
+      }
+      .section{
+        padding:14px; border-radius:14px; border:1px solid var(--border);
+        background: var(--panel);
+      }
+      .section-soft{
+        padding:14px; border-radius:14px;
+        border:1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 86%, transparent);
+      }
+      input, select, textarea{
+        color:var(--fg); background:var(--panel);
+        border:1px solid var(--border); border-radius:10px; height:38px; padding:0 10px;
+      }
+      .muted{ opacity:.85 }
+      .card{
+        border:1px solid var(--border); border-radius:14px; padding:12px;
+        background:var(--panel); display:grid; gap:6;
+      }
+    `}</style>
+  );
+}
+/* ===== конец темы ===== */
+
 type Row = {
   id: string;
   createdAt: string;
   telegramId: string | null;
   tier: Tier;
   plan: Plan;
-
-  // либо «звёзды», либо «рубли»
-  amountStars?: number;        // для stars
-  amountKopecks?: number;      // для RUB
+  amountStars?: number;
+  amountKopecks?: number;
   currency: string | null;
-
   days: number | null;
-  providerPaymentChargeId: string | null; // invoiceId / paymentId
+  providerPaymentChargeId: string | null;
   payload: string | null;
   source: 'stars' | 'card';
 };
@@ -52,8 +110,8 @@ export default function AdminPaymentsPage() {
   const [q, setQ] = useState('');
   const [tier, setTier] = useState<'' | Tier>('');
   const [plan, setPlan] = useState<'' | Plan>('');
-  const [currency, setCurrency] = useState('');  // оставим для совместимости
-  const [source, setSource] = useState<'all'|'stars'|'card'>('all'); // НОВОЕ
+  const [currency, setCurrency] = useState('');
+  const [source, setSource] = useState<'all'|'stars'|'card'>('all');
 
   const [from, setFrom] = useState<string>(() => { const d=new Date(); d.setDate(d.getDate()-30); return d.toISOString().slice(0,10); });
   const [to, setTo] = useState<string>(() => new Date().toISOString().slice(0,10));
@@ -96,7 +154,16 @@ export default function AdminPaymentsPage() {
     } finally { setLoading(false); }
   }
 
-  useEffect(()=>{ try{ (window as any)?.Telegram?.WebApp?.ready?.(); }catch{} load(1); /* eslint-disable-next-line */ }, []);
+  useEffect(()=>{
+    const tg:any = (window as any)?.Telegram?.WebApp;
+    try{ tg?.ready?.(); }catch{}
+    applyTgTheme();
+    const onTheme = () => applyTgTheme();
+    try{ tg?.onEvent?.('themeChanged', onTheme); }catch{}
+    load(1);
+    return ()=>{ try{ tg?.offEvent?.('themeChanged', onTheme); }catch{} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const pages = Math.max(1, Math.ceil(total / limit));
   const approxTon = (totalStars * STARS_TO_TON).toFixed(2);
@@ -113,41 +180,34 @@ export default function AdminPaymentsPage() {
       </div>
 
       {/* фильтры */}
-      <div style={{ display:'grid', gap:10, padding:14, border:'1px solid var(--border)', borderRadius:14, background:'#111722' }}>
+      <div className="section">
         <div style={{ display:'grid', gap:10, gridTemplateColumns:'1fr 1fr', alignItems:'center' }}>
-          <input placeholder="Поиск: tg id / payload / invoice id / payment id" value={q} onChange={e=>setQ(e.target.value)}
-            style={{ height:38, borderRadius:10, border:'1px solid #2b3552', background:'#121722', padding:'0 10px' }} />
+          <input placeholder="Поиск: tg id / payload / invoice id / payment id" value={q} onChange={e=>setQ(e.target.value)} />
           <div style={{ display:'flex', gap:8 }}>
-            <input type="date" value={from} onChange={e=>setFrom(e.target.value)}
-              style={{ height:38, borderRadius:10, border:'1px solid #2b3552', background:'#121722', padding:'0 10px' }} />
-            <input type="date" value={to} onChange={e=>setTo(e.target.value)}
-              style={{ height:38, borderRadius:10, border:'1px solid #2b3552', background:'#121722', padding:'0 10px' }} />
+            <input type="date" value={from} onChange={e=>setFrom(e.target.value)} />
+            <input type="date" value={to} onChange={e=>setTo(e.target.value)} />
           </div>
         </div>
 
-        <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(4, 1fr)' }}>
-          <select value={tier} onChange={e=>setTier(e.target.value as any)}
-            style={{ height:38, borderRadius:10, border:'1px solid #2b3552', background:'#121722', padding:'0 10px' }}>
+        <div style={{ display:'grid', gap:8, gridTemplateColumns:'repeat(4, 1fr)', marginTop:10 }}>
+          <select value={tier} onChange={e=>setTier(e.target.value as any)}>
             <option value="">Тариф: все</option>
             <option value="PRO">Pro</option>
             <option value="PROPLUS">Pro+</option>
           </select>
-          <select value={plan} onChange={e=>setPlan(e.target.value as any)}
-            style={{ height:38, borderRadius:10, border:'1px solid #2b3552', background:'#121722', padding:'0 10px' }}>
+          <select value={plan} onChange={e=>setPlan(e.target.value as any)}>
             <option value="">План: все</option>
             <option value="WEEK">Неделя</option>
             <option value="MONTH">Месяц</option>
             <option value="HALF_YEAR">Полгода</option>
             <option value="YEAR">Год</option>
           </select>
-          <select value={source} onChange={e=>setSource(e.target.value as any)}
-            style={{ height:38, borderRadius:10, border:'1px solid #2b3552', background:'#121722', padding:'0 10px' }}>
+          <select value={source} onChange={e=>setSource(e.target.value as any)}>
             <option value="all">Источник: все</option>
             <option value="stars">Только Stars</option>
             <option value="card">Только RUB</option>
           </select>
-          <select value={currency} onChange={e=>setCurrency(e.target.value)}
-            style={{ height:38, borderRadius:10, border:'1px solid #2b3552', background:'#121722', padding:'0 10px' }}>
+          <select value={currency} onChange={e=>setCurrency(e.target.value)}>
             <option value="">Валюта (для Stars)</option>
             <option value="TON">TON</option><option value="USDT">USDT</option>
             <option value="USDC">USDC</option><option value="BTC">BTC</option><option value="ETH">ETH</option>
@@ -155,9 +215,8 @@ export default function AdminPaymentsPage() {
           </select>
         </div>
 
-        <div style={{ display:'flex', gap:8 }}>
-          <button type="button" className="list-btn" onClick={()=>{ haptic('light'); load(1); }}
-            style={{ padding:'10px 14px', borderRadius:12 }}>
+        <div style={{ display:'flex', gap:8, marginTop:10 }}>
+          <button type="button" className="list-btn btn-accent" onClick={()=>{ haptic('light'); load(1); }}>
             Применить фильтры
           </button>
           <button type="button" className="list-btn" onClick={()=>{
@@ -165,22 +224,21 @@ export default function AdminPaymentsPage() {
             const d=new Date(); const f=new Date(); f.setDate(f.getDate()-30);
             setFrom(f.toISOString().slice(0,10)); setTo(d.toISOString().slice(0,10));
             haptic('light'); setTimeout(()=>load(1),0);
-          }} style={{ padding:'10px 14px', borderRadius:12, background:'#171a21', border:'1px solid var(--border)' }}>
+          }}>
             Сбросить
           </button>
         </div>
       </div>
 
       {/* сводка */}
-      <div style={{ padding:14, border:'1px solid rgba(120,170,255,.25)', borderRadius:14,
-        background:'radial-gradient(140% 140% at 10% 0%, rgba(120,170,255,.14), rgba(255,255,255,.03))' }}>
+      <div className="section-soft">
         <div style={{ display:'flex', gap:14, flexWrap:'wrap', alignItems:'baseline' }}>
           <b>Всего платежей:</b> <span>{total}</span>
           <b>Сумма (звёзды):</b> <span>{totalStars}</span>
           <b>~ в TON:</b> <span>{approxTon}</span>
         </div>
         {!!byCurrency.length && (
-          <div style={{ marginTop:8, opacity:.9 }}>
+          <div style={{ marginTop:8 }} className="muted">
             По валютам:&nbsp;
             {byCurrency.map((x,i)=>(
               <span key={x.currency}>{i>0 && ', '}{x.currency}: {x.stars}</span>
@@ -189,23 +247,21 @@ export default function AdminPaymentsPage() {
         )}
       </div>
 
-      {err && <p style={{ color:'#ff5c7a' }}>Ошибка: {err}</p>}
-      {loading && <p style={{ opacity:.7 }}>Загружаем…</p>}
+      {err && <p style={{ color:'var(--danger)' }}>Ошибка: {err}</p>}
+      {loading && <p className="muted">Загружаем…</p>}
 
       {/* список */}
       <div style={{ display:'grid', gap:10 }}>
         {rows.map(row => {
           const isCard = row.source === 'card';
           return (
-            <div key={row.id} style={{
-              border:'1px solid #333', borderRadius:14, padding:12, background:'#121621', display:'grid', gap:6
-            }}>
+            <div key={row.id} className="card">
               <div style={{ display:'flex', justifyContent:'space-between', gap:10 }}>
                 <b>{row.tier === 'PROPLUS' ? 'Pro+' : 'Pro'} · {labelPlan(row.plan)} {isCard ? '· RUB' : ''}</b>
-                <span style={{ opacity:.8 }}>{fmtDateTime(row.createdAt)}</span>
+                <span className="muted">{fmtDateTime(row.createdAt)}</span>
               </div>
 
-              <div style={{ display:'flex', gap:12, flexWrap:'wrap', opacity:.95 }}>
+              <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
                 <span>👤: <b>{row.telegramId || '—'}</b></span>
                 {isCard
                   ? <span>Сумма: <b>{rub(row.amountKopecks)}</b></span>
@@ -227,21 +283,21 @@ export default function AdminPaymentsPage() {
             </div>
           );
         })}
-        {!loading && rows.length === 0 && <p style={{ opacity:.7 }}>Нет данных.</p>}
+        {!loading && rows.length === 0 && <p className="muted">Нет данных.</p>}
       </div>
 
       {/* пагинация */}
       {pages > 1 && (
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop:4 }}>
           <button className="list-btn" disabled={page<=1}
-            onClick={()=>{ if(page>1){ haptic('light'); load(page-1); } }}
-            style={{ padding:'10px 14px', borderRadius:12 }}>← Назад</button>
-          <div style={{ opacity:.8 }}>Стр. {page} / {pages}</div>
+            onClick={()=>{ if(page>1){ haptic('light'); load(page-1); } }}>← Назад</button>
+          <div className="muted">Стр. {page} / {pages}</div>
           <button className="list-btn" disabled={page>=pages}
-            onClick={()=>{ if(page<pages){ haptic('light'); load(page+1); } }}
-            style={{ padding:'10px 14px', borderRadius:12 }}>Вперёд →</button>
+            onClick={()=>{ if(page<pages){ haptic('light'); load(page+1); } }}>Вперёд →</button>
         </div>
       )}
+
+      <ThemeCSS/>
     </main>
   );
 }
