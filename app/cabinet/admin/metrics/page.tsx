@@ -107,6 +107,13 @@ export default function AdminMetricsPage() {
     }
   }
 
+  function downloadAllTimeTxt() {
+    const initData = (window as any)?.Telegram?.WebApp?.initData || '';
+    const qs = new URLSearchParams({ format: 'txt', init: initData || '' });
+    window.open(`/api/admin/export/users?${qs.toString()}`, '_blank');
+    haptic('medium');
+  }
+
   return (
     <main className="safe" style={{ padding: 20, display: 'grid', gap: 14 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
@@ -189,6 +196,18 @@ export default function AdminMetricsPage() {
           Список — <code>getAvailableGifts</code>, отправка — <code>sendGift</code>. Нужен <b>BOT_TOKEN</b> на сервере.
         </small>
       </section>
+
+      {/* Только кнопка «скачать за всё время» */}
+      <div style={{ display:'flex', justifyContent:'center' }}>
+        <button
+          type="button"
+          className="list-btn"
+          onClick={downloadAllTimeTxt}
+          style={{ borderRadius: 12, maxWidth: 320 }}
+        >
+          Скачать за всё время (TXT)
+        </button>
+      </div>
 
       <ThemeCSS/>
     </main>
