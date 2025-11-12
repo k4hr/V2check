@@ -8,9 +8,12 @@ export const dynamic = 'force-dynamic';
 
 // --- токены и конфигурация ---
 const BOT_TOKEN  = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
-// дефолтный секрет, если ENV не задана
 const WH_SECRET  = (process.env.TG_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || 'supersecret12345').trim();
 const APP_ORIGIN = (process.env.APP_ORIGIN || process.env.NEXT_PUBLIC_APP_ORIGIN || '').replace(/\/+$/, '');
+// важно: имя бота для deeplink
+const BOT_USERNAME = process.env.BOT_USERNAME || 'LiveManagBot';
+// стартовый параметр mini-app (чтобы отличать экраны на старте)
+const STARTAPP_PARAM = 'home';
 
 type TgUpdate = {
   update_id?: number;
@@ -29,7 +32,7 @@ type TgUpdate = {
       telegram_payment_charge_id?: string;
       provider_payment_charge_id?: string;
       currency?: string;
-      total_amount?: number; // в минорных единицах (Stars)
+      total_amount?: number;
     };
   };
 };
@@ -58,7 +61,7 @@ function addDays(base: Date, days: number): Date {
   return d;
 }
 
-// --- health-check, чтобы в браузере не был белый экран
+// --- health-check
 export async function GET() {
   return NextResponse.json({ ok: true, ping: 'botWebhook alive' });
 }
@@ -96,11 +99,33 @@ export async function POST(req: NextRequest) {
         '🚀 Внутри — набор ежедневных инструментов: планы, здоровье, дом, контент, идеи и многое другое.\n\n' +
         'Нажми кнопку ниже, чтобы открыть приложение.';
 
-      const reply_markup = APP_ORIGIN
-        ? { inline_keyboard: [[{ text: 'Открыть LiveManager ❤️', web_app: { url: `${APP_ORIGIN}/home` } }]] }
-        : undefined;
+      // deeplink в Main App (fullscreen согласно настройке BotFather)
+      const deeplink = `https://t.me/${BOT_USERNAME}/app?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
 
-      await tg('sendMessage', { chat_id: chatId, text: welcome, reply_markup });
+      // кнопка web_app как fallback (и для быстрого входа из чата)
+      // передаём tgWebAppStartParam, чтобы вы видели start_param на стороне клиента
+      const webAppUrl = APP_ORIGIN
+        ? `${APP_ORIGIN}/home?tgWebAppStartParam=${encodeURIComponent(STARTAPP_PARAM)}`
+        : '';
+
+      const reply_markup =
+        APP_ORIGIN
+          ? {
+              inline_keyboard: [
+                [{ text: 'Открыть в полноэкранном режиме', url: deeplink }],
+                [{ text: 'Открыть здесь (в чате)', web_app: { url: webAppUrl } }],
+              ],
+            }
+          : {
+              inline_keyboard: [[{ text: 'Открыть в полноэкранном режиме', url: deeplink }]],
+            };
+
+      await tg('sendMessage', {
+        chat_id: chatId,
+        text: welcome,
+        disable_web_page_preview: true,
+        reply_markup,
+      });
       return NextResponse.json({ ok: true, stage: 'start_sent' });
     }
 
@@ -147,7 +172,6 @@ export async function POST(req: NextRequest) {
       const days = prices[plan].days;
       const until = addDays(from, days);
 
-      // лог платежа
       await prisma.payment.create({
         data: {
           userId: u.id,
@@ -163,7 +187,6 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // продление подписки
       await prisma.user.update({
         where: { id: u.id },
         data: { subscriptionUntil: until, plan: tier },
