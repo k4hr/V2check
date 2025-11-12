@@ -127,7 +127,7 @@ export async function POST(req: NextRequest) {
     if (/^\/support\b/i.test(text)) {
       await tg('sendMessage', {
         chat_id: chatId,
-        text: '💬 Поддержка: @LiveManagerSupport',
+        text: '💬 Поддержка: @seimngr',
       });
       return NextResponse.json({ ok: true, stage: 'support_sent' });
     }
