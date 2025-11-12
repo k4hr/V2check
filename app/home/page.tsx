@@ -7,7 +7,7 @@ import { useEffect, useMemo } from 'react';
 import { STRINGS, readLocale, ensureLocaleCookie, type Locale } from '@/lib/i18n';
 
 const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'LiveManagBot';
-const STARTAPP_PARAM = 'home';
+const STARTAPP_PARAM = process.env.NEXT_PUBLIC_STARTAPP_PARAM || 'home';
 
 export default function HomePage() {
   // cookies и локаль
@@ -45,8 +45,7 @@ export default function HomePage() {
       // В чат-режиме у WebApp нет start_param. Если ещё не пытались — прыгаем в Main App.
       if (!fromDeeplink && !alreadyTried && tg) {
         sessionStorage.setItem('__fs_fix_tried__', '1');
-        const link = `https://t.me/${BOT_USERNAME}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
-        // предпочтительно через Telegram API — так навигация не блокируется внутри того же чата
+        const link = `https://t.me/${BOT_USERNAME.replace(/^@/, '')}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
         if (typeof tg.openTelegramLink === 'function') tg.openTelegramLink(link);
         else window.location.href = link;
       }
