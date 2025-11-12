@@ -1,8 +1,61 @@
-/* path: app/cabinet/admin/users/page.tsx */
+// app/cabinet/admin/users/page.tsx
 'use client';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+
+/* ===== ТЕМА ИЗ TELEGRAM (та же, что на payments) ===== */
+function hexToRgb(hex?: string){ if(!hex) return [0,0,0]; const h=hex.replace('#',''); return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)) as any; }
+function isDark(hex?:string){ const [r,g,b]=hexToRgb(hex); const L=(0.299*r+0.587*g+0.114*b)/255; return L<0.5; }
+function applyTgTheme(){
+  const tg:any = (window as any)?.Telegram?.WebApp;
+  const p = tg?.themeParams || {};
+  const dark = p.bg_color ? isDark(p.bg_color) : matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const vars: Record<string,string> = {
+    '--bg':    p.bg_color            || (dark ? '#0f121b' : '#f7f9ff'),
+    '--fg':    p.text_color          || (dark ? '#eef2ff' : '#0f172a'),
+    '--panel': p.secondary_bg_color  || (dark ? '#161c2b' : '#ffffff'),
+    '--panel-weak':                  dark ? '#121826' : '#f2f6ff',
+    '--border':                      dark ? 'rgba(255,255,255,.12)' : 'rgba(15,23,42,.14)',
+    '--accent': p.button_color       || '#4c82ff',
+  };
+  Object.entries(vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+  try { tg?.setHeaderColor?.('secondary_bg_color'); tg?.setBackgroundColor?.(vars['--bg']); } catch {}
+}
+function ThemeCSS(){
+  return (
+    <style jsx global>{`
+      :root{
+        --bg:#f7f9ff; --fg:#0f172a; --panel:#ffffff; --panel-weak:#f2f6ff; --border:rgba(15,23,42,.14); --accent:#4c82ff;
+      }
+      body{ background:var(--bg); color:var(--fg); }
+      .list-btn{
+        display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:12px 14px; border-radius:12px; font-weight:800;
+        background:var(--panel); color:var(--fg); border:1px solid var(--border);
+      }
+      .section{
+        border:1px solid var(--border); border-radius:14px; background:var(--panel);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+      }
+      .kpi{
+        padding:14px; border-radius:14px; border:1px solid var(--border);
+        background: color-mix(in oklab, var(--panel) 86%, transparent);
+      }
+      .muted{ opacity:.85 }
+      table{ width:100%; border-collapse:collapse; }
+      thead tr{ opacity:.7; text-align:left; }
+      td, th{ padding:6px 8px; border-top:1px solid color-mix(in oklab, var(--border) 60%, transparent); }
+      code{ background: color-mix(in oklab, var(--panel-weak) 70%, transparent); padding:0 4px; border-radius:6px; }
+      .badge{ display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; white-space:nowrap; }
+      .badge--gold{ background:#3a2d12; border:1px solid #caa86a; }
+      .badge--blue{ background:color-mix(in oklab, var(--accent) 18%, transparent); border:1px solid color-mix(in oklab, var(--accent) 40%, var(--border)); }
+      .badge--gray{ background:#2a2f45; border:1px solid rgba(255,255,255,.12); }
+    `}</style>
+  );
+}
+/* ===== конец темы ===== */
 
 function haptic(type: 'light' | 'medium' = 'light') {
   try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
@@ -71,8 +124,13 @@ export default function AdminUsersPage() {
   }
 
   useEffect(() => {
-    try { (window as any)?.Telegram?.WebApp?.ready?.(); } catch {}
+    const tg:any = (window as any)?.Telegram?.WebApp;
+    try { tg?.ready?.(); } catch {}
+    applyTgTheme();
+    const onTheme = () => applyTgTheme();
+    try { tg?.onEvent?.('themeChanged', onTheme); } catch {}
     load();
+    return () => { try { tg?.offEvent?.('themeChanged', onTheme); } catch {} };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -88,21 +146,17 @@ export default function AdminUsersPage() {
         </Link>
         <h1 style={{ margin: 0 }}>Admin · Пользователи</h1>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-          <button className="list-btn" onClick={() => { haptic('light'); load(); }}
-                  style={{ padding: '10px 14px', borderRadius: 12 }}>
+          <button className="list-btn" onClick={() => { haptic('light'); load(); }}>
             Обновить
           </button>
         </div>
       </div>
 
-      {err && <p style={{ color:'#ff5c7a' }}>Ошибка: {err}</p>}
-      {updatedAt && <div style={{ opacity:.65, marginTop: -6 }}>Обновлено: {fmtDate(updatedAt)}</div>}
+      {err && <p style={{ color: '#ff5c7a' }}>Ошибка: {err}</p>}
+      {updatedAt && <div className="muted" style={{ marginTop: -6 }}>Обновлено: {fmtDate(updatedAt)}</div>}
 
       {/* KPI */}
-      <div style={{
-        display:'grid', gap:10,
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'
-      }}>
+      <div style={{ display:'grid', gap:10, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         {totals && (
           <>
             <Kpi title="Всего пользователей"  value={totals.totalUsers} />
@@ -119,80 +173,63 @@ export default function AdminUsersPage() {
       </div>
 
       {/* Недавние регистрации */}
-      <section style={{
-        border:'1px solid var(--border)', borderRadius:14, background:'#111722',
-        boxShadow: '0 10px 26px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04)'
-      }}>
-        <div style={{ padding:'12px 14px', borderBottom:'1px solid #2b3552', display:'flex', alignItems:'baseline', gap:10 }}>
+      <section className="section">
+        <div style={{ padding:'12px 14px', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'baseline', gap:10 }}>
           <h3 style={{ margin:0 }}>Последние 25 пользователей</h3>
-          <span style={{ opacity:.65 }}>(по дате регистрации)</span>
+          <span className="muted">(по дате регистрации)</span>
         </div>
         <div style={{ padding:12, overflowX:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:14 }}>
+          <table>
             <thead>
-              <tr style={{ textAlign:'left', opacity:.7 }}>
-                <th style={{ padding:'6px 8px' }}>Telegram</th>
-                <th style={{ padding:'6px 8px' }}>Имя</th>
-                <th style={{ padding:'6px 8px' }}>План</th>
-                <th style={{ padding:'6px 8px' }}>Активна до</th>
-                <th style={{ padding:'6px 8px' }}>Создан</th>
-                <th style={{ padding:'6px 8px' }}>Был(а)</th>
+              <tr>
+                <th>Telegram</th>
+                <th>Имя</th>
+                <th>План</th>
+                <th>Активна до</th>
+                <th>Создан</th>
+                <th>Был(а)</th>
               </tr>
             </thead>
             <tbody>
               {recent.map((u, i) => (
-                <tr key={i} style={{ borderTop:'1px solid rgba(255,255,255,.06)' }}>
-                  <td style={{ padding:'8px' }}>
-                    <code style={{ opacity:.9 }}>{u.telegramId}</code>
-                    {u.username && <span style={{ opacity:.7 }}> · @{u.username}</span>}
-                  </td>
-                  <td style={{ padding:'8px' }}>
-                    {(u.firstName || u.lastName) ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '—'}
-                  </td>
-                  <td style={{ padding:'8px' }}>
+                <tr key={i}>
+                  <td><code>{u.telegramId}</code>{u.username && <span className="muted"> · @{u.username}</span>}</td>
+                  <td>{(u.firstName || u.lastName) ? `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim() : '—'}</td>
+                  <td>
                     <Badge kind={u.plan === 'PROPLUS' ? 'gold' : u.plan === 'PRO' ? 'blue' : 'gray'}>
                       {fmtPlan(u.plan)}
                     </Badge>
                   </td>
-                  <td style={{ padding:'8px' }}>{fmtDate(u.subscriptionUntil)}</td>
-                  <td style={{ padding:'8px' }}>{fmtDate(u.createdAt)}</td>
-                  <td style={{ padding:'8px' }}>{fmtDate(u.lastSeenAt)}</td>
+                  <td>{fmtDate(u.subscriptionUntil)}</td>
+                  <td>{fmtDate(u.createdAt)}</td>
+                  <td>{fmtDate(u.lastSeenAt)}</td>
                 </tr>
               ))}
               {!recent.length && (
-                <tr><td colSpan={6} style={{ padding:'10px 8px', opacity:.7 }}>Нет данных.</td></tr>
+                <tr><td colSpan={6} className="muted">Нет данных.</td></tr>
               )}
             </tbody>
           </table>
         </div>
       </section>
+
+      <ThemeCSS/>
     </main>
   );
 }
 
 function Kpi({ title, value }: { title: string; value: number }) {
   return (
-    <div style={{
-      padding:14, border:'1px solid rgba(120,170,255,.25)', borderRadius:14,
-      background:'radial-gradient(140% 140% at 10% 0%, rgba(120,170,255,.14), rgba(255,255,255,.03))',
-      boxShadow: '0 10px 26px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.04)'
-    }}>
-      <div style={{ opacity:.85 }}>{title}</div>
+    <div className="kpi">
+      <div className="muted">{title}</div>
       <div style={{ fontSize:26, fontWeight:800, lineHeight:1.1 }}>{value}</div>
     </div>
   );
 }
 
 function Badge({ children, kind }:{ children: any; kind: 'gold'|'blue'|'gray' }) {
-  const styleMap: Record<typeof kind, React.CSSProperties> = {
-    gold: { background:'#3a2d12', border:'1px solid #caa86a' },
-    blue: { background:'rgba(76,130,255,.18)', border:'1px solid rgba(120,170,255,.35)' },
-    gray: { background:'#2a2f45', border:'1px solid rgba(255,255,255,.12)' },
-  };
-  return (
-    <span style={{
-      display:'inline-block', padding:'2px 8px', borderRadius:999, fontSize:12, whiteSpace:'nowrap',
-      ...styleMap[kind],
-    }}>{children}</span>
-  );
+  const cls =
+    kind === 'gold' ? 'badge badge--gold' :
+    kind === 'blue' ? 'badge badge--blue' : 'badge badge--gray';
+  return <span className={cls}>{children}</span>;
 }
