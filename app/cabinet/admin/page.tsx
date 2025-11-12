@@ -1,3 +1,4 @@
+/* path: app/cabinet/admin/page.tsx */
 'use client';
 
 import Link from 'next/link';
@@ -16,6 +17,61 @@ function haptic(type: 'light' | 'medium' = 'light') {
   try { (window as any)?.Telegram?.WebApp?.HapticFeedback?.impactOccurred?.(type); } catch {}
 }
 
+/** ==== ТЕМА ИЗ TELEGRAM ==== */
+function hexToRgb(hex?: string){ if(!hex) return [0,0,0]; const h=hex.replace('#',''); return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)) as any; }
+function isDark(hex?:string){ const [r,g,b]=hexToRgb(hex); const L=(0.299*r+0.587*g+0.114*b)/255; return L<0.5; }
+function applyTgTheme(){
+  const tg:any = (window as any)?.Telegram?.WebApp;
+  const p = tg?.themeParams || {};
+  const dark = p.bg_color ? isDark(p.bg_color) : matchMedia('(prefers-color-scheme: dark)').matches;
+
+  const vars: Record<string,string> = {
+    '--bg':    p.bg_color            || (dark ? '#0f121b' : '#f7f9ff'),
+    '--fg':    p.text_color          || (dark ? '#eef2ff' : '#0f172a'),
+    '--panel': p.secondary_bg_color  || (dark ? '#161c2b' : '#ffffff'),
+    '--panel-weak':                  dark ? '#121826' : '#f2f6ff',
+    '--border':                      dark ? 'rgba(255,255,255,.12)' : 'rgba(15,23,42,.14)',
+    '--accent': p.button_color       || '#4c82ff',
+  };
+  Object.entries(vars).forEach(([k,v])=>document.documentElement.style.setProperty(k,v));
+  try { tg?.setHeaderColor?.('secondary_bg_color'); tg?.setBackgroundColor?.(vars['--bg']); } catch {}
+}
+
+function ThemeCSS(){
+  return (
+    <style jsx global>{`
+      :root{
+        --bg:#f7f9ff; --fg:#0f172a; --panel:#ffffff; --panel-weak:#f2f6ff; --border:rgba(15,23,42,.14); --accent:#4c82ff;
+      }
+      body{ background: var(--bg); color: var(--fg); }
+      .list-btn{
+        display:flex; align-items:center; justify-content:space-between; gap:10px;
+        padding:12px 14px; border-radius:12px;
+        background:var(--panel); color:var(--fg);
+        border:1px solid var(--border); font-weight:800;
+      }
+      .list-btn__chev{ opacity:.5 }
+      input, select, textarea{
+        color:var(--fg);
+        background:var(--panel);
+        border:1px solid var(--border);
+      }
+      .btn-accent{
+        background: color-mix(in oklab, var(--accent) 18%, var(--panel));
+        border: 1px solid color-mix(in oklab, var(--accent) 60%, var(--border));
+      }
+      .section{
+        background: color-mix(in oklab, var(--panel) 86%, transparent);
+        border: 1px solid var(--border);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,.04);
+        border-radius:16px; padding:14px;
+      }
+      .muted{ opacity:.85 }
+      code{ background: color-mix(in oklab, var(--panel-weak) 70%, transparent); padding:0 4px; border-radius:6px; }
+    `}</style>
+  );
+}
+
 export default function AdminHome() {
   const [allowed, setAllowed] = useState<null | boolean>(null);
   const [info, setInfo] = useState<string>('');
@@ -28,20 +84,28 @@ export default function AdminHome() {
   const [grantBusy, setGrantBusy] = useState(false);
   const [grantMsg, setGrantMsg] = useState<string | null>(null);
 
-  // === Новые стейты для блока «Автоплатёж — отмена» ===
-  const [cancelKey, setCancelKey] = useState('');            // tg id или vk:12345
+  // отмена автоплатежа
+  const [cancelKey, setCancelKey] = useState('');
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelMsg, setCancelMsg] = useState<string | null>(null);
   const [cancelErr, setCancelErr] = useState<string | null>(null);
 
   // для браузерного режима
   const debugId = useMemo(() => {
-    try {
-      const u = new URL(window.location.href);
-      const id = u.searchParams.get('id');
-      return id && /^\d{3,15}$/.test(id) ? id : '';
-    } catch { return ''; }
+    try { const u = new URL(window.location.href); const id = u.searchParams.get('id'); return id && /^\d{3,15}$/.test(id) ? id : ''; }
+    catch { return ''; }
   }, []);
+
+  useEffect(() => {
+    try { (window as any)?.Telegram?.WebApp?.ready?.(); } catch {}
+    applyTgTheme();
+    // live-переключение темы
+    const tg:any = (window as any)?.Telegram?.WebApp;
+    const handler = () => applyTgTheme();
+    try { tg?.onEvent?.('themeChanged', handler); } catch {}
+    check();
+    return () => { try { tg?.offEvent?.('themeChanged', handler); } catch {} };
+  }, [debugId]);
 
   async function check() {
     try {
@@ -63,26 +127,15 @@ export default function AdminHome() {
     }
   }
 
-  useEffect(() => {
-    try { (window as any)?.Telegram?.WebApp?.ready?.(); } catch {}
-    check();
-  }, [debugId]);
-
   async function grant() {
-    if (!tgId.trim()) {
-      setGrantMsg('Укажите Telegram ID пользователя.');
-      return;
-    }
-    setGrantBusy(true);
-    setGrantMsg(null);
+    if (!tgId.trim()) { setGrantMsg('Укажите Telegram ID пользователя.'); return; }
+    setGrantBusy(true); setGrantMsg(null);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const initData = (window as any)?.Telegram?.WebApp?.initData || '';
       if (initData) headers['x-init-data'] = initData;
 
-      // Передаём debug id как и в /api/admin/check (для браузерного режима)
       const qs = !initData && DEBUG && debugId ? `?id=${encodeURIComponent(debugId)}` : '';
-
       const res = await fetch(`/api/admin/grant-subscription${qs}`, {
         method: 'POST',
         headers,
@@ -90,14 +143,11 @@ export default function AdminHome() {
       });
 
       const data: GrantResp = await res.json().catch(() => ({ ok: false, error: 'BAD_RESPONSE' } as any));
-
-      if (!data.ok) {
-        throw new Error((data as any).error || 'GRANT_FAILED');
-      }
+      if (!data.ok) throw new Error((data as any).error || 'GRANT_FAILED');
 
       const until = new Date(data.until);
       setGrantMsg(`Готово: выдано ${tier === 'PROPLUS' ? 'Pro+' : 'Pro'} (${plan}) на ${data.days} дн. До ${until.toLocaleDateString()}.`);
-      try { haptic('medium'); } catch {}
+      haptic('medium');
     } catch (e: any) {
       setGrantMsg(`Ошибка: ${String(e?.message || e)}`);
     } finally {
@@ -105,7 +155,6 @@ export default function AdminHome() {
     }
   }
 
-  // === Функция из твоего блока для отмены автоплатежа ===
   async function cancelAutopay() {
     if (!cancelKey.trim() || cancelBusy) return;
     setCancelBusy(true); setCancelMsg(null); setCancelErr(null);
@@ -113,10 +162,7 @@ export default function AdminHome() {
       const initData = (window as any)?.Telegram?.WebApp?.initData || '';
       const r = await fetch('/api/admin/autopay/cancel', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(initData ? { 'x-init-data': initData } : {}),
-        },
+        headers: { 'Content-Type': 'application/json', ...(initData ? { 'x-init-data': initData } : {}) },
         body: JSON.stringify({ key: cancelKey.trim() }),
       });
       const data = await r.json();
@@ -134,12 +180,11 @@ export default function AdminHome() {
     return (
       <main className="safe" style={{ padding: 20 }}>
         <p>Доступ запрещён.</p>
-        {DEBUG && <p style={{ opacity: .6, fontSize: 12 }}>{info}</p>}
-        <Link href={debugId ? { pathname: '/cabinet', query: { id: debugId } } : '/cabinet'} className="list-btn"
-          onClick={() => haptic('light')}
-          style={{ display: 'inline-flex', marginTop: 12 }}>
+        {DEBUG && <p className="muted" style={{ fontSize: 12 }}>{info}</p>}
+        <Link href={debugId ? { pathname: '/cabinet', query: { id: debugId } } : '/cabinet'} className="list-btn" onClick={() => haptic('light')} style={{ display:'inline-flex', marginTop:12 }}>
           ← В кабинет
         </Link>
+        <ThemeCSS/>
       </main>
     );
   }
@@ -148,7 +193,8 @@ export default function AdminHome() {
     return (
       <main className="safe" style={{ padding: 20 }}>
         <p>Проверяем доступ…</p>
-        {DEBUG && <p style={{ opacity: .6, fontSize: 12 }}>{info}</p>}
+        {DEBUG && <p className="muted" style={{ fontSize: 12 }}>{info}</p>}
+        <ThemeCSS/>
       </main>
     );
   }
@@ -157,19 +203,16 @@ export default function AdminHome() {
   const baseDays = prices[plan].days;
   const totalDays = baseDays + (Number.isFinite(extraDays) ? Math.max(0, Number(extraDays)) : 0);
 
-  // allowed === true
   return (
     <main className="safe" style={{ padding: 20, display: 'grid', gap: 14 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <Link href={debugId ? { pathname: '/cabinet', query: { id: debugId } } : '/cabinet'} className="list-btn"
-          onClick={() => haptic('light')}
-          style={{ width: 120, textDecoration: 'none' }}>
+        <Link href={debugId ? { pathname: '/cabinet', query: { id: debugId } } : '/cabinet'} className="list-btn" onClick={() => haptic('light')} style={{ width: 120, textDecoration: 'none' }}>
           ← Назад
         </Link>
         <h1 style={{ margin: 0 }}>Admin</h1>
       </div>
 
-      {DEBUG && <p style={{ opacity: .6, fontSize: 12 }}>{info}</p>}
+      {DEBUG && <p className="muted" style={{ fontSize: 12 }}>{info}</p>}
 
       <div style={{ display: 'grid', gap: 10 }}>
         <Link href="/cabinet/admin/users" className="list-btn" style={{ textDecoration: 'none' }}>
@@ -186,49 +229,34 @@ export default function AdminHome() {
         </Link>
       </div>
 
-      {/* === Секция: Выдать подписку === */}
-      <section
-        style={{
-          marginTop: 6, padding: 14, borderRadius: 16,
-          background: 'rgba(255,210,120,.10)', border: '1px solid rgba(255,210,120,.30)',
-          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.05)'
-        }}
-      >
+      {/* Выдать подписку */}
+      <section className="section">
         <h3 style={{ marginTop: 0, marginBottom: 12 }}>Выдать подписку вручную</h3>
 
         <div style={{ display: 'grid', gap: 10 }}>
           <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ opacity: .85 }}>Telegram ID пользователя</span>
+            <span className="muted">Telegram ID пользователя</span>
             <input
               value={tgId}
               onChange={(e) => setTgId(e.target.value)}
               placeholder="например, 123456789"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              style={{ height: 38, borderRadius: 10, border: '1px solid #2b3552', background: '#121722', padding: '0 10px', color: 'var(--fg)' }}
+              inputMode="numeric" pattern="[0-9]*"
+              style={{ height: 38, borderRadius: 10, padding: '0 10px' }}
             />
           </label>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ opacity: .85 }}>Тариф</span>
-              <select
-                value={tier}
-                onChange={(e) => { setTier(e.target.value as Tier); }}
-                style={{ height: 38, borderRadius: 10, border: '1px solid #2b3552', background: '#121722', padding: '0 10px', color: 'var(--fg)' }}
-              >
+              <span className="muted">Тариф</span>
+              <select value={tier} onChange={(e) => { setTier(e.target.value as Tier); }} style={{ height: 38, borderRadius: 10, padding: '0 10px' }}>
                 <option value="PRO">Pro</option>
                 <option value="PROPLUS">Pro+</option>
               </select>
             </label>
 
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ opacity: .85 }}>План</span>
-              <select
-                value={plan}
-                onChange={(e) => setPlan(e.target.value as Plan)}
-                style={{ height: 38, borderRadius: 10, border: '1px solid #2b3552', background: '#121722', padding: '0 10px', color: 'var(--fg)' }}
-              >
+              <span className="muted">План</span>
+              <select value={plan} onChange={(e) => setPlan(e.target.value as Plan)} style={{ height: 38, borderRadius: 10, padding: '0 10px' }}>
                 <option value="WEEK">Неделя</option>
                 <option value="MONTH">Месяц</option>
                 <option value="HALF_YEAR">Полгода</option>
@@ -238,13 +266,12 @@ export default function AdminHome() {
           </div>
 
           <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ opacity: .85 }}>Дополнительно дней (опционально)</span>
+            <span className="muted">Дополнительно дней (опционально)</span>
             <input
               value={extraDays}
               onChange={(e) => setExtraDays(Number(e.target.value || 0))}
-              type="number" min={0}
-              placeholder="0"
-              style={{ height: 38, borderRadius: 10, border: '1px solid #2b3552', background: '#121722', padding: '0 10px', color: 'var(--fg)' }}
+              type="number" min={0} placeholder="0"
+              style={{ height: 38, borderRadius: 10, padding: '0 10px' }}
             />
           </label>
 
@@ -252,13 +279,7 @@ export default function AdminHome() {
             Итого будет выдано: <b>{totalDays}</b> дн. (база {baseDays} + доп. {extraDays || 0})
           </div>
 
-          <button
-            type="button"
-            onClick={grant}
-            disabled={grantBusy}
-            className="list-btn"
-            style={{ padding: '12px 14px', borderRadius: 12, background: '#2a3150', border: '1px solid #4b57b3', fontWeight: 800 }}
-          >
+          <button type="button" onClick={grant} disabled={grantBusy} className="list-btn btn-accent" style={{ fontWeight: 800 }}>
             {grantBusy ? 'Выдаём…' : 'Выдать подписку'}
           </button>
 
@@ -266,17 +287,10 @@ export default function AdminHome() {
         </div>
       </section>
 
-      {/* === НОВАЯ СЕКЦИЯ: Автоплатёж — отмена === */}
-      <section
-        style={{
-          display: 'grid', gap: 10, padding: 14, borderRadius: 16,
-          border: '1px solid rgba(120,170,255,.25)',
-          background: 'radial-gradient(140% 140% at 10% 0%, rgba(120,170,255,.14), rgba(255,255,255,.03))',
-          boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.04)'
-        }}
-      >
+      {/* Автоплатёж — отмена */}
+      <section className="section">
         <h3 style={{ marginTop: 0 }}>Автоплатёж — отмена</h3>
-        <p style={{ marginTop: -6, opacity: .85 }}>
+        <p className="muted" style={{ marginTop: -6 }}>
           Введите <b>Telegram ID</b> пользователя (или ключ вида <code>vk:12345</code>) и отключите автопродление.
         </p>
 
@@ -285,31 +299,25 @@ export default function AdminHome() {
             placeholder="например: 123456789 или vk:12345"
             value={cancelKey}
             onChange={e => setCancelKey(e.target.value)}
-            style={{ flex: '1 1 280px', height: 38, borderRadius: 10, border: '1px solid #2b3552', background: '#121722', padding: '0 10px' }}
+            style={{ flex: '1 1 280px', height: 38, borderRadius: 10, padding: '0 10px' }}
           />
-          <button
-            type="button"
-            className="list-btn"
-            disabled={!cancelKey.trim() || cancelBusy}
-            onClick={() => { haptic('light'); cancelAutopay(); }}
-            style={{ padding: '10px 14px', borderRadius: 12 }}
-          >
+          <button type="button" className="list-btn btn-accent" disabled={!cancelKey.trim() || cancelBusy}
+            onClick={() => { haptic('light'); cancelAutopay(); }} style={{ padding: '10px 14px', borderRadius: 12 }}>
             Отключить автоплатёж
           </button>
         </div>
 
-        {cancelMsg && <div style={{ color: '#7dff9b' }}>{cancelMsg}</div>}
+        {cancelMsg && <div style={{ color: 'color-mix(in oklab, #7dff9b 80%, var(--fg))' }}>{cancelMsg}</div>}
         {cancelErr && <div style={{ color: '#ff5c7a' }}>Ошибка: {cancelErr}</div>}
-        <small style={{ opacity: .8 }}>
-          Требуется админ-доступ (валидный Telegram WebApp initData).
-        </small>
+        <small className="muted">Требуется админ-доступ (валидный Telegram WebApp initData).</small>
       </section>
 
-      {/* Подсказка про крон */}
-      <div style={{ padding: 12, border: '1px dashed #333', borderRadius: 12, opacity: .85 }}>
+      <div className="section" style={{ borderStyle:'dashed' }}>
         Для автосписания раз в сутки вызови <code>/api/cron/autopay</code> из внешнего планировщика
         (headers: <code>x-cron-secret: {'<CRON_SECRET>'}</code>).
       </div>
+
+      <ThemeCSS/>
     </main>
   );
 }
