@@ -34,7 +34,7 @@ export default function HomePage() {
     } catch {}
   }, [locale]);
 
-  // ⚡️ Форсим fullscreen: если открылись не как Main App — один раз уходим в deeplink
+  // ⚡️ Форсим fullscreen
   useEffect(() => {
     try {
       const tg: any = (window as any)?.Telegram?.WebApp;
@@ -42,7 +42,6 @@ export default function HomePage() {
       const fromDeeplink = Boolean(tg?.initDataUnsafe?.start_param || params.get('tgWebAppStartParam'));
       const alreadyTried = sessionStorage.getItem('__fs_fix_tried__');
 
-      // В чат-режиме у WebApp нет start_param. Если ещё не пытались — прыгаем в Main App.
       if (!fromDeeplink && !alreadyTried && tg) {
         sessionStorage.setItem('__fs_fix_tried__', '1');
         const link = `https://t.me/${BOT_USERNAME.replace(/^@/, '')}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
@@ -107,12 +106,15 @@ export default function HomePage() {
         </Link>
       </section>
 
-      {/* Золотая стеклянная кнопка «Пробный день 1₽» */}
-      <Link href={href('/pro/max')} className="trial-pill" aria-label="Пробный день за 1 рубль">
-        <span className="trial-pill__line">Пробный</span>
-        <span className="trial-pill__line">день</span>
-        <span className="trial-pill__line trial-pill__price">1₽</span>
-      </Link>
+      {/* OVERLAY: всё поверх любых слоёв/фильтров */}
+      <div className="ui-overlay" aria-hidden={false}>
+        {/* Золотая стеклянная кнопка «Пробный день 1₽» */}
+        <Link href={href('/pro/max')} className="trial-pill" aria-label="Пробный день за 1 рубль">
+          <span className="trial-pill__line">Пробный</span>
+          <span className="trial-pill__line">день</span>
+          <span className="trial-pill__line trial-pill__price">1₽</span>
+        </Link>
+      </div>
 
       {/* Узкая кнопка снизу по центру */}
       <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
@@ -248,40 +250,34 @@ export default function HomePage() {
             linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.08) 50%, transparent 80%) !important;
         }
 
+        /* ======= СЛОЙ ПОВЕРХ ВСЕГО ======= */
+        .ui-overlay{
+          position:fixed; inset:0;
+          z-index:2147483647;            /* max-safe */
+          pointer-events:none;           /* не блокируем скролл/клики под слоем */
+        }
+
         /* Кнопка пробного дня — золотой стеклянный кружок */
         .trial-pill{
-          position:fixed;
-          left:50%;
-          transform:translateX(-50%);
+          position:absolute;
+          left:50%; transform:translateX(-50%) translateZ(0);
           bottom: calc(env(safe-area-inset-bottom,0px) + 68px);
-          width:92px;
-          height:92px;
-          border-radius:999px;
-          display:flex;
-          flex-direction:column;
-          align-items:center;
-          justify-content:center;
-          gap:1px;
-          font-size:13px;
-          font-weight:700;
-          text-align:center;
-          z-index:3;
+          width:92px; height:92px; border-radius:999px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+          font-size:13px; font-weight:700; text-align:center;
+          pointer-events:auto;            /* кликабельна, несмотря на pointer-events:none у оверлея */
           background:
             radial-gradient(120% 160% at 15% 0%, rgba(255,240,200,.85), rgba(255,215,140,.45)),
             rgba(255,255,255,.80);
           border:1px solid rgba(215,170,60,.70);
-          box-shadow:
-            0 14px 32px rgba(215,170,60,.45),
-            inset 0 1px 0 rgba(255,255,255,.85);
+          box-shadow:0 14px 32px rgba(215,170,60,.45), inset 0 1px 0 rgba(255,255,255,.85);
           -webkit-backdrop-filter: blur(14px) saturate(170%);
                   backdrop-filter: blur(14px) saturate(170%);
           color:#3a2600;
+          isolation:isolate;
         }
         .trial-pill__line{ line-height:1.1; }
-        .trial-pill__price{
-          font-size:16px;
-          margin-top:3px;
-        }
+        .trial-pill__price{ font-size:16px; margin-top:3px; }
 
         /* Узкая кнопка снизу по центру */
         .dock{
