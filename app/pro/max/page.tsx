@@ -1,304 +1,362 @@
-/* path: app/home/page.tsx */
+// app/pro/max/page.tsx
 'use client';
 
-import Link from 'next/link';
-import type { Route } from 'next';
-import { useEffect, useMemo } from 'react';
-import { STRINGS, readLocale, ensureLocaleCookie, type Locale } from '@/lib/i18n';
+import React, { useEffect, useMemo, useState } from 'react';
+import type { Plan, Tier } from '@/lib/pricing';
+import { getPrices, getVkRubKopecks } from '@/lib/pricing';
+import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
+import BackBtn from '@/app/components/BackBtn';
 
-const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME || 'LiveManagBot';
-const STARTAPP_PARAM = process.env.NEXT_PUBLIC_STARTAPP_PARAM || 'home';
+const tier: Tier = 'PROPLUS';
 
-export default function HomePage() {
-  // cookies и локаль
-  useEffect(() => { try { ensureLocaleCookie({ sameSite: 'none', secure: true } as any); } catch {} }, []);
-  const locale = useMemo<Locale>(() => readLocale(), []);
-  const L = STRINGS[locale] ?? STRINGS.ru;
+const TITLES_RU: Record<Plan, string> = {
+  WEEK: 'Pro+ — Неделя',
+  MONTH: 'Pro+ — Месяц',
+  HALF_YEAR: 'Pro+ — Полгода',
+  YEAR: 'Pro+ — Год',
+};
+const TITLES_EN: Record<Plan, string> = {
+  WEEK: 'Pro+ — Week',
+  MONTH: 'Pro+ — Month',
+  HALF_YEAR: 'Pro+ — 6 months',
+  YEAR: 'Pro+ — Year',
+};
 
-  // оформление и цвета из Telegram
-  useEffect(() => {
+function Star({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden focusable="false">
+      <path d="M12 2.75l2.9 5.88 6.49.94-4.7 4.58 1.11 6.47L12 17.98l-5.8 3.06 1.11-6.47-4.7-4.58 6.49-.94L12 2.75z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/* скидки только для оплаты картой */
+function formatRUB(kopecks: number, locale: 'ru' | 'en'): string {
+  const rub = Math.floor(kopecks / 100);
+  const fmt = new Intl.NumberFormat(locale === 'en' ? 'en-RU' : 'ru-RU');
+  return fmt.format(rub) + ' ₽';
+}
+const CARD_DISCOUNT: Partial<Record<Plan, number>> = {
+  MONTH: 0.30,
+  HALF_YEAR: 0.50,
+  YEAR: 0.70,
+};
+function roundDownToNine(rub: number): number {
+  if (rub <= 9) return 9;
+  return Math.floor((rub - 9) / 10) * 10 + 9;
+}
+function discountRubForPlan(plan: Plan, kopecks: number): number {
+  const rub = Math.floor(kopecks / 100);
+  const d = CARD_DISCOUNT[plan] ?? 0;
+  if (!d) return rub;
+  const discounted = Math.max(1, Math.floor(rub * (1 - d)));
+  return roundDownToNine(discounted);
+}
+
+/* ---- auth helpers (как в Pro) ---- */
+function getCookie(name: string): string {
+  try {
+    const rows = document.cookie ? document.cookie.split('; ') : [];
+    for (const row of rows) {
+      const [k, ...rest] = row.split('=');
+      if (decodeURIComponent(k) === name) return decodeURIComponent(rest.join('='));
+    }
+  } catch {}
+  return '';
+}
+function getTgIdFromWebApp(): string {
+  try {
     const tg: any = (window as any)?.Telegram?.WebApp;
-    try {
-      tg?.ready?.(); tg?.expand?.();
-      tg?.setHeaderColor?.('secondary_bg_color');
-      tg?.setBackgroundColor?.('#ffffff');
-      const accent = tg?.themeParams?.button_color || '#4c82ff';
-      const text   = tg?.themeParams?.text_color   || '#0f172a';
-      document.documentElement.style.setProperty('--accent', accent);
-      document.documentElement.style.setProperty('--text',   text);
-    } catch {}
+    const id = tg?.initDataUnsafe?.user?.id;
+    return id ? String(id) : '';
+  } catch { return ''; }
+}
+function getVkKeyFromCookie(): string {
+  try {
+    const raw = getCookie('vk_params');
+    if (!raw) return '';
+    const sp = new URLSearchParams(raw);
+    const uid = sp.get('vk_user_id');
+    return uid ? `vk:${uid}` : '';
+  } catch { return ''; }
+}
+async function fetchAuthKeyFromApi(): Promise<string> {
+  try {
+    const r = await fetch('/api/me', { method: 'POST', cache: 'no-store' });
+    const j = await r.json().catch(()=> ({}));
+    const key = j?.user?.telegramId;
+    return key ? String(key) : '';
+  } catch { return ''; }
+}
+async function getAuthKey(): Promise<string> {
+  const tgId = getTgIdFromWebApp();
+  if (tgId) return tgId;
+  const vkKey = getVkKeyFromCookie();
+  if (vkKey) return vkKey;
+  return await fetchAuthKeyFromApi();
+}
+/* ---------------------------------- */
+
+export default function ProMaxPage() {
+  const locale: Locale = readLocale();
+  const S = STRINGS[locale];
+  const TITLES = locale === 'en' ? TITLES_EN : TITLES_RU;
+
+  const [busy, setBusy] = useState<Plan | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+
+  const pricesStars = useMemo(() => getPrices(tier), []);
+  const pricesRubK  = useMemo(() => getVkRubKopecks(tier), []);
+  const pricesRubDiscounted = useMemo(() => ({
+    WEEK:      discountRubForPlan('WEEK',      pricesRubK.WEEK),
+    MONTH:     discountRubForPlan('MONTH',     pricesRubK.MONTH),
+    HALF_YEAR: discountRubForPlan('HALF_YEAR', pricesRubK.HALF_YEAR),
+    YEAR:      discountRubForPlan('YEAR',      pricesRubK.YEAR),
+  }), [pricesRubK]);
+
+  useEffect(() => {
+    const w: any = window;
+    try { w?.Telegram?.WebApp?.ready?.(); w?.Telegram?.WebApp?.expand?.(); } catch {}
     try { document.documentElement.lang = locale; } catch {}
-    try {
-      const ok = CSS.supports('backdrop-filter: blur(10px)') || CSS.supports('-webkit-backdrop-filter: blur(10px)');
-      document.documentElement.classList.toggle('no-frost', !ok);
-    } catch {}
   }, [locale]);
 
-  // ⚡️ Форсим fullscreen: если открылись не как Main App — один раз уходим в deeplink
-  useEffect(() => {
+  async function buyStars(plan: Plan) {
+    if (busy) return;
+    setBusy(plan); setMsg(null); setInfo(null);
     try {
-      const tg: any = (window as any)?.Telegram?.WebApp;
-      const params = new URLSearchParams(location.search);
-      const fromDeeplink = Boolean(tg?.initDataUnsafe?.start_param || params.get('tgWebAppStartParam'));
-      const alreadyTried = sessionStorage.getItem('__fs_fix_tried__');
+      const res = await fetch(`/api/createInvoice?tier=${tier}&plan=${plan}`, { method: 'POST' });
+      const { ok, link, error } = await res.json();
+      if (!ok || !link) throw new Error(error || 'createInvoiceLink failed');
+      const tg: any = (window as any).Telegram?.WebApp;
+      if (tg?.openInvoice) tg.openInvoice(link, () => {});
+      else if (tg?.openTelegramLink) tg.openTelegramLink(link);
+      else window.location.href = link;
+    } catch (e: any) {
+      setMsg(e?.message || 'Неизвестная ошибка');
+    } finally {
+      setTimeout(() => setBusy(null), 1200);
+    }
+  }
 
-      // В чат-режиме у WebApp нет start_param. Если ещё не пытались — прыгаем в Main App.
-      if (!fromDeeplink && !alreadyTried && tg) {
-        sessionStorage.setItem('__fs_fix_tried__', '1');
-        const link = `https://t.me/${BOT_USERNAME.replace(/^@/, '')}?startapp=${encodeURIComponent(STARTAPP_PARAM)}`;
-        if (typeof tg.openTelegramLink === 'function') tg.openTelegramLink(link);
-        else window.location.href = link;
+  async function buyCard(plan: Plan, extraBody: Record<string, any> = {}) {
+    if (busy) return;
+    setBusy(plan); setMsg(null); setInfo(null);
+    try {
+      const email = (typeof localStorage !== 'undefined' ? localStorage.getItem('lm_email') : '') || '';
+      if (!/\S+@\S+\.\S+/.test(email)) {
+        setMsg('Укажите e-mail для чека');
+        const ret = encodeURIComponent(location.pathname);
+        window.location.href = `/pay/email?return=${ret}`;
+        return;
       }
-    } catch {}
-  }, []);
 
-  // cache-buster
-  const suffix = useMemo(() => {
-    try {
-      const u = new URL(window.location.href);
-      const sp = new URLSearchParams(u.search);
-      sp.set('welcomed', '1'); sp.set('_v', 'hm16');
-      const id = u.searchParams.get('id'); if (id) sp.set('id', id);
-      const s = sp.toString();
-      return s ? `?${s}` : '?welcomed=1&_v=hm16';
-    } catch { return '?welcomed=1&_v=hm16'; }
-  }, []);
-  const href = (p: string) => `${p}${suffix}` as Route;
+      const telegramId = await getAuthKey();
+      if (!telegramId) {
+        setMsg('Не удалось определить ваш ID. Откройте приложение из Telegram/VK и попробуйте снова.');
+        return;
+      }
 
-  const dailyDesc  = (L as any).dailyDesc  || 'Быстрые ежедневные инструменты и автоматизации.';
-  const expertDesc = (L as any).expertDesc || 'Продвинутые промпты, рецепты и профессиональные сценарии.';
-  const appTitle   = (L as any).appTitle   || 'LiveManager';
+      const res = await fetch(`/api/pay/card/create?tier=${tier}&plan=${plan}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, telegramId, ...extraBody }),
+      });
+      const { ok, url, error, message } = await res.json();
+      if (!ok || !url) throw new Error(error || message || 'CARD_LINK_FAILED');
+
+      const tg: any = (window as any).Telegram?.WebApp;
+      if (tg?.openLink) tg.openLink(url, { try_instant_view: false });
+      else window.location.href = url;
+    } catch (e: any) {
+      setMsg(String(e?.message || 'Ошибка при подготовке оплаты картой.'));
+    } finally {
+      setTimeout(() => setBusy(null), 800);
+    }
+  }
+
+  async function buyTrial() {
+    await buyCard('MONTH', { trial: true });
+  }
+
+  const entries = Object.entries(pricesStars) as [Plan, typeof pricesStars[Plan]][];
+
+  const T = {
+    title: locale === 'en' ? 'LiveManager Pro+ — payment' : 'LiveManager Pro+ — оплата',
+    starsHeader: locale === 'en' ? 'Pay in Telegram Stars' : 'Оплата в Telegram Stars',
+    cardHeader: locale === 'en' ? 'Pay by card (RUB)' : 'Оплата картой (₽)',
+    cardNote: locale === 'en' ? 'Secure payment via YooKassa' : 'Безопасная оплата через ЮKassa',
+    sale: (p: Plan) => ({ MONTH: '-30%', HALF_YEAR: '-50%', YEAR: '-70%', WEEK: '' }[p] || ''),
+    trialName: locale === 'en' ? 'Pro+ — Trial day' : 'Pro+ — Пробный день',
+  };
 
   return (
-    <main className="home">
-      {/* Живой фон */}
-      <div className="bg" aria-hidden>
-        <i className="bg__conic" />
-        <b className="bg__blobs" />
+    <main>
+      <div className="safe">
+        <BackBtn fallback="/pro" />
+
+        <h1 className="title">{T.title}</h1>
+        {msg && <p className="err">{msg}</p>}
+        {info && <p className="info">{info}</p>}
+
+        {/* Card / RUB — СВЕРХУ */}
+        <h3 className="section">{T.cardHeader}</h3>
+        <div className="card-grid">
+          {/* ПРОБНЫЙ ДЕНЬ — красный */}
+          <button
+            type="button"
+            className="card-row card-row--trial glass"
+            disabled={!!busy && busy !== 'MONTH'}
+            onClick={buyTrial}
+          >
+            <div className="card-left">
+              <span className="bank">💳</span>
+              <b className="name">{T.trialName}</b>
+            </div>
+            <span className="sale sale--empty" aria-hidden />
+            <div className="price-wrap">
+              <span className="price-new">{formatRUB(100, locale)}</span>
+              <del className="price-old">{formatRUB(1000, locale)}</del>
+            </div>
+            <span className="chev">›</span>
+          </button>
+
+          {(Object.keys(pricesRubK) as Plan[]).map((p) => {
+            const oldRub = Math.floor(pricesRubK[p] / 100);
+            const newRub = pricesRubDiscounted[p];
+            const hasSale = !!CARD_DISCOUNT[p];
+            const can = !busy || busy === p;
+            const gold = p === 'MONTH';
+            return (
+              <button
+                key={p}
+                type="button"
+                className={`card-row glass ${gold ? 'card-row--gold' : ''}`}
+                disabled={!can}
+                onClick={() => buyCard(p)}
+              >
+                <div className="card-left">
+                  <span className="bank">💳</span>
+                  <b className="name">{TITLES[p]}</b>
+                </div>
+                {hasSale ? <span className="sale">{T.sale(p)}</span> : <span className="sale sale--empty" aria-hidden />}
+                <div className="price-wrap">
+                  {hasSale ? (
+                    <>
+                      <span className="price-new">{formatRUB(newRub * 100, locale)}</span>
+                      <del className="price-old">{formatRUB(oldRub * 100, locale)}</del>
+                    </>
+                  ) : (
+                    <span className="price-new">{formatRUB(oldRub * 100, locale)}</span>
+                  )}
+                </div>
+                <span className="chev">›</span>
+              </button>
+            );
+          })}
+        </div>
+        <small className="subnote">{T.cardNote}</small>
+
+        {/* Stars — белые стеклянные */}
+        <h3 className="section">{T.starsHeader}</h3>
+        <div className="list">
+          {entries.map(([key, cfg]) => {
+            const can = !busy || busy === key;
+            return (
+              <button
+                key={key}
+                disabled={!can}
+                onClick={() => buyStars(key)}
+                className="row glass"
+                aria-label={`${TITLES[key]} — ${cfg.amount} ⭐`}
+              >
+                <span className="left">
+                  <span className="dot">✨</span>
+                  <b className="name">{TITLES[key]}</b>
+                </span>
+                <span className="right">
+                  <span className="price">{cfg.amount}</span>
+                  <span className="star" aria-hidden><Star size={16} /></span>
+                  <span className="chev">›</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <header className="hdr">
-        <h1 className="title">{appTitle}</h1>
-        <p className="sub">{L.subtitle}</p>
-      </header>
-
-      <section className="stack">
-        <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
-          <div className="card__text">
-            <b className="card__title">{L.daily}</b>
-            <span className="card__desc">{dailyDesc}</span>
-          </div>
-          <span className="card__chev">›</span>
-        </Link>
-
-        {/* CHATGPT 5 — своя стеклянная капсула (максимально прозрачная) */}
-        <Link href={href('/home/ChatGPT')} className="glass-cta gpt" aria-label="CHATGPT 5">
-          <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
-          <span className="gpt__chev">›</span>
-        </Link>
-
-        {/* Эксперт центр — нежное золото */}
-        <Link href={href('/home/pro-plus')} className="card glass pulse gold raise" style={{ textDecoration: 'none' }}>
-          <div className="card__text">
-            <b className="card__title">{L.expert}</b>
-            <span className="card__desc">{expertDesc}</span>
-          </div>
-          <span className="card__chev">›</span>
-        </Link>
-      </section>
-
-      {/* Золотая стеклянная кнопка «Пробный день 1₽» */}
-      <Link href={href('/pro/max')} className="trial-pill" aria-label="Пробный день за 1 рубль">
-        <span className="trial-pill__line">Пробный</span>
-        <span className="trial-pill__line">день</span>
-        <span className="trial-pill__line trial-pill__price">1₽</span>
-      </Link>
-
-      {/* Узкая кнопка снизу по центру */}
-      <a href={href('/cabinet')} className="dock" aria-label={L.cabinet}>
-        <b>{L.cabinet}</b>
-      </a>
-
       <style jsx>{`
-        :global(html, body, #__next){ height:100%; overflow:hidden; }
-        :global(*){ -webkit-tap-highlight-color: transparent; }
-        :global(a), :global(a:visited){ text-decoration:none; color:inherit; }
-        :global(.lm-bg){ display:none !important; }
+        .safe { max-width: 600px; margin: 0 auto; display:flex; flex-direction:column; gap:14px; padding:20px; }
+        .title { text-align:center; margin:6px 0 2px; }
+        .section { margin:6px 2px 2px; opacity:.9; }
+        .err { color:#ff4d6d; text-align:center; }
+        .info { opacity:.7; text-align:center; }
 
-        :global(.lm-page) .card.glass{
-          background: rgba(255,255,255,.20) !important;
-          border: 1px solid rgba(15,23,42,.22) !important;
-          box-shadow: 0 22px 44px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.55) !important;
-          -webkit-backdrop-filter: blur(18px) saturate(180%) !important;
-                  backdrop-filter: blur(18px) saturate(180%) !important;
-        }
-
-        .home{
-          position:relative; z-index:1;
-          height:100dvh; display:grid; grid-template-rows:auto 1fr;
-          color:var(--text,#0f172a);
-          padding:16px 14px 0;
-        }
-
-        /* Фон (ускорено) */
-        .bg{ position:fixed; inset:0; z-index:0; overflow:hidden;
-             background: radial-gradient(120% 100% at 50% 0%, #dff5f1, #eaf3ff 70%); }
-        .bg__conic{
-          position:absolute; left:50%; top:50%;
-          width:220vmax; height:220vmax; transform:translate(-50%,-50%) rotate(0deg);
-          background: conic-gradient(from 0deg, rgba(42,214,205,.30), rgba(146,220,255,.28), rgba(255,210,160,.26), rgba(42,214,205,.30));
-          filter: blur(60px) saturate(140%); will-change: transform;
-          animation: spinBg 12.6s linear infinite;
-          opacity:.55;
-        }
-        .bg__blobs{
-          position:absolute; inset:-12%;
-          background:
-            radial-gradient(90vmax 60vmax at 18% 22%, rgba(42,214,205,.22), transparent 60%),
-            radial-gradient(90vmax 60vmax at 82% 86%, rgba(92,170,255,.20), transparent 60%);
-          will-change: transform; animation: floatBg 8.4s ease-in-out infinite alternate;
-          opacity:.85;
-        }
-        @keyframes spinBg { to { transform: translate(-50%,-50%) rotate(360deg); } }
-        @keyframes floatBg { 0% { transform: translate3d(0,0,0) scale(1); } 100%{ transform: translate3d(-3%,2%,0) scale(1.02); } }
-
-        .hdr{ text-align:center; margin-bottom:10px; position:relative; z-index:2; }
-        .title{
-          margin:6px 0 4px; font-weight:800; letter-spacing:-.02em;
-          font-size:32px; line-height:1.1;
-          color:var(--text,#0f172a);
-          -webkit-text-fill-color: currentColor !important;
-          background:none !important;
-        }
-        .sub{ opacity:.75; margin:0; }
-
-        .stack{
-          display:grid; gap:16px; align-content:start; justify-items:center;
-          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 98px);
-          min-height:0;
-        }
-        .stack > *{ width:min(92vw, 640px); }
-
-        .card{ position:relative; padding:16px; border-radius:18px; }
-        .card__text{ min-width:0; }
-        .card__title{ display:block; font-size:18px; margin-bottom:6px; }
-        .card__desc{ display:block; opacity:.78; font-size:14px; line-height:1.25; }
-        .card__chev{ font-size:22px; opacity:.45; position:absolute; right:14px; top:50%; transform:translateY(-50%); }
-
-        .pulse{ animation: cardPulse 2.4s ease-in-out infinite; }
-        .pulse::after{
-          content:''; position:absolute; inset:-2px; border-radius:inherit; pointer-events:none;
-          box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent);
-          opacity:0; animation: halo 2.4s ease-in-out infinite;
-        }
-        @keyframes cardPulse{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-1px)} }
-        @keyframes halo{
-          0%,100%{opacity:0; box-shadow:0 0 0 0 color-mix(in oklab, var(--accent,#4c82ff) 16%, transparent)}
-          50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
-        }
-
-        /* CHATGPT 5 — предельно прозрачное стекло */
-        .glass-cta{
-          position:relative; z-index:3; isolation:isolate;
-          border-radius:22px; min-height:120px; padding:20px 18px;
-          display:grid; grid-template-columns:1fr auto; align-items:center; justify-items:center;
-          background: rgba(255,255,255,.06) !important;
-          border: 1px solid rgba(15,23,42,.12) !important;
-          box-shadow: 0 8px 16px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.45) !important;
-          -webkit-backdrop-filter: blur(10px) saturate(130%) !important;
-                  backdrop-filter: blur(10px) saturate(130%) !important;
-        }
-        .glass-cta::before{
-          content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none; z-index:0;
-          background:
-            radial-gradient(120% 140% at 10% 0%, rgba(255,255,255,.30), transparent 62%),
-            linear-gradient(180deg, rgba(255,255,255,.08), transparent 45%) !important;
-        }
-        .gpt__shimmer{
-          position:relative; z-index:1; display:inline-block;
-          justify-self:center; font-weight:900; letter-spacing:.02em;
-          font-size:clamp(50px, 10vw, 68px); line-height:1;
-          background:conic-gradient(from 180deg at 50% 50%, #9aa7ff, #6aa8ff, #a28bff, #ffdb86, #9aa7ff);
-          background-size:200% 200%;
-          -webkit-background-clip:text; background-clip:text; color:transparent;
-          -webkit-text-fill-color: transparent;
-          text-shadow:0 0 28px rgba(141,160,255,.18);
-          animation: shimmer 6s ease-in-out infinite, gptPulse 1.9s ease-in-out infinite;
-        }
-        .gpt__chev{ position:relative; z-index:1; font-size:28px; opacity:.45; }
-        @keyframes shimmer{ 0%{background-position:0% 50%} 50%{background-position:100% 50%} 100%{background-position:0% 50%} }
-        @keyframes gptPulse{
-          0%,100%{ opacity:.92; filter:brightness(1); text-shadow:0 0 24px rgba(141,160,255,.18); }
-          50%    { opacity:1;    filter:brightness(1.18); text-shadow:0 0 46px rgba(141,160,255,.36); }
-        }
-
-        /* Эксперт центр — мягкое золото */
-        .raise{ z-index:2; isolation:isolate; }
-        :global(.lm-page) .card.gold{
-          background:
-            linear-gradient(140deg, rgba(255,225,150,.22), rgba(255,205,120,.10)),
-            rgba(255,255,255,.20) !important;
-          border: 1px solid rgba(215,170,60,.55) !important;
-          box-shadow: 0 22px 44px rgba(215,170,60,.20), inset 0 1px 0 rgba(255,245,205,.85) !important;
-        }
-        :global(.lm-page) .card.gold::before{
-          content:''; position:absolute; inset:0; border-radius:18px; pointer-events:none; z-index:0;
-          background:
-            radial-gradient(120% 160% at 12% 0%, rgba(255,220,140,.35), rgba(255,220,140,0) 65%),
-            linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.08) 50%, transparent 80%) !important;
-        }
-
-        /* Кнопка пробного дня — золотой стеклянный кружок */
-        .trial-pill{
-          position:fixed;
-          left:50%;
-          transform:translateX(-50%);
-          bottom: calc(env(safe-area-inset-bottom,0px) + 68px);
-          width:92px;
-          height:92px;
-          border-radius:999px;
-          display:flex;
-          flex-direction:column;
-          align-items:center;
-          justify-content:center;
-          gap:1px;
-          font-size:13px;
-          font-weight:700;
-          text-align:center;
-          z-index:3;
-          background:
-            radial-gradient(120% 160% at 15% 0%, rgba(255,240,200,.85), rgba(255,215,140,.45)),
-            rgba(255,255,255,.80);
-          border:1px solid rgba(215,170,60,.70);
+        .glass {
+          background: rgba(255,255,255,.78);
+          color: #0d1220;
+          border: 1px solid rgba(0,0,0,.08);
           box-shadow:
-            0 14px 32px rgba(215,170,60,.45),
-            inset 0 1px 0 rgba(255,255,255,.85);
-          -webkit-backdrop-filter: blur(14px) saturate(170%);
-                  backdrop-filter: blur(14px) saturate(170%);
-          color:#3a2600;
-        }
-        .trial-pill__line{ line-height:1.1; }
-        .trial-pill__price{
-          font-size:16px;
-          margin-top:3px;
+            0 10px 28px rgba(17, 23, 40, .12),
+            inset 0 0 0 1px rgba(255,255,255,.55);
+          backdrop-filter: saturate(160%) blur(14px);
+          -webkit-backdrop-filter: saturate(160%) blur(14px);
         }
 
-        /* Узкая кнопка снизу по центру */
-        .dock{
-          position:fixed;
-          left:50%; right:auto;
-          transform: translateX(-50%);
-          bottom: calc(env(safe-area-inset-bottom,0px) + 8px);
-          width: min(560px, 50vw);
-          padding: 14px 18px;
-          text-align:center; font-weight:800;
-          color:#0f172a; z-index:2;
-          background: rgba(255,255,255,.92);
-          border:1px solid rgba(15,23,42,.16);
-          border-radius: 14px;
-          box-shadow:0 10px 28px rgba(15,23,42,.12), inset 0 1px 0 rgba(255,255,255,.68);
-          -webkit-backdrop-filter: blur(12px) saturate(160%);
-                  backdrop-filter: blur(12px) saturate(160%);
+        .list { display:grid; gap:12px; }
+        .row {
+          width:100%; border-radius:14px; padding:14px 18px;
+          display:grid; grid-template-columns:1fr auto; align-items:center; column-gap:12px;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+        }
+        .row:hover { transform: translateY(-1px); }
+        .left { display:flex; align-items:center; gap:10px; min-width:0; }
+        .right { display:flex; justify-content:flex-end; align-items:center; gap:8px; font-variant-numeric: tabular-nums; }
+        .star :global(svg){ display:block; }
+        .chev { opacity:.45; }
+
+        .card-grid { display:grid; gap:10px; }
+        .card-row {
+          position:relative; width:100%; border-radius:14px; padding:14px 16px;
+          display:grid; grid-template-columns:1fr auto auto auto; grid-template-areas:"left sale price chev";
+          align-items:center; column-gap:12px;
+          transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+        }
+        .card-row:hover { transform: translateY(-1px); }
+        .card-left { grid-area:left; display:flex; align-items:center; gap:10px; min-width:0; }
+        .bank { width:30px; height:30px; border-radius:10px; display:grid; place-items:center;
+          background: rgba(0,0,0,.04); border:1px solid rgba(0,0,0,.08); }
+        .sale { grid-area:sale; padding:4px 8px; border-radius:10px; font-size:12px;
+          background: rgba(91,140,255,.18); border:1px solid rgba(91,140,255,.38); white-space:nowrap; }
+        .sale--empty { visibility:hidden; padding:0; border:0; }
+        .price-wrap { grid-area:price; display:flex; flex-direction:column; align-items:flex-end; line-height:1.05; }
+        .price-new { font-weight:800; }
+        .price-old { opacity:.55; text-decoration:line-through; font-size:13px; }
+        .subnote { opacity:.7; margin-top:-4px; }
+        button:disabled { opacity:.75; }
+
+        .card-row--gold {
+          border-color: rgba(255,191,73,.55);
+          box-shadow:
+            0 12px 34px rgba(255,191,73,.20),
+            inset 0 0 0 1px rgba(255,210,120,.55);
+          background:
+            linear-gradient(135deg, rgba(255,210,120,.18), rgba(255,191,73,.12)),
+            rgba(255,255,255,.78);
+        }
+        .card-row--trial {
+          border-color: rgba(255,99,99,.45);
+          box-shadow:
+            0 12px 34px rgba(255,99,99,.18),
+            inset 0 0 0 1px rgba(255,255,255,.55);
+          background:
+            linear-gradient(135deg, rgba(255,120,120,.18), rgba(255,90,90,.10)),
+            rgba(255,255,255,.78);
+        }
+
+        @media (max-width:380px){
+          .card-row { grid-template-columns:1fr auto; grid-template-areas:"left chev" "sale chev" "price chev"; row-gap:6px; }
+          .price-wrap { align-items:flex-start; }
         }
       `}</style>
     </main>
