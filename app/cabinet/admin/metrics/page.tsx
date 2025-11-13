@@ -106,30 +106,28 @@ export default function AdminMetricsPage() {
     }
   }
 
-  // «Скачать за всё время (TXT)» — только те, кто нажал /start (через StartEvent)
+  // «Скачать за всё время (TXT)» — отправляем TXT-файл админу в Telegram
   function downloadAllTimeTxt() {
     const initData = (window as any)?.Telegram?.WebApp?.initData || '';
     (async () => {
       try {
-        const r = await fetch('/api/admin/export/users?format=txt', {
+        const params = new URLSearchParams({ format: 'txt', mode: 'send' });
+        if (initData) params.set('init', initData);
+
+        const r = await fetch('/api/admin/export/users?' + params.toString(), {
           method: 'GET',
           headers: initData ? { 'x-init-data': initData } : {},
           cache: 'no-store',
         });
-        if (!r.ok) {
-          const j = await r.json().catch(() => ({} as any));
+        const j = await r.json().catch(() => ({} as any));
+        if (!r.ok || !j?.ok) {
           throw new Error(j?.error || `HTTP ${r.status}`);
         }
-        const txt = await r.text();
-        const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'users-started-all.txt';
-        document.body.appendChild(a); a.click();
-        URL.revokeObjectURL(url); a.remove();
+
+        alert('TXT-файл с пользователями отправлен вам в чат с ботом.');
         haptic('medium');
       } catch (e:any) {
-        alert('Не удалось скачать: ' + String(e?.message || e));
+        alert('Не удалось отправить файл: ' + String(e?.message || e));
       }
     })();
   }
