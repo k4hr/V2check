@@ -1,10 +1,7 @@
-/* path: lib/ai.ts */
-
 /** Универсальные типы нашего приложения */
 export type ChatContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'input_image'; image_url: { url: string } }
-  | { type: 'image_url'; image_url: { url: string } }; // совместимость
+  | { type: 'input_image'; image_url: { url: string } };
 
 export type ChatMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -25,16 +22,16 @@ const BASE_URL =
   process.env.AI_BASE_URL ||
   (PROVIDER === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1');
 
-/** Для OpenAI по умолчанию используем Responses API */
+/** Для OpenAI по умолчанию пробуем Responses API, с авто-фолбэком на Chat Completions */
 const USE_RESPONSES =
   (process.env.AI_USE_RESPONSES ??
     (PROVIDER === 'openai' ? '1' : '0')) === '1';
 
-/** Фолбэк-модель на случай, если вызов askAI() без явной model */
+/** Фолбэк-модель, если явно не передали в askAI() */
 const DEFAULT_MODEL =
   process.env.AI_MODEL ||
   process.env.OPENAI_MODEL ||
-  'gpt-4o-mini'; // Free-предпочтение
+  'gpt-4o-mini'; // предпочтение для free
 
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 60_000);
 const TEMP       = Number(process.env.AI_TEMP ?? 0.2);
@@ -52,30 +49,25 @@ function ensureBlocks(content: string | ChatContentBlock[]): ChatContentBlock[] 
 function toResponsesInput(messages: ChatMessage[]) {
   return (messages || []).map(m => ({
     role: m.role,
-    content: ensureBlocks(m.content).map(b => {
-      const t = (b as any).type;
-      if (t === 'input_image' || t === 'image_url') {
-        return { type: 'input_image', image_url: { url: (b as any).image_url.url } };
-      }
-      return { type: 'text', text: String((b as any).text ?? '') };
-    })
+    content: ensureBlocks(m.content).map(b =>
+      b.type === 'input_image'
+        ? { type: 'input_image', image_url: { url: b.image_url.url } }
+        : { type: 'text', text: b.text }
+    )
   }));
 }
 
 /** Тело для Chat Completions (OpenAI legacy / OpenRouter) */
 function toChatCompletionsMessages(messages: ChatMessage[]) {
   return (messages || []).map(m => {
-    const blocks = ensureBlocks(m.content).map(b => {
-      const t = (b as any).type;
-      if (t === 'input_image' || t === 'image_url') {
-        return { type: 'image_url', image_url: { url: (b as any).image_url.url } } as const;
-      }
-      return { type: 'text', text: String((b as any).text ?? '') } as const;
-    });
+    const blocks = ensureBlocks(m.content).map(b =>
+      b.type === 'input_image'
+        ? ({ type: 'image_url', image_url: { url: b.image_url.url } } as const)
+        : ({ type: 'text', text: b.text } as const)
+    );
 
-    // Chat Completions допускает строку (когда один текстовый блок) или массив частей
     const content =
-      blocks.length === 1 && (blocks[0] as any).type === 'text'
+      blocks.length === 1 && blocks[0].type === 'text'
         ? (blocks[0] as any).text
         : (blocks as any);
 
@@ -103,10 +95,16 @@ async function safeReadBody(res: Response) {
   }
 }
 
+function isEndpointMismatch(status: number, data: any): boolean {
+  if (status === 404) return true;            // endpoint not found
+  if (status === 415 || status === 422) return true; // unsupported media/payload
+  const msg = String(data?.error?.message || '').toLowerCase();
+  return /use .*chat\.completions/.test(msg) || /use .*responses/.test(msg);
+}
+
 /** Достаём чистый текст из Responses API */
 function extractTextFromResponses(data: any): string {
   if (typeof data?.output_text === 'string') return data.output_text;
-
   const chunks = Array.isArray(data?.output) ? data.output : [];
   const pieces: string[] = [];
   for (const ch of chunks) {
@@ -137,47 +135,76 @@ export async function askAI(
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
 
   try {
-    const url = USE_RESPONSES && PROVIDER === 'openai'
-      ? `${BASE_URL}/responses`
-      : `${BASE_URL}/chat/completions`;
+    const responsesUrl = `${BASE_URL}/responses`;
+    const chatUrl      = `${BASE_URL}/chat/completions`;
 
-    const body =
-      url.endsWith('/responses')
-        ? {
-            model,
-            input: toResponsesInput(messages),
-            temperature: TEMP,
-            max_output_tokens: MAX_TOKENS,
-          }
-        : {
-            model,
-            messages: toChatCompletionsMessages(messages),
-            temperature: TEMP,
-            max_tokens: MAX_TOKENS,
-          };
+    const responsesBody = {
+      model,
+      input: toResponsesInput(messages),
+      temperature: TEMP,
+      max_output_tokens: MAX_TOKENS,
+    };
+    const chatBody = {
+      model,
+      messages: toChatCompletionsMessages(messages),
+      temperature: TEMP,
+      max_tokens: MAX_TOKENS,
+    };
 
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify(body),
-      signal: ctrl.signal,
-    });
+    // 1) Пытаемся через Responses (если включено)
+    if (USE_RESPONSES && PROVIDER === 'openai') {
+      const r = await fetch(responsesUrl, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(responsesBody),
+        signal: ctrl.signal,
+      });
+      const data = await safeReadBody(r);
 
-    const data = await safeReadBody(res);
+      if (r.ok) return extractTextFromResponses(data);
 
-    if (!res.ok) {
+      // Если endpoint/модель не подошли — пробуем Chat Completions
+      if (isEndpointMismatch(r.status, data)) {
+        const r2 = await fetch(chatUrl, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(chatBody),
+          signal: ctrl.signal,
+        });
+        const data2 = await safeReadBody(r2);
+        if (!r2.ok) {
+          const msg =
+            data2?.error?.message ||
+            (typeof data2 === 'string' ? data2 : JSON.stringify(data2)) ||
+            `HTTP_${r2.status}`;
+        throw new Error(`AI_HTTP_${r2.status}: ${msg}`);
+        }
+        return extractTextFromChatCompletions(data2);
+      }
+
       const msg =
         data?.error?.message ||
         (typeof data === 'string' ? data : JSON.stringify(data)) ||
-        `HTTP_${res.status}`;
-      throw new Error(`AI_HTTP_${res.status}: ${msg}`);
+        `HTTP_${r.status}`;
+      throw new Error(`AI_HTTP_${r.status}: ${msg}`);
     }
 
-    const text = url.endsWith('/responses')
-      ? extractTextFromResponses(data)
-      : extractTextFromChatCompletions(data);
-
-    return text || '';
+    // 2) Сразу Chat Completions
+    const rc = await fetch(chatUrl, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify(chatBody),
+      signal: ctrl.signal,
+    });
+    const dataC = await safeReadBody(rc);
+    if (!rc.ok) {
+      const msg =
+        dataC?.error?.message ||
+        (typeof dataC === 'string' ? dataC : JSON.stringify(dataC)) ||
+        `HTTP_${rc.status}`;
+      throw new Error(`AI_HTTP_${rc.status}: ${msg}`);
+    }
+    return extractTextFromChatCompletions(dataC);
   } catch (e: any) {
     const status = e?.status || e?.response?.status;
     const detail =
