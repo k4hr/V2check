@@ -17,7 +17,7 @@ const PROPLUS_QA_PER_DAY  = Number(process.env.PROPLUS_QA_PER_DAY  ?? 200);
 const MODEL_FREE =
   process.env.AI_MODEL_FREE ||
   process.env.OPENAI_MODEL_FREE ||
-  'gpt-4o-mini'; // ← Бесплатная — GPT-4 mini
+  'gpt-4o-mini'; // Бесплатная — GPT-4 mini
 
 const MODEL_PRO =
   process.env.AI_MODEL_PRO ||
@@ -81,14 +81,23 @@ function isSupportedImageUrl(u?: string): boolean {
   if (u.startsWith('data:image/')) return true;
   try { const url = new URL(u); return url.protocol === 'https:' && !!url.hostname; } catch { return false; }
 }
+
+/** Сборка контента user-сообщения.
+ * ВАЖНО: используем input_image — это нативный формат для /v1/responses.
+ * В lib/ai.ts есть конвертация под Chat Completions.
+ */
 function buildUserContent(prompt: string, images?: string[]) {
   const content: any[] = [];
   const text = (prompt || '').trim();
   if (text) content.push({ type: 'text', text });
+
   const arr = Array.isArray(images) ? images.filter(isSupportedImageUrl) : [];
-  for (const url of arr) content.push({ type: 'image_url', image_url: { url } });
+  for (const url of arr) {
+    content.push({ type: 'input_image', image_url: { url } });
+  }
   return content.length ? content : [{ type: 'text', text: '' }];
 }
+
 function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
   return (history || []).map((m) => {
     const txt = typeof (m as any).content === 'string' ? (m as any).content : '';
@@ -100,7 +109,7 @@ function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
 function pickModelByTier(tier: TierLevel): string {
   if (tier === 'PROPLUS') return MODEL_PRO_PLUS; // напр. gpt-5 / gpt-5.1
   if (tier === 'PRO')     return MODEL_PRO;
-  return MODEL_FREE;                              // ← free = gpt-4o-mini
+  return MODEL_FREE;                               // free = gpt-4o-mini
 }
 
 /** Основной хэндлер */
@@ -142,7 +151,7 @@ export async function POST(req: NextRequest) {
           ...mmHistory,
           { role: 'user', content: userContent as any },
         ],
-        { model } // ← gpt-4o-mini
+        { model } // gpt-4o-mini
       );
 
       const answer = cleanAssistantText(raw);
@@ -179,7 +188,7 @@ export async function POST(req: NextRequest) {
         ...mmHistory,
         { role: 'user', content: userContent as any },
       ],
-      { model } // ← PRO/PRO+ из .env
+      { model } // PRO/PRO+ из .env
     );
 
     const answer = cleanAssistantText(raw);
