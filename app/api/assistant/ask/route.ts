@@ -143,15 +143,32 @@ export async function POST(req: NextRequest) {
     const history  = (body?.history || []) as ChatMessage[];
     const mode     = String(body?.mode || '');
     const images   = Array.isArray(body?.images) ? (body.images as string[]) : [];
-    const model    = pickModelByMode(mode);
+
+    // 1) Желаемая модель по режиму
+    const desired = pickModelByMode(mode);
+
+    // 2) Определяем подписку (+лимиты ниже)
+    const tgId = resolveTelegramId(req);
+    const { tier, userId } = await resolveTierByTgId(tgId);
+    const today = todayStr();
+
+    // 3) Разрешённая модель по уровню подписки
+    const allowed =
+      tier === 'PROPLUS' ? MODEL_PRO_PLUS :
+      tier === 'PRO'     ? MODEL_PRO :
+                           MODEL_DEFAULT;
+
+    // 4) Выбираем финальную модель: не выше allowed
+    const ORDER = [MODEL_DEFAULT, MODEL_PRO, MODEL_PRO_PLUS] as const;
+    const rank = (m: string) => {
+      const i = ORDER.indexOf(m as any);
+      return i < 0 ? 0 : i;
+    };
+    const model = rank(desired) <= rank(allowed) ? desired : allowed;
 
     if (!prompt && (!images || images.length === 0)) {
       return NextResponse.json({ ok: false, error: 'EMPTY_PROMPT' }, { status: 400 });
     }
-
-    const tgId = resolveTelegramId(req);
-    const { tier, userId } = await resolveTierByTgId(tgId);
-    const today = todayStr();
 
     const mmHistory: ChatMessage[] = toMultimodalHistory(history);
     const userContent = buildUserContent(prompt, images);
