@@ -31,7 +31,7 @@ const USE_RESPONSES =
 const DEFAULT_MODEL =
   process.env.AI_MODEL ||
   process.env.OPENAI_MODEL ||
-  'gpt-4o-mini'; // предпочтение для free
+  'gpt-4o-mini'; // free
 
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 60_000);
 const TEMP       = Number(process.env.AI_TEMP ?? 0.2);
@@ -45,14 +45,14 @@ function ensureBlocks(content: string | ChatContentBlock[]): ChatContentBlock[] 
   return [{ type: 'text', text }];
 }
 
-/** Тело для Responses API (OpenAI) */
+/** Тело для Responses API (OpenAI) — ВАЖНО: input_text / input_image */
 function toResponsesInput(messages: ChatMessage[]) {
   return (messages || []).map(m => ({
     role: m.role,
     content: ensureBlocks(m.content).map(b =>
       b.type === 'input_image'
         ? { type: 'input_image', image_url: { url: b.image_url.url } }
-        : { type: 'text', text: b.text }
+        : { type: 'input_text', text: b.text }    // ← было 'text', должно быть 'input_text'
     )
   }));
 }
@@ -95,23 +95,35 @@ async function safeReadBody(res: Response) {
   }
 }
 
+/** Хелпер: когда надо переключиться с Responses на ChatCompletions */
 function isEndpointMismatch(status: number, data: any): boolean {
-  if (status === 404) return true;            // endpoint not found
-  if (status === 415 || status === 422) return true; // unsupported media/payload
-  const msg = String(data?.error?.message || '').toLowerCase();
-  return /use .*chat\.completions/.test(msg) || /use .*responses/.test(msg);
+  if (status === 404 || status === 415 || status === 422) return true;
+  const msg = String(data?.error?.message || data?.message || '').toLowerCase();
+
+  // типичный случай: "unrecognized type 'text' in content" или подсказка про другой эндпоинт
+  if (status === 400 && (
+      /unrecognized type/.test(msg) ||
+      /input_text/.test(msg) ||
+      /use .*chat\.completions/.test(msg) ||
+      /use .*responses/.test(msg)
+    )) return true;
+
+  return false;
 }
 
 /** Достаём чистый текст из Responses API */
 function extractTextFromResponses(data: any): string {
   if (typeof data?.output_text === 'string') return data.output_text;
-  const chunks = Array.isArray(data?.output) ? data.output : [];
+
+  const out = Array.isArray(data?.output) ? data.output : [];
   const pieces: string[] = [];
-  for (const ch of chunks) {
+  for (const ch of out) {
     const content = Array.isArray(ch?.content) ? ch.content : [];
     for (const c of content) {
-      const v = c?.text?.value ?? c?.text ?? '';
-      if (typeof v === 'string' && v) pieces.push(v);
+      const v =
+        (typeof c?.text?.value === 'string' && c.text.value) ? c.text.value :
+        (typeof c?.text === 'string' ? c.text : '');
+      if (v) pieces.push(v);
     }
   }
   return pieces.join('\n').trim();
@@ -151,7 +163,7 @@ export async function askAI(
       max_tokens: MAX_TOKENS,
     };
 
-    // 1) Пытаемся через Responses (если включено)
+    // 1) Пробуем Responses
     if (USE_RESPONSES && PROVIDER === 'openai') {
       const r = await fetch(responsesUrl, {
         method: 'POST',
@@ -163,7 +175,7 @@ export async function askAI(
 
       if (r.ok) return extractTextFromResponses(data);
 
-      // Если endpoint/модель не подошли — пробуем Chat Completions
+      // Если формат/эндпоинт не подошёл — перепробуем Chat Completions
       if (isEndpointMismatch(r.status, data)) {
         const r2 = await fetch(chatUrl, {
           method: 'POST',
@@ -177,7 +189,7 @@ export async function askAI(
             data2?.error?.message ||
             (typeof data2 === 'string' ? data2 : JSON.stringify(data2)) ||
             `HTTP_${r2.status}`;
-        throw new Error(`AI_HTTP_${r2.status}: ${msg}`);
+          throw new Error(`AI_HTTP_${r2.status}: ${msg}`);
         }
         return extractTextFromChatCompletions(data2);
       }
@@ -189,7 +201,7 @@ export async function askAI(
       throw new Error(`AI_HTTP_${r.status}: ${msg}`);
     }
 
-    // 2) Сразу Chat Completions
+    // 2) Иначе — сразу Chat Completions
     const rc = await fetch(chatUrl, {
       method: 'POST',
       headers: authHeaders(),
