@@ -3,7 +3,8 @@
 /** Универсальные типы нашего приложения */
 export type ChatContentBlock =
   | { type: 'text'; text: string }
-  | { type: 'input_image'; image_url: { url: string } };
+  | { type: 'input_image'; image_url: { url: string } }
+  | { type: 'image_url'; image_url: { url: string } }; // совместимость
 
 export type ChatMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -33,7 +34,7 @@ const USE_RESPONSES =
 const DEFAULT_MODEL =
   process.env.AI_MODEL ||
   process.env.OPENAI_MODEL ||
-  'gpt-4o-mini'; // ← Free-предпочтение
+  'gpt-4o-mini'; // Free-предпочтение
 
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 60_000);
 const TEMP       = Number(process.env.AI_TEMP ?? 0.2);
@@ -51,25 +52,30 @@ function ensureBlocks(content: string | ChatContentBlock[]): ChatContentBlock[] 
 function toResponsesInput(messages: ChatMessage[]) {
   return (messages || []).map(m => ({
     role: m.role,
-    content: ensureBlocks(m.content).map(b =>
-      b.type === 'input_image'
-        ? { type: 'input_image', image_url: { url: b.image_url.url } }
-        : { type: 'text', text: b.text }
-    )
+    content: ensureBlocks(m.content).map(b => {
+      const t = (b as any).type;
+      if (t === 'input_image' || t === 'image_url') {
+        return { type: 'input_image', image_url: { url: (b as any).image_url.url } };
+      }
+      return { type: 'text', text: String((b as any).text ?? '') };
+    })
   }));
 }
 
 /** Тело для Chat Completions (OpenAI legacy / OpenRouter) */
 function toChatCompletionsMessages(messages: ChatMessage[]) {
   return (messages || []).map(m => {
-    const blocks = ensureBlocks(m.content).map(b =>
-      b.type === 'input_image'
-        ? ({ type: 'image_url', image_url: { url: b.image_url.url } } as const)
-        : ({ type: 'text', text: b.text } as const)
-    );
+    const blocks = ensureBlocks(m.content).map(b => {
+      const t = (b as any).type;
+      if (t === 'input_image' || t === 'image_url') {
+        return { type: 'image_url', image_url: { url: (b as any).image_url.url } } as const;
+      }
+      return { type: 'text', text: String((b as any).text ?? '') } as const;
+    });
 
+    // Chat Completions допускает строку (когда один текстовый блок) или массив частей
     const content =
-      blocks.length === 1 && blocks[0].type === 'text'
+      blocks.length === 1 && (blocks[0] as any).type === 'text'
         ? (blocks[0] as any).text
         : (blocks as any);
 
