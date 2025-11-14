@@ -7,32 +7,29 @@ import { verifyInitData, getTelegramId, getInitDataFrom } from '@/lib/auth/verif
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/** Дневные лимиты */
 const FREE_QA_PER_DAY     = Number(process.env.FREE_QA_PER_DAY     ?? 2);
 const PRO_QA_PER_DAY      = Number(process.env.PRO_QA_PER_DAY      ?? 100);
 const PROPLUS_QA_PER_DAY  = Number(process.env.PROPLUS_QA_PER_DAY  ?? 200);
 
-/** Модели (из .env с безопасными фолбэками) */
 const MODEL_FREE =
   process.env.AI_MODEL_FREE ||
   process.env.OPENAI_MODEL_FREE ||
-  'gpt-4o-mini';                // бесплатный слой
+  'gpt-4o-mini';
 
 const MODEL_PRO =
   process.env.AI_MODEL_PRO ||
   process.env.OPENAI_MODEL_PRO ||
-  'gpt-5-mini';                 // дефолт для PRO
+  'gpt-5-mini';
 
 const MODEL_PRO_PLUS =
   process.env.AI_MODEL_PRO_PLUS ||
   process.env.OPENAI_MODEL_PRO_PLUS ||
-  'gpt-5.1';                    // топ для PRO+
+  'gpt-5.1';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
 type TierLevel = 'FREE'|'PRO'|'PROPLUS';
 
-/** Telegram ID из заголовков/cookies/qs */
 function resolveTelegramId(req: NextRequest): string | null {
   const initData =
     req.headers.get('x-init-data') ||
@@ -49,7 +46,6 @@ function resolveTelegramId(req: NextRequest): string | null {
   return null;
 }
 
-/** План по Telegram ID */
 async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel; userId?: string }> {
   if (!tgId) return { tier: 'FREE' };
   const user = await prisma.user.findFirst({
@@ -65,7 +61,6 @@ async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel;
   return { tier: 'PRO', userId: user.id };
 }
 
-/** Дата UTC YYYY-MM-DD */
 function todayStr() {
   const d = new Date();
   const y = d.getUTCFullYear();
@@ -74,7 +69,6 @@ function todayStr() {
   return `${y}-${m}-${dd}`;
 }
 
-/** Vision helpers */
 function isSupportedImageUrl(u?: string): boolean {
   if (!u) return false;
   if (u.startsWith('data:image/')) return true;
@@ -85,7 +79,7 @@ function buildUserContent(prompt: string, images?: string[]) {
   const text = (prompt || '').trim();
   if (text) content.push({ type: 'text', text });
   const arr = Array.isArray(images) ? images.filter(isSupportedImageUrl) : [];
-  for (const url of arr) content.push({ type: 'input_image', image_url: { url } }); // для Responses
+  for (const url of arr) content.push({ type: 'input_image', image_url: { url } }); // под Responses
   return content.length ? content : [{ type: 'text', text: '' }];
 }
 function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
@@ -95,14 +89,12 @@ function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
   });
 }
 
-/** Выбор модели по подписке */
 function pickModelByTier(tier: TierLevel): string {
   if (tier === 'PROPLUS') return MODEL_PRO_PLUS;
   if (tier === 'PRO')     return MODEL_PRO;
   return MODEL_FREE;
 }
 
-/** Основной хэндлер */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -158,7 +150,6 @@ export async function POST(req: NextRequest) {
       return resp;
     }
 
-    // ===== PRO / PROPLUS =====
     const limit = tier === 'PROPLUS' ? PROPLUS_QA_PER_DAY : PRO_QA_PER_DAY;
     const used = await prisma.usageDaily.findUnique({
       where: { userId_date: { userId: userId!, date: today } },
