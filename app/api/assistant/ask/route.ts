@@ -1,4 +1,3 @@
-/* path: app/api/assistant/ask/route.ts */
 import { NextResponse, NextRequest } from 'next/server';
 import { askAI, type ChatMessage } from '@/lib/ai';
 import { prisma } from '@/lib/prisma';
@@ -17,17 +16,17 @@ const PROPLUS_QA_PER_DAY  = Number(process.env.PROPLUS_QA_PER_DAY  ?? 200);
 const MODEL_FREE =
   process.env.AI_MODEL_FREE ||
   process.env.OPENAI_MODEL_FREE ||
-  'gpt-4o-mini'; // Бесплатная — GPT-4 mini
+  'gpt-4o-mini';                // бесплатный слой
 
 const MODEL_PRO =
   process.env.AI_MODEL_PRO ||
   process.env.OPENAI_MODEL_PRO ||
-  MODEL_FREE;
+  'gpt-5-mini';                 // разумный дефолт для PRO
 
 const MODEL_PRO_PLUS =
   process.env.AI_MODEL_PRO_PLUS ||
   process.env.OPENAI_MODEL_PRO_PLUS ||
-  MODEL_PRO;
+  'gpt-5.1';                    // топ для PRO+
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 
@@ -66,7 +65,7 @@ async function resolveTierByTgId(tgId?: string|null): Promise<{ tier: TierLevel;
   return { tier: 'PRO', userId: user.id };
 }
 
-/** Утилиты */
+/** Дата UTC YYYY-MM-DD */
 function todayStr() {
   const d = new Date();
   const y = d.getUTCFullYear();
@@ -81,23 +80,14 @@ function isSupportedImageUrl(u?: string): boolean {
   if (u.startsWith('data:image/')) return true;
   try { const url = new URL(u); return url.protocol === 'https:' && !!url.hostname; } catch { return false; }
 }
-
-/** Сборка контента user-сообщения.
- * ВАЖНО: используем input_image — это нативный формат для /v1/responses.
- * В lib/ai.ts есть конвертация под Chat Completions.
- */
 function buildUserContent(prompt: string, images?: string[]) {
   const content: any[] = [];
   const text = (prompt || '').trim();
   if (text) content.push({ type: 'text', text });
-
   const arr = Array.isArray(images) ? images.filter(isSupportedImageUrl) : [];
-  for (const url of arr) {
-    content.push({ type: 'input_image', image_url: { url } });
-  }
+  for (const url of arr) content.push({ type: 'input_image', image_url: { url } }); // важно: input_image
   return content.length ? content : [{ type: 'text', text: '' }];
 }
-
 function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
   return (history || []).map((m) => {
     const txt = typeof (m as any).content === 'string' ? (m as any).content : '';
@@ -107,9 +97,9 @@ function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
 
 /** Выбор модели по подписке */
 function pickModelByTier(tier: TierLevel): string {
-  if (tier === 'PROPLUS') return MODEL_PRO_PLUS; // напр. gpt-5 / gpt-5.1
+  if (tier === 'PROPLUS') return MODEL_PRO_PLUS;
   if (tier === 'PRO')     return MODEL_PRO;
-  return MODEL_FREE;                               // free = gpt-4o-mini
+  return MODEL_FREE;
 }
 
 /** Основной хэндлер */
@@ -151,7 +141,7 @@ export async function POST(req: NextRequest) {
           ...mmHistory,
           { role: 'user', content: userContent as any },
         ],
-        { model } // gpt-4o-mini
+        { model }
       );
 
       const answer = cleanAssistantText(raw);
@@ -188,7 +178,7 @@ export async function POST(req: NextRequest) {
         ...mmHistory,
         { role: 'user', content: userContent as any },
       ],
-      { model } // PRO/PRO+ из .env
+      { model }
     );
 
     const answer = cleanAssistantText(raw);
