@@ -5,7 +5,6 @@ export type ChatContentBlock =
 
 export type ChatMessage = {
   role: 'user' | 'assistant' | 'system';
-  /** Либо сырой текст, либо массив мультимодальных блоков */
   content: string | ChatContentBlock[];
 };
 
@@ -17,21 +16,18 @@ const API_KEY =
   process.env.OPENAI_API_KEY ||
   '';
 
-/** Базовые URL (можно переопределить AI_BASE_URL для прокси) */
 const BASE_URL =
   process.env.AI_BASE_URL ||
   (PROVIDER === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1');
 
-/** Для OpenAI по умолчанию пробуем Responses API, с авто-фолбэком на Chat Completions */
 const USE_RESPONSES =
   (process.env.AI_USE_RESPONSES ??
     (PROVIDER === 'openai' ? '1' : '0')) === '1';
 
-/** Фолбэк-модель, если явно не передали в askAI() */
 const DEFAULT_MODEL =
   process.env.AI_MODEL ||
   process.env.OPENAI_MODEL ||
-  'gpt-4o-mini'; // free
+  'gpt-4o-mini'; // free по умолчанию
 
 const TIMEOUT_MS = Number(process.env.AI_TIMEOUT_MS || 60_000);
 const TEMP       = Number(process.env.AI_TEMP ?? 0.2);
@@ -45,19 +41,19 @@ function ensureBlocks(content: string | ChatContentBlock[]): ChatContentBlock[] 
   return [{ type: 'text', text }];
 }
 
-/** Тело для Responses API (OpenAI) — ВАЖНО: input_text / input_image */
+/** Для Responses API — ВАЖНО: input_text / input_image */
 function toResponsesInput(messages: ChatMessage[]) {
   return (messages || []).map(m => ({
     role: m.role,
     content: ensureBlocks(m.content).map(b =>
       b.type === 'input_image'
         ? { type: 'input_image', image_url: { url: b.image_url.url } }
-        : { type: 'input_text', text: b.text }    // ← было 'text', должно быть 'input_text'
+        : { type: 'input_text', text: b.text } // ← ключевая правка
     )
   }));
 }
 
-/** Тело для Chat Completions (OpenAI legacy / OpenRouter) */
+/** Для Chat Completions */
 function toChatCompletionsMessages(messages: ChatMessage[]) {
   return (messages || []).map(m => {
     const blocks = ensureBlocks(m.content).map(b =>
@@ -65,12 +61,10 @@ function toChatCompletionsMessages(messages: ChatMessage[]) {
         ? ({ type: 'image_url', image_url: { url: b.image_url.url } } as const)
         : ({ type: 'text', text: b.text } as const)
     );
-
     const content =
       blocks.length === 1 && blocks[0].type === 'text'
         ? (blocks[0] as any).text
         : (blocks as any);
-
     return { role: m.role, content };
   });
 }
@@ -95,26 +89,20 @@ async function safeReadBody(res: Response) {
   }
 }
 
-/** Хелпер: когда надо переключиться с Responses на ChatCompletions */
 function isEndpointMismatch(status: number, data: any): boolean {
   if (status === 404 || status === 415 || status === 422) return true;
   const msg = String(data?.error?.message || data?.message || '').toLowerCase();
-
-  // типичный случай: "unrecognized type 'text' in content" или подсказка про другой эндпоинт
   if (status === 400 && (
       /unrecognized type/.test(msg) ||
       /input_text/.test(msg) ||
       /use .*chat\.completions/.test(msg) ||
       /use .*responses/.test(msg)
     )) return true;
-
   return false;
 }
 
-/** Достаём чистый текст из Responses API */
 function extractTextFromResponses(data: any): string {
   if (typeof data?.output_text === 'string') return data.output_text;
-
   const out = Array.isArray(data?.output) ? data.output : [];
   const pieces: string[] = [];
   for (const ch of out) {
@@ -129,7 +117,6 @@ function extractTextFromResponses(data: any): string {
   return pieces.join('\n').trim();
 }
 
-/** Достаём текст из Chat Completions */
 function extractTextFromChatCompletions(data: any): string {
   return String(data?.choices?.[0]?.message?.content ?? '').trim();
 }
@@ -150,20 +137,24 @@ export async function askAI(
     const responsesUrl = `${BASE_URL}/responses`;
     const chatUrl      = `${BASE_URL}/chat/completions`;
 
-    const responsesBody = {
+    const responsesBody: any = {
       model,
       input: toResponsesInput(messages),
       temperature: TEMP,
       max_output_tokens: MAX_TOKENS,
     };
-    const chatBody = {
+
+    // Для Chat Completions параметр зависит от провайдера
+    const chatBody: any = {
       model,
       messages: toChatCompletionsMessages(messages),
       temperature: TEMP,
-      max_tokens: MAX_TOKENS,
+      ...(PROVIDER === 'openrouter'
+        ? { max_tokens: MAX_TOKENS }          // OpenRouter
+        : { max_completion_tokens: MAX_TOKENS } // OpenAI новые модели
+      ),
     };
 
-    // 1) Пробуем Responses
     if (USE_RESPONSES && PROVIDER === 'openai') {
       const r = await fetch(responsesUrl, {
         method: 'POST',
@@ -175,7 +166,6 @@ export async function askAI(
 
       if (r.ok) return extractTextFromResponses(data);
 
-      // Если формат/эндпоинт не подошёл — перепробуем Chat Completions
       if (isEndpointMismatch(r.status, data)) {
         const r2 = await fetch(chatUrl, {
           method: 'POST',
@@ -201,7 +191,7 @@ export async function askAI(
       throw new Error(`AI_HTTP_${r.status}: ${msg}`);
     }
 
-    // 2) Иначе — сразу Chat Completions
+    // Сразу Chat Completions
     const rc = await fetch(chatUrl, {
       method: 'POST',
       headers: authHeaders(),
