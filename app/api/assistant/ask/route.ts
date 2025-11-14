@@ -21,7 +21,7 @@ const MODEL_FREE =
 const MODEL_PRO =
   process.env.AI_MODEL_PRO ||
   process.env.OPENAI_MODEL_PRO ||
-  'gpt-5-mini';                 // разумный дефолт для PRO
+  'gpt-5-mini';                 // дефолт для PRO
 
 const MODEL_PRO_PLUS =
   process.env.AI_MODEL_PRO_PLUS ||
@@ -85,7 +85,7 @@ function buildUserContent(prompt: string, images?: string[]) {
   const text = (prompt || '').trim();
   if (text) content.push({ type: 'text', text });
   const arr = Array.isArray(images) ? images.filter(isSupportedImageUrl) : [];
-  for (const url of arr) content.push({ type: 'input_image', image_url: { url } }); // важно: input_image
+  for (const url of arr) content.push({ type: 'input_image', image_url: { url } }); // для Responses
   return content.length ? content : [{ type: 'text', text: '' }];
 }
 function toMultimodalHistory(history: ChatMessage[]): ChatMessage[] {
