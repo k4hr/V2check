@@ -84,7 +84,6 @@ export default function ChatGPTPage() {
   const subtitle = C.subtitle;
   const systemPrompt = C.systemPrompt;
 
-  const mode = 'chat';
   const backHref = '/home' as Route;
   const maxAttach = MAX_ATTACH_DEFAULT;
   const passthroughIdParam = true;
@@ -128,6 +127,9 @@ export default function ChatGPTPage() {
   const [thread, setThread] = useState<ThreadState>({ starred: false, busy: false });
 
   const [proPlusActive, setProPlusActive] = useState<boolean>(false);
+
+  // Режим для сервера: proplus-* включает топовую модель
+  const mode = useMemo(() => (proPlusActive ? 'proplus-chat' : 'chat'), [proPlusActive]);
 
   const listRef = useRef<HTMLDivElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);
