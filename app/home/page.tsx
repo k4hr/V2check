@@ -78,6 +78,7 @@ export default function HomePage() {
       </header>
 
       <section className="stack">
+        {/* 1 строка — Ежедневные задачи */}
         <Link href={href('/home/pro')} className="card glass pulse" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.daily}</b>
@@ -86,11 +87,7 @@ export default function HomePage() {
           <span className="card__chev">›</span>
         </Link>
 
-        <Link href={href('/home/ChatGPT')} className="glass-cta gpt" aria-label="CHATGPT 5">
-          <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
-          <span className="gpt__chev">›</span>
-        </Link>
-
+        {/* 2 строка — Эксперт центр */}
         <Link href={href('/home/pro-plus')} className="card glass pulse gold raise" style={{ textDecoration: 'none' }}>
           <div className="card__text">
             <b className="card__title">{L.expert}</b>
@@ -98,9 +95,26 @@ export default function HomePage() {
           </div>
           <span className="card__chev">›</span>
         </Link>
+
+        {/* Ниже две переливающиеся кнопки: CHATGPT 5 и GEMINI 3 PRO */}
+
+        {/* CHATGPT 5 */}
+        <Link href={href('/home/ChatGPT')} className="glass-cta gpt" aria-label="CHATGPT 5">
+          <span className="gpt__shimmer">CHATGPT&nbsp;5</span>
+          <span className="gpt__chev">›</span>
+        </Link>
+
+        {/* GEMINI 3 PRO */}
+        <Link
+          href={href('/home/Gemini')}
+          className="gemini-cta"
+          aria-label="GEMINI 3 PRO"
+        >
+          <span className="gemini__shimmer">GEMINI&nbsp;3&nbsp;PRO</span>
+        </Link>
       </section>
 
-      {/* круглая золотая кнопка — строго между Expert и «Личный кабинет» */}
+      {/* круглая золотая кнопка — над «Личным кабинетом» */}
       <Link href={href('/pro/max')} className="trial-pill" aria-label="Пробный день за 1 рубль">
         <span className="trial-pill__line">Пробный</span>
         <span className="trial-pill__line">день</span>
@@ -164,7 +178,7 @@ export default function HomePage() {
 
         .stack{
           display:grid; gap:16px; align-content:start; justify-items:center;
-          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 120px); /* запас под кнопку и док */
+          padding-bottom: calc(env(safe-area-inset-bottom,0px) + 140px); /* запас под пробный день + док */
           min-height:0;
         }
         .stack > *{ width:min(92vw, 640px); }
@@ -187,6 +201,7 @@ export default function HomePage() {
           50%{opacity:.9; box-shadow:0 0 0 12px color-mix(in oklab, var(--accent,#4c82ff) 12%, transparent)}
         }
 
+        /* CHATGPT 5 */
         .glass-cta{
           position:relative; z-index:3; isolation:isolate;
           border-radius:22px; min-height:120px; padding:20px 18px;
@@ -221,6 +236,7 @@ export default function HomePage() {
           50%    { opacity:1;    filter:brightness(1.18); text-shadow:0 0 46px rgba(141,160,255,.36); }
         }
 
+        /* Эксперт центр */
         .raise{ z-index:2; isolation:isolate; }
         :global(.lm-page) .card.gold{
           background:
@@ -236,13 +252,63 @@ export default function HomePage() {
             linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.08) 50%, transparent 80%) !important;
         }
 
-        /* ——— круглая кнопка, глобально чтобы гарантированно применилось ——— */
+        /* GEMINI 3 PRO — переливающаяся надпись, теперь в колонке */
+        .gemini-cta{
+          display:flex;
+          justify-content:center;
+          align-items:center;
+          text-align:center;
+          padding:10px 12px 0;
+        }
+        .gemini__shimmer{
+          display:inline-block;
+          font-weight:900;
+          letter-spacing:.04em;
+          font-size:clamp(24px, 7vw, 34px); /* чтобы влезало в строку */
+          line-height:1;
+          background: conic-gradient(
+            from 200deg at 50% 50%,
+            #ff6b6b,
+            #ffb86c,
+            #ffd3e0,
+            #8be9fd,
+            #bd93f9,
+            #ff6b6b
+          );
+          background-size:220% 220%;
+          -webkit-background-clip:text;
+          background-clip:text;
+          color:transparent;
+          -webkit-text-fill-color: transparent;
+          text-shadow:
+            0 0 18px rgba(255,120,120,.45),
+            0 0 32px rgba(255,120,120,.30);
+          animation: geminiShimmer 6s ease-in-out infinite, geminiPulse 2.1s ease-in-out infinite;
+        }
+        @keyframes geminiShimmer{
+          0%{background-position:0% 50%}
+          50%{background-position:100% 50%}
+          100%{background-position:0% 50%}
+        }
+        @keyframes geminiPulse{
+          0%,100%{
+            opacity:.94;
+            filter:brightness(1);
+            text-shadow:0 0 18px rgba(255,120,120,.45), 0 0 32px rgba(255,120,120,.30);
+          }
+          50%{
+            opacity:1;
+            filter:brightness(1.16);
+            text-shadow:0 0 26px rgba(255,160,140,.75), 0 0 50px rgba(255,120,120,.55);
+          }
+        }
+
+        /* круглая золотая кнопка */
         :global(.trial-pill){
           position:fixed;
           left:50%; transform:translateX(-50%) translateZ(0);
-          /* чуть выше «Личного кабинета» */
           bottom: calc(env(safe-area-inset-bottom,0px) + 84px);
-          z-index: 9999;
+          z-index: 25;
 
           width:92px; height:92px; border-radius:999px;
           display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
