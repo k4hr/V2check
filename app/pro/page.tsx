@@ -186,7 +186,7 @@ export default function ProSelectPage() {
           {/* Модель ИИ */}
           <div className="cell cell--label">{S.aiModel}</div>
           <div className="cell">ChatGPT 4o</div>
-          <div className="cell cell--proplus">ChatGPT 5</div>
+          <div className="cell cell--proplus">ChatGPT 5 GEMINI 3 Pro</div>
 
           {/* Без ограничений */}
           <div className="cell cell--label">{S.unlimited}</div>
