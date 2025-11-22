@@ -1,23 +1,18 @@
 // path: app/api/admin/autopay/cancel/route.ts
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import {
-  verifyInitData,
-  getTelegramId,
-  getInitDataFrom,
-} from '@/lib/auth/verifyInitData';
+import { verifyInitData, getTelegramId, getInitDataFrom } from '@/lib/auth/verifyInitData';
 
 export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
 
 const BOT_TOKEN = process.env.BOT_TOKEN || process.env.TG_BOT_TOKEN || '';
 const ADMIN_TG_IDS = String(process.env.ADMIN_TG_IDS || '')
   .split(/[,\s]+/)
-  .map((s) => s.trim())
+  .map(s => s.trim())
   .filter(Boolean);
 
-const ALLOW_BROWSER_DEBUG =
-  (process.env.ALLOW_BROWSER_DEBUG || '').trim() === '1';
+// чтобы в браузере можно было дебажить по ?id=...
+const ALLOW_BROWSER_DEBUG = (process.env.ALLOW_BROWSER_DEBUG || '').trim() === '1';
 
 function getCookieFromHeader(headers: Headers, name: string): string {
   try {
@@ -25,8 +20,7 @@ function getCookieFromHeader(headers: Headers, name: string): string {
     const parts = raw.split(/;\s*/);
     for (const p of parts) {
       const [k, ...v] = p.split('=');
-      if (decodeURIComponent(k) === name)
-        return decodeURIComponent(v.join('='));
+      if (decodeURIComponent(k) === name) return decodeURIComponent(v.join('='));
     }
   } catch {}
   return '';
@@ -35,27 +29,23 @@ function getCookieFromHeader(headers: Headers, name: string): string {
 async function ensureAdmin(req: NextRequest) {
   const url = new URL(req.url);
   let initData = getInitDataFrom(req as any) || '';
-  if (!initData)
-    initData = getCookieFromHeader(req.headers, 'tg_init_data') || '';
+  if (!initData) initData = getCookieFromHeader(req.headers, 'tg_init_data') || '';
   if (!initData) initData = url.searchParams.get('initData') || '';
 
   if (initData) {
     const ok = verifyInitData(initData, BOT_TOKEN);
     if (ok) {
       const id = getTelegramId(initData);
-      if (id && ADMIN_TG_IDS.includes(String(id)))
-        return { ok: true, id: String(id), via: 'initData' as const };
+      if (id && ADMIN_TG_IDS.includes(String(id))) {
+        return { ok: true as const, id: String(id), via: 'initData' as const };
+      }
       return { ok: false as const, id: id || null, via: 'initData' as const };
     }
   }
 
   if (ALLOW_BROWSER_DEBUG) {
     const debugId = url.searchParams.get('id');
-    if (
-      debugId &&
-      /^\d{3,15}$/.test(debugId) &&
-      ADMIN_TG_IDS.includes(debugId)
-    ) {
+    if (debugId && /^\d{3,15}$/.test(debugId) && ADMIN_TG_IDS.includes(debugId)) {
       return { ok: true as const, id: debugId, via: 'debugId' as const };
     }
   }
@@ -66,51 +56,32 @@ async function ensureAdmin(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const adm = await ensureAdmin(req);
-    if (!adm.ok)
-      return NextResponse.json(
-        { ok: false, error: 'FORBIDDEN' },
-        { status: 403 },
-      );
-
-    const { key } = await req.json().catch(() => ({} as any));
-    const rawKey = String(key || '').trim();
-    if (!rawKey) {
-      return NextResponse.json(
-        { ok: false, error: 'KEY_REQUIRED' },
-        { status: 400 },
-      );
+    if (!adm.ok) {
+      return NextResponse.json({ ok: false, error: 'FORBIDDEN' }, { status: 403 });
     }
 
-    // --- Определяем, по какому полю искать: TG ID или vk:123 ---
-    let where: any = null;
+    const body = await req.json().catch(() => ({} as any));
+    const rawKey = String(body?.key || '').trim();
+    if (!rawKey) {
+      return NextResponse.json({ ok: false, error: 'KEY_REQUIRED' }, { status: 400 });
+    }
 
+    // --- ключ: либо чистый Telegram ID, либо vk:12345 ---
+    let where: any;
     if (rawKey.startsWith('vk:')) {
       const vkId = rawKey.slice(3).trim();
       if (!vkId) {
-        return NextResponse.json(
-          { ok: false, error: 'BAD_VK_KEY' },
-          { status: 400 },
-        );
+        return NextResponse.json({ ok: false, error: 'BAD_VK_KEY' }, { status: 400 });
       }
-      where = { vkUserId: vkId };
+      where = { vkUserId: String(vkId) }; // ВСЕГДА СТРОКА
     } else {
-      const tgIdNum = Number(rawKey);
-      if (!Number.isFinite(tgIdNum)) {
-        return NextResponse.json(
-          { ok: false, error: 'BAD_TG_ID' },
-          { status: 400 },
-        );
-      }
-      where = { telegramId: tgIdNum };
+      // Telegram ID ВСЕГДА КАК СТРОКА
+      where = { telegramId: String(rawKey) };
     }
 
     const user = await prisma.user.findFirst({ where });
-
     if (!user) {
-      return NextResponse.json(
-        { ok: false, error: 'USER_NOT_FOUND' },
-        { status: 404 },
-      );
+      return NextResponse.json({ ok: false, error: 'USER_NOT_FOUND' }, { status: 404 });
     }
 
     const updated = await prisma.user.update({
@@ -118,12 +89,11 @@ export async function POST(req: NextRequest) {
       data: {
         autopayActive: false,
         autopayNextAt: null,
-        autopayPlan: null,
-        autopayTier: null,
-        // Жёстко отвязываем платёжные реквизиты ЮKassa:
+        // чтобы совсем гарантированно ничего не списалось:
         ykPaymentMethodId: null,
         ykCustomerId: null,
-        // trialActive трогать не обязательно; он про пробник, а не про рекуррент
+        // можно заодно отключить пробный период, если был
+        // trialActive: false,
       },
       select: {
         id: true,
@@ -131,8 +101,6 @@ export async function POST(req: NextRequest) {
         vkUserId: true,
         autopayActive: true,
         autopayNextAt: true,
-        autopayPlan: true,
-        autopayTier: true,
         ykPaymentMethodId: true,
         ykCustomerId: true,
       },
