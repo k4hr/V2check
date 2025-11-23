@@ -1,10 +1,13 @@
 // lib/cleanText.ts
+
 /**
  * Удаляем Markdown/разметку из ответа модели и приводим к чистому тексту.
  * Никаких **звёздочек**, _подчёркиваний_, `код-блоков` и т.п.
  */
 export function cleanAssistantText(input: string): string {
-  let s = String(input ?? '');
+  // исходный текст (на всякий случай)
+  const original = String(input ?? '');
+  let s = original;
 
   // 1) Тройные код-блоки ```lang ... ```
   s = s.replace(/```[\s\S]*?```/g, (block) => {
@@ -18,7 +21,7 @@ export function cleanAssistantText(input: string): string {
   s = s.replace(/`([^`]+)`/g, '$1');
 
   // 3) Жирный/курсив: **...**, __...__, *...*, _..._
-  s = s.replace(/(\*\*|__)(.*?)\1/g, '$2');                   // **bold** / __bold__
+  s = s.replace(/(\*\*|__)(.*?)\1/g, '$2');                     // **bold** / __bold__
   s = s.replace(/(^|[^\*])\*([^\*\n]+)\*(?=[^\*]|$)/g, '$1$2'); // *italic*
   s = s.replace(/(^|[^_])_([^_\n]+)_(?=[^_]|$)/g, '$1$2');      // _italic_
 
@@ -36,7 +39,14 @@ export function cleanAssistantText(input: string): string {
   s = s.replace(/\n{3,}/g, '\n\n');
   s = s.replace(/[ \t]{2,}/g, ' ');
 
-  return s.trim();
+  s = s.trim();
+
+  // КРИТИЧЕСКИЙ ФИКС:
+  // если после чистки всё съели и строка стала пустой — возвращаем исходный текст,
+  // чтобы клиент не видел пустой ответ и не подставлял "Готово. Продолжим?".
+  if (!s) return original.trim();
+
+  return s;
 }
 
 export default cleanAssistantText;
