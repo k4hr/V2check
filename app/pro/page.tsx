@@ -7,6 +7,7 @@ import { useEffect, useMemo } from 'react';
 import { readLocale, STRINGS, type Locale } from '@/lib/i18n';
 import { detectPlatform } from '@/lib/platform';
 import BackBtn from '@/app/components/BackBtn';
+import LegalFooter from '@/components/LegalFooter'; // ← добавили
 
 function setWelcomedCookie() {
   try {
@@ -20,12 +21,15 @@ export default function ProSelectPage() {
   const S = STRINGS[locale];
 
   // Локализация заголовков и подзаголовков карточек
-  const L: Record<Locale, {
-    choosePlan: string;
-    compareAndPay: string;
-    proSub: string;
-    proPlusSub: string;
-  }> = {
+  const L: Record<
+    Locale,
+    {
+      choosePlan: string;
+      compareAndPay: string;
+      proSub: string;
+      proPlusSub: string;
+    }
+  > = {
     ru: {
       choosePlan: 'Выберите подписку',
       compareAndPay: 'Сравните и перейдите к оплате',
@@ -90,7 +94,9 @@ export default function ProSelectPage() {
 
   useEffect(() => {
     const w: any = window;
-    try { document.documentElement.lang = locale; } catch {}
+    try {
+      document.documentElement.lang = locale;
+    } catch {}
 
     try {
       if (platform === 'telegram') {
@@ -103,7 +109,9 @@ export default function ProSelectPage() {
           bridge.send('VKWebAppExpand').catch(() => {});
         } else if (typeof w.VKWebAppInit === 'function') {
           w.VKWebAppInit();
-          try { w.VKWebAppExpand?.(); } catch {}
+          try {
+            w.VKWebAppExpand?.();
+          } catch {}
         }
       }
     } catch {}
@@ -134,17 +142,17 @@ export default function ProSelectPage() {
         <BackBtn fallback={`/home${linkSuffix}` as Route} />
       </div>
 
-      <h1 style={{ textAlign:'center' }}>{L[locale].choosePlan}</h1>
-      <p className="lm-subtitle" style={{ textAlign:'center' }}>
+      <h1 style={{ textAlign: 'center' }}>{L[locale].choosePlan}</h1>
+      <p className="lm-subtitle" style={{ textAlign: 'center' }}>
         {L[locale].compareAndPay}
       </p>
 
-      <div className="lm-grid" style={{ marginTop:16 }}>
+      <div className="lm-grid" style={{ marginTop: 16 }}>
         {/* Pro — светлое стекло */}
         <Link
           href={`${base}/min${linkSuffix}` as Route}
           className="card card--pro"
-          style={{ textDecoration:'none' }}
+          style={{ textDecoration: 'none' }}
         >
           <span className="card__left">
             <span className="card__icon card__icon--pro">📦</span>
@@ -160,7 +168,7 @@ export default function ProSelectPage() {
         <Link
           href={`${base}/max${linkSuffix}` as Route}
           className="card card--proplus"
-          style={{ textDecoration:'none' }}
+          style={{ textDecoration: 'none' }}
         >
           <span className="card__left">
             <span className="card__icon card__icon--proplus">✨</span>
@@ -190,155 +198,260 @@ export default function ProSelectPage() {
 
           {/* Без ограничений */}
           <div className="cell cell--label">{S.unlimited}</div>
-          <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
+          <div className="cell">
+            <span className="chip chip--no">⛔</span>
+          </div>
+          <div className="cell cell--proplus">
+            <span className="chip chip--ok">✅</span>
+          </div>
 
           {/* Работа с файлами */}
           <div className="cell cell--label">{S.filesWork}</div>
-          <div className="cell"><span className="chip chip--no">✅</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
+          <div className="cell">
+            <span className="chip chip--no">✅</span>
+          </div>
+          <div className="cell cell--proplus">
+            <span className="chip chip--ok">✅</span>
+          </div>
 
           {/* Продвинутые сценарии */}
           <div className="cell cell--label">{S.advancedScenarios}</div>
-          <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
+          <div className="cell">
+            <span className="chip chip--no">⛔</span>
+          </div>
+          <div className="cell cell--proplus">
+            <span className="chip chip--ok">✅</span>
+          </div>
 
           {/* Приоритет в очереди */}
           <div className="cell cell--label">{S.queuePriority}</div>
-          <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
+          <div className="cell">
+            <span className="chip chip--no">⛔</span>
+          </div>
+          <div className="cell cell--proplus">
+            <span className="chip chip--ok">✅</span>
+          </div>
 
           {/* Сохранение ответов */}
           <div className="cell cell--label">{S.saveAnswers}</div>
-          <div className="cell"><span className="chip chip--no">⛔</span></div>
-          <div className="cell cell--proplus"><span className="chip chip--ok">✅</span></div>
+          <div className="cell">
+            <span className="chip chip--no">⛔</span>
+          </div>
+          <div className="cell cell--proplus">
+            <span className="chip chip--ok">✅</span>
+          </div>
         </div>
       </section>
 
+      {/* МЕЛКИЙ СЕРЫЙ ТЕКСТ С ОФЕРТОЙ */}
+      <LegalFooter />
+
       <style jsx>{`
-        .lm-wrap { padding: 20px; max-width: 780px; margin: 0 auto; }
-        .lm-subtitle { opacity: .7; margin-top: 6px; }
-        .lm-grid { display: grid; gap: 12px; }
+        .lm-wrap {
+          padding: 20px;
+          max-width: 780px;
+          margin: 0 auto;
+        }
+        .lm-subtitle {
+          opacity: 0.7;
+          margin-top: 6px;
+        }
+        .lm-grid {
+          display: grid;
+          gap: 12px;
+        }
 
         /* ===== Карточки: светлое стекло ===== */
         .card {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 16px; border-radius: 16px;
-          color: #0B0C10; text-decoration: none;
-          background: rgba(255,255,255,.78);
-          border: 1px solid rgba(10,12,20,.10);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.65), 0 10px 26px rgba(18,28,45,.10);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px;
+          border-radius: 16px;
+          color: #0b0c10;
+          text-decoration: none;
+          background: rgba(255, 255, 255, 0.78);
+          border: 1px solid rgba(10, 12, 20, 0.1);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65),
+            0 10px 26px rgba(18, 28, 45, 0.1);
           backdrop-filter: blur(10px) saturate(140%);
-          transition: transform .12s ease, border-color .12s ease, background .12s ease, box-shadow .12s ease;
+          transition: transform 0.12s ease, border-color 0.12s ease,
+            background 0.12s ease, box-shadow 0.12s ease;
           -webkit-tap-highlight-color: transparent;
         }
-        .card:hover { transform: translateY(-1px); }
-        .card__left { display: flex; gap: 12px; align-items: center; }
-        .card__icon {
-          width: 40px; height: 40px; display: grid; place-items: center; font-size: 20px;
-          border-radius: 12px; border: 1px solid rgba(10,12,20,.10);
-          background: rgba(255,255,255,.85);
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
+        .card:hover {
+          transform: translateY(-1px);
         }
-        .card__title { font-weight: 800; font-size: 16px; line-height: 1.1; }
-        .card__subtitle { opacity: .75; font-size: 13px; margin-top: 2px; }
-        .card__chev { opacity: .55; font-size: 22px; }
+        .card__left {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+        .card__icon {
+          width: 40px;
+          height: 40px;
+          display: grid;
+          place-items: center;
+          font-size: 20px;
+          border-radius: 12px;
+          border: 1px solid rgba(10, 12, 20, 0.1);
+          background: rgba(255, 255, 255, 0.85);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+        }
+        .card__title {
+          font-weight: 800;
+          font-size: 16px;
+          line-height: 1.1;
+        }
+        .card__subtitle {
+          opacity: 0.75;
+          font-size: 13px;
+          margin-top: 2px;
+        }
+        .card__chev {
+          opacity: 0.55;
+          font-size: 22px;
+        }
 
-        /* Pro — лёгкий синий акцент при hover */
-        .card--pro:hover { border-color: rgba(45,126,247,.45); background: rgba(255,255,255,.82); }
+        .card--pro:hover {
+          border-color: rgba(45, 126, 247, 0.45);
+          background: rgba(255, 255, 255, 0.82);
+        }
 
-        /* Pro+ — золотое стекло по умолчанию */
         .card--proplus {
-          background:
-            linear-gradient(135deg, rgba(255,210,120,.22), rgba(255,191,73,.18)),
-            rgba(255,255,255,.78);
-          border: 1px solid rgba(255,191,73,.55);
-          box-shadow: 0 12px 36px rgba(255,191,73,.20), inset 0 1px 0 rgba(255,255,255,.6);
+          background: linear-gradient(
+              135deg,
+              rgba(255, 210, 120, 0.22),
+              rgba(255, 191, 73, 0.18)
+            ),
+            rgba(255, 255, 255, 0.78);
+          border: 1px solid rgba(255, 191, 73, 0.55);
+          box-shadow: 0 12px 36px rgba(255, 191, 73, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.6);
         }
         .card--proplus:hover {
-          background:
-            linear-gradient(135deg, rgba(255,210,120,.28), rgba(255,191,73,.22)),
-            rgba(255,255,255,.82);
-          border-color: rgba(255,191,73,.70);
+          background: linear-gradient(
+              135deg,
+              rgba(255, 210, 120, 0.28),
+              rgba(255, 191, 73, 0.22)
+            ),
+            rgba(255, 255, 255, 0.82);
+          border-color: rgba(255, 191, 73, 0.7);
         }
         .card__icon--proplus {
-          background:
-            linear-gradient(135deg, rgba(255,210,120,.28), rgba(255,191,73,.18)),
-            rgba(255,255,255,.85);
-          border-color: rgba(255,191,73,.55);
+          background: linear-gradient(
+              135deg,
+              rgba(255, 210, 120, 0.28),
+              rgba(255, 191, 73, 0.18)
+            ),
+            rgba(255, 255, 255, 0.85);
+          border-color: rgba(255, 191, 73, 0.55);
         }
         .card__icon--pro {
-          background:
-            linear-gradient(135deg, rgba(45,126,247,.16), rgba(59,130,246,.10)),
-            rgba(255,255,255,.85);
-          border-color: rgba(10,12,20,.10);
+          background: linear-gradient(
+              135deg,
+              rgba(45, 126, 247, 0.16),
+              rgba(59, 130, 246, 0.1)
+            ),
+            rgba(255, 255, 255, 0.85);
+          border-color: rgba(10, 12, 20, 0.1);
         }
 
-        /* ===== Таблица сравнения — белое стекло ===== */
-        .cmp { margin-top: 18px; }
-        .cmp__title { margin: 12px 0 12px; text-align: center; font-size: 18px; opacity: .95; color:#0B0C10; }
+        .cmp {
+          margin-top: 18px;
+        }
+        .cmp__title {
+          margin: 12px 0 12px;
+          text-align: center;
+          font-size: 18px;
+          opacity: 0.95;
+          color: #0b0c10;
+        }
 
         .cmp-grid {
-          background: rgba(255,255,255,.88);
-          border: 1px solid rgba(10,12,20,.10);
+          background: rgba(255, 255, 255, 0.88);
+          border: 1px solid rgba(10, 12, 20, 0.1);
           border-radius: 18px;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 12px 28px rgba(18,28,45,.08);
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6),
+            0 12px 28px rgba(18, 28, 45, 0.08);
           backdrop-filter: blur(8px) saturate(140%);
           overflow: hidden;
           display: grid;
           grid-template-columns: minmax(160px, 1.4fr) 1fr 1fr;
-          color: #0B0C10;
+          color: #0b0c10;
         }
 
         .cell {
           padding: 12px;
           font-size: 14px;
-          border-bottom: 1px solid rgba(10,12,20,.06);
+          border-bottom: 1px solid rgba(10, 12, 20, 0.06);
           display: flex;
           align-items: center;
           justify-content: center;
           text-align: center;
           min-height: 54px;
         }
-        .cell--label { background: rgba(10,12,20,.03); font-weight: 600; }
-        .cell--head  { font-weight: 800; background: rgba(10,12,20,.04); }
-
-        /* Вертикальные разделители */
-        .cmp-grid .cell:nth-child(3n+1),
-        .cmp-grid .cell:nth-child(3n+2) { border-right: 1px solid rgba(10,12,20,.06); }
-        .cmp-grid .cell:nth-last-child(-n+3) { border-bottom: none; }
-
-        /* Колонка Pro+ — золотой подсвет */
-        .cell--proplus,
-        .cell--proplus-head {
-          background:
-            linear-gradient(135deg, rgba(255,210,120,.16), rgba(255,191,73,.12)),
-            rgba(255,255,255,.80);
-          font-weight: 700;
-          box-shadow: inset 0 1px 0 rgba(255,255,255,.6);
+        .cell--label {
+          background: rgba(10, 12, 20, 0.03);
+          font-weight: 600;
+        }
+        .cell--head {
+          font-weight: 800;
+          background: rgba(10, 12, 20, 0.04);
         }
 
-        /* Чипы */
+        .cmp-grid .cell:nth-child(3n + 1),
+        .cmp-grid .cell:nth-child(3n + 2) {
+          border-right: 1px solid rgba(10, 12, 20, 0.06);
+        }
+        .cmp-grid .cell:nth-last-child(-n + 3) {
+          border-bottom: none;
+        }
+
+        .cell--proplus,
+        .cell--proplus-head {
+          background: linear-gradient(
+              135deg,
+              rgba(255, 210, 120, 0.16),
+              rgba(255, 191, 73, 0.12)
+            ),
+            rgba(255, 255, 255, 0.8);
+          font-weight: 700;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+        }
+
         .chip {
-          display: inline-flex; align-items: center; justify-content: center;
-          min-width: 24px; height: 24px; padding: 0 8px;
-          border-radius: 999px; font-size: 13px; line-height: 24px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 24px;
+          height: 24px;
+          padding: 0 8px;
+          border-radius: 999px;
+          font-size: 13px;
+          line-height: 24px;
           border: 1px solid transparent;
         }
         .chip--ok {
-          background: rgba(36,199,104,.22);
-          border-color: rgba(36,199,104,.45);
-          color: #0B0C10;
+          background: rgba(36, 199, 104, 0.22);
+          border-color: rgba(36, 199, 104, 0.45);
+          color: #0b0c10;
         }
         .chip--no {
-          background: rgba(255,90,90,.18);
-          border-color: rgba(255,90,90,.40);
-          color: #0B0C10;
+          background: rgba(255, 90, 90, 0.18);
+          border-color: rgba(255, 90, 90, 0.4);
+          color: #0b0c10;
         }
 
         @media (max-width: 420px) {
-          .cell { padding: 10px; font-size: 13px; min-height: 48px; }
-          .cmp-grid { grid-template-columns: minmax(120px, 1.2fr) 1fr 1fr; }
+          .cell {
+            padding: 10px;
+            font-size: 13px;
+            min-height: 48px;
+          }
+          .cmp-grid {
+            grid-template-columns: minmax(120px, 1.2fr) 1fr 1fr;
+          }
         }
       `}</style>
     </main>
