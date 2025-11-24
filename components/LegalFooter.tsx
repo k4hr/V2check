@@ -4,36 +4,37 @@
 import Link from 'next/link';
 
 type LegalFooterProps = {
+  /** Явно включить показ футера. Без force компонент вернёт null. */
   force?: boolean;
 };
 
-export default function LegalFooter(_: LegalFooterProps = {}) {
+/**
+ * LegalFooter
+ * По умолчанию НИЧЕГО не рендерит.
+ * Появляется только там, где ты явно пишешь <LegalFooter force />.
+ */
+export default function LegalFooter({ force }: LegalFooterProps = {}) {
+  if (!force) return null;
+
   return (
-    <footer
+    <p
       style={{
         marginTop: 24,
-        paddingTop: 12,
-        borderTop: '1px solid rgba(148,163,184,0.35)',
+        marginBottom: 0,
+        fontSize: 12,
+        lineHeight: 1.4,
+        color: 'rgba(15, 23, 42, 0.55)', // мягкий серый
         textAlign: 'center',
       }}
     >
-      <p
-        style={{
-          margin: 0,
-          fontSize: 11,
-          lineHeight: 1.5,
-          color: 'rgba(148,163,184,0.95)',
-        }}
+      Оформляя подписку, вы принимаете условия{' '}
+      <Link
+        href="/info/offer"
+        style={{ color: 'inherit', textDecoration: 'underline' }}
       >
-        Оформляя подписку, вы принимаете условия{' '}
-        <Link
-          href="/info/offer"
-          style={{ color: 'inherit', textDecoration: 'underline' }}
-        >
-          публичной оферты
-        </Link>
-        .
-      </p>
-    </footer>
+        публичной оферты
+      </Link>
+      .
+    </p>
   );
 }
