@@ -181,7 +181,7 @@ export default function OfferPage() {
       <h2>14. Контакты</h2>
       <ul>
         <li>Исполнитель: <b>LiveManager</b></li>
-        <li>Поддержка: <b>support@seimngr</b></li>
+        <li>Поддержка: <b>@seimngr</b></li>
         <li>ИНН: <b>290221242314</b></li>
         <li>ОГРНИП: <b>325290000042402</b></li>
       </ul>
